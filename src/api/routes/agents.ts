@@ -2,6 +2,7 @@ import { FastifyInstance } from 'fastify';
 import { agentQueries, capabilityQueries, endpointQueries } from '../../db/index.js';
 import { ListAgentsQuery, AgentIdParam, validateQueryParams, ApiResponse, PaginationMeta } from '../../validation/api-schema.js';
 import { Agent, AgentCapability, AgentEndpoint } from '../../db/schema.js';
+import { getNameFlagInfo } from '../../utils/name-flags.js';
 
 // Transform DB agent to API response
 function transformAgent(agent: Agent) {
@@ -18,6 +19,8 @@ function transformAgent(agent: Agent) {
     updatedAt: agent.updated_at,
     indexedAt: agent.indexed_at,
     blockHeight: agent.block_height,
+    // Name flagging for impersonation warnings (does not block, just warns)
+    trustInfo: getNameFlagInfo(agent.name),
   };
 }
 
