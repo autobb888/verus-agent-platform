@@ -25,6 +25,36 @@ const CHALLENGE_LIFETIME_MS = 5 * 60 * 1000;
 // Session cookie name
 const SESSION_COOKIE = 'verus_session';
 
+// Cookie domain — share across subdomains (app.autobb.app + api.autobb.app)
+// In prod with CORS_ORIGIN like "https://app.autobb.app", extract root domain.
+// In dev (localhost), leave undefined (browser defaults to current host).
+function getCookieDomain(): string | undefined {
+  const corsOrigin = process.env.CORS_ORIGIN?.split(',')[0];
+  if (!corsOrigin) return undefined;
+  try {
+    const host = new URL(corsOrigin).hostname; // e.g. "app.autobb.app"
+    const parts = host.split('.');
+    if (parts.length >= 2 && !host.includes('localhost')) {
+      return '.' + parts.slice(-2).join('.'); // ".autobb.app"
+    }
+  } catch {}
+  return undefined;
+}
+const COOKIE_DOMAIN = getCookieDomain();
+
+// Shared cookie options
+function cookieOpts(signed = true) {
+  return {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'lax' as const,
+    maxAge: SESSION_LIFETIME_MS / 1000,
+    path: '/',
+    signed,
+    ...(COOKIE_DOMAIN ? { domain: COOKIE_DOMAIN } : {}),
+  };
+}
+
 // Rate limiting state (per-IP)
 const rateLimitMap = new Map<string, { count: number; resetAt: number }>();
 const RATE_LIMIT_WINDOW = 60 * 1000; // 1 minute
@@ -289,14 +319,7 @@ export async function authRoutes(fastify: FastifyInstance): Promise<void> {
       
       // Set session cookie
       // Shield: HttpOnly, Secure (in prod), SameSite=Strict
-      reply.setCookie(SESSION_COOKIE, sessionId, {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
-        sameSite: 'lax',
-        maxAge: SESSION_LIFETIME_MS / 1000, // seconds
-        path: '/',
-        signed: true,
-      });
+      reply.setCookie(SESSION_COOKIE, sessionId, cookieOpts());
       
       fastify.log.info({ verusId, identityAddress, identityName }, 'User logged in');
       
@@ -339,14 +362,14 @@ export async function authRoutes(fastify: FastifyInstance): Promise<void> {
       `).get(sessionId) as { id: string; verus_id: string; identity_name: string | null; created_at: number; expires_at: number } | undefined;
       
       if (!session) {
-        reply.clearCookie(SESSION_COOKIE);
+        reply.clearCookie(SESSION_COOKIE, { path: '/', ...(COOKIE_DOMAIN ? { domain: COOKIE_DOMAIN } : {}) });
         return { data: { authenticated: false } };
       }
       
       // Check if expired
       if (session.expires_at < Date.now()) {
         db.prepare(`DELETE FROM sessions WHERE id = ?`).run(sessionId);
-        reply.clearCookie(SESSION_COOKIE);
+        reply.clearCookie(SESSION_COOKIE, { path: '/', ...(COOKIE_DOMAIN ? { domain: COOKIE_DOMAIN } : {}) });
         return { data: { authenticated: false } };
       }
       
@@ -386,7 +409,7 @@ export async function authRoutes(fastify: FastifyInstance): Promise<void> {
       }
     }
     
-    reply.clearCookie(SESSION_COOKIE);
+    reply.clearCookie(SESSION_COOKIE, { path: '/', ...(COOKIE_DOMAIN ? { domain: COOKIE_DOMAIN } : {}) });
     return { data: { success: true } };
   });
 
@@ -653,14 +676,7 @@ export async function authRoutes(fastify: FastifyInstance): Promise<void> {
         `).run(sessionId, row.verus_id, row.identity_name || row.verus_id, sessionNow, sessionExpiry);
         
         // Set session cookie
-        reply.setCookie(SESSION_COOKIE, sessionId, {
-          httpOnly: true,
-          secure: process.env.NODE_ENV === 'production',
-          sameSite: 'lax',
-          maxAge: SESSION_LIFETIME_MS / 1000,
-          path: '/',
-          signed: true,
-        });
+        reply.setCookie(SESSION_COOKIE, sessionId, cookieOpts());
         
         fastify.log.info({ verusId: row.verus_id }, 'QR login completed');
         
@@ -718,14 +734,7 @@ export async function authRoutes(fastify: FastifyInstance): Promise<void> {
         VALUES (?, ?, ?, ?, ?)
       `).run(sessionId, row.verus_id, row.identity_name || row.verus_id, sessionNow, sessionExpiry);
 
-      reply.setCookie(SESSION_COOKIE, sessionId, {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
-        sameSite: 'lax',
-        maxAge: SESSION_LIFETIME_MS / 1000,
-        path: '/',
-        signed: true,
-      });
+      reply.setCookie(SESSION_COOKIE, sessionId, cookieOpts());
 
       fastify.log.info({ verusId: row.verus_id }, 'QR login completed via redirect');
 
