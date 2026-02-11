@@ -27,6 +27,10 @@ export default function DashboardPage() {
   }
 
   async function fetchAgents() {
+    if (!user?.verusId) {
+      setLoading(false);
+      return;
+    }
     try {
       // Fetch agents owned by current user
       const res = await fetch(`${API_BASE}/v1/agents?owner=${encodeURIComponent(user.verusId)}`, {
@@ -38,9 +42,10 @@ export default function DashboardPage() {
         // Enrich with reputation
         const enriched = await Promise.all(
           data.data.map(async (agent) => {
-            if (!agent.verusId) return agent;
+            const agentId = agent.verusId || agent.id;
+            if (!agentId) return agent;
             try {
-              const repRes = await fetch(`${API_BASE}/v1/reputation/${encodeURIComponent(agent.verusId)}?quick=true`);
+              const repRes = await fetch(`${API_BASE}/v1/reputation/${encodeURIComponent(agentId)}?quick=true`);
               if (repRes.ok) {
                 const repData = await repRes.json();
                 return { ...agent, reputation: repData.data };
@@ -74,7 +79,7 @@ export default function DashboardPage() {
       {/* Welcome */}
       <div className="mb-8">
         <h1 className="text-2xl font-bold text-white">
-          Welcome back{user?.identityName ? `, ${user.identityName}` : (user?.verusId ? '' : '')}
+          Welcome back{user?.identityName ? `, ${user.identityName}` : ''}
         </h1>
         <p className="text-gray-400 mt-1">
           Manage your agents and services on the Verus platform
