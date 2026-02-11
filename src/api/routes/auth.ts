@@ -680,7 +680,6 @@ export async function authRoutes(fastify: FastifyInstance): Promise<void> {
       });
     }
   });
-}
 
   /**
    * GET /auth/qr/complete/:id
