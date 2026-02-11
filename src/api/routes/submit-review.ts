@@ -1,0 +1,340 @@
+/**
+ * Review Submission API (Facilitator Pattern)
+ * 
+ * Buyers submit signed reviews which go to the agent's INBOX.
+ * The agent then chooses to add them to their on-chain VerusID.
+ * 
+ * Flow:
+ * 1. Buyer signs a review message
+ * 2. Buyer submits to platform
+ * 3. Platform verifies signature, puts in agent's inbox
+ * 4. Agent views inbox, gets updateidentity command
+ * 5. Agent runs command to add review to their VerusID
+ * 6. Platform indexes the on-chain update
+ */
+
+import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
+import { z } from 'zod';
+import { inboxQueries, agentQueries } from '../../db/index.js';
+import { getRpcClient } from '../../indexer/rpc-client.js';
+import { VDXF_KEYS, encodeVdxfValue } from '../../validation/vdxf-keys.js';
+
+// P3-RATE-1: Rate limiting for review submissions
+const RATE_LIMIT_WINDOW_MS = 60 * 1000; // 1 minute
+const MAX_REVIEWS_PER_IP = 10;
+const MAX_REVIEWS_PER_BUYER = 5;
+
+interface RateLimitEntry {
+  count: number;
+  resetAt: number;
+}
+
+const ipRateLimits = new Map<string, RateLimitEntry>();
+const buyerRateLimits = new Map<string, RateLimitEntry>();
+
+// Cleanup stale entries every 5 minutes
+setInterval(() => {
+  const now = Date.now();
+  for (const [key, entry] of ipRateLimits) {
+    if (entry.resetAt < now) ipRateLimits.delete(key);
+  }
+  for (const [key, entry] of buyerRateLimits) {
+    if (entry.resetAt < now) buyerRateLimits.delete(key);
+  }
+}, 5 * 60 * 1000);
+
+function checkRateLimit(
+  map: Map<string, RateLimitEntry>,
+  key: string,
+  maxRequests: number
+): boolean {
+  const now = Date.now();
+  const entry = map.get(key);
+
+  if (!entry || entry.resetAt < now) {
+    map.set(key, { count: 1, resetAt: now + RATE_LIMIT_WINDOW_MS });
+    return true;
+  }
+
+  if (entry.count >= maxRequests) {
+    return false;
+  }
+
+  entry.count++;
+  return true;
+}
+
+// Review submission schema
+const submitReviewSchema = z.object({
+  agentVerusId: z.string().min(1).max(100),     // Agent being reviewed (i-address or name@)
+  buyerVerusId: z.string().min(1).max(100),     // Buyer leaving review (i-address or name@)
+  jobHash: z.string().min(1).max(100),          // Unique job identifier
+  message: z.string().max(1000).optional(),     // Review text
+  rating: z.number().min(1).max(5).optional(),  // 1-5 stars
+  timestamp: z.number(),                         // Unix timestamp (seconds)
+  signature: z.string().min(1).max(500),        // Buyer's signature
+});
+
+/**
+ * Generate the message that should have been signed
+ * This must match exactly what the buyer signed
+ */
+function generateReviewMessage(
+  agentVerusId: string,
+  jobHash: string,
+  message: string | undefined,
+  rating: number | undefined,
+  timestamp: number
+): string {
+  return [
+    'Verus Agent Platform Review',
+    '===========================',
+    `Agent: ${agentVerusId}`,
+    `Job: ${jobHash}`,
+    `Rating: ${rating || 'N/A'}`,
+    `Message: ${message || 'No message'}`,
+    `Timestamp: ${timestamp}`,
+    '',
+    'I confirm this review is genuine.',
+  ].join('\n');
+}
+
+/**
+ * Generate VDXF data for storing the review in contentmultimap
+ */
+function generateVdxfData(
+  buyerVerusId: string,
+  jobHash: string,
+  message: string | undefined,
+  rating: number | undefined,
+  signature: string,
+  timestamp: number
+): Record<string, unknown> {
+  const reviewKeys = VDXF_KEYS.review;
+  
+  return {
+    [reviewKeys.buyer]: encodeVdxfValue(buyerVerusId),
+    [reviewKeys.jobHash]: encodeVdxfValue(jobHash),
+    [reviewKeys.message]: message ? encodeVdxfValue(message) : null,
+    [reviewKeys.rating]: rating ? encodeVdxfValue(rating) : null,
+    [reviewKeys.signature]: encodeVdxfValue(signature),
+    [reviewKeys.timestamp]: encodeVdxfValue(timestamp),
+  };
+}
+
+export async function submitReviewRoutes(fastify: FastifyInstance): Promise<void> {
+  /**
+   * POST /v1/reviews
+   * Submit a signed review → goes to agent's inbox
+   */
+  fastify.post('/v1/reviews', async (request: FastifyRequest, reply: FastifyReply) => {
+    // P3-RATE-1: Check IP rate limit first
+    const clientIp = request.ip;
+    if (!checkRateLimit(ipRateLimits, clientIp, MAX_REVIEWS_PER_IP)) {
+      return reply.code(429).send({
+        error: {
+          code: 'RATE_LIMITED',
+          message: 'Too many review submissions. Please wait before trying again.',
+        },
+      });
+    }
+
+    // Validate input
+    const parsed = submitReviewSchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.code(400).send({
+        error: {
+          code: 'VALIDATION_ERROR',
+          message: 'Invalid review data',
+          details: parsed.error.errors,
+        },
+      });
+    }
+
+    const { agentVerusId, buyerVerusId, jobHash, message, rating, timestamp, signature } = parsed.data;
+
+    // Check timestamp is reasonable (within last 24 hours)
+    const now = Math.floor(Date.now() / 1000);
+    const maxAge = 24 * 60 * 60; // 24 hours
+    if (timestamp < now - maxAge || timestamp > now + 300) {
+      return reply.code(400).send({
+        error: {
+          code: 'INVALID_TIMESTAMP',
+          message: 'Timestamp must be within the last 24 hours',
+        },
+      });
+    }
+
+    const rpc = getRpcClient();
+    
+    // Resolve agent's identity address
+    let agentIAddress: string;
+    try {
+      // Check if it's already an i-address or needs resolution
+      const agent = agentQueries.getById(agentVerusId);
+      if (agent) {
+        agentIAddress = agent.verus_id;
+      } else {
+        const agentIdentity = await rpc.getIdentity(agentVerusId);
+        agentIAddress = agentIdentity.identity.identityaddress;
+        // Verify agent is registered
+        const resolvedAgent = agentQueries.getById(agentIAddress);
+        if (!resolvedAgent) {
+          return reply.code(404).send({
+            error: {
+              code: 'AGENT_NOT_FOUND',
+              message: 'Agent not found in platform registry',
+            },
+          });
+        }
+      }
+    } catch {
+      return reply.code(404).send({
+        error: {
+          code: 'AGENT_NOT_FOUND',
+          message: 'Could not resolve agent identity',
+        },
+      });
+    }
+
+    // Resolve buyer's identity address
+    let buyerIAddress: string;
+    try {
+      const buyerIdentity = await rpc.getIdentity(buyerVerusId);
+      buyerIAddress = buyerIdentity.identity.identityaddress;
+    } catch {
+      return reply.code(400).send({
+        error: {
+          code: 'INVALID_BUYER',
+          message: 'Could not resolve buyer identity',
+        },
+      });
+    }
+
+    // P3-RATE-1: Check buyer-specific rate limit
+    if (!checkRateLimit(buyerRateLimits, buyerIAddress, MAX_REVIEWS_PER_BUYER)) {
+      return reply.code(429).send({
+        error: {
+          code: 'RATE_LIMITED',
+          message: 'Too many reviews submitted by this identity. Please wait.',
+        },
+      });
+    }
+
+    // P3-DUP-1: Check for duplicate pending review
+    const existingReview = inboxQueries.findPendingReview(agentIAddress, buyerIAddress, jobHash);
+    if (existingReview) {
+      return reply.code(409).send({
+        error: {
+          code: 'DUPLICATE_REVIEW',
+          message: 'A review for this job is already pending in the agent inbox.',
+        },
+      });
+    }
+
+    // Verify the buyer's signature
+    const expectedMessage = generateReviewMessage(agentVerusId, jobHash, message, rating, timestamp);
+    
+    let isValid: boolean;
+    try {
+      isValid = await rpc.verifyMessage(buyerVerusId, expectedMessage, signature);
+    } catch (error) {
+      fastify.log.error({ error, buyerVerusId }, 'Signature verification failed');
+      return reply.code(400).send({
+        error: {
+          code: 'VERIFICATION_FAILED',
+          message: 'Could not verify signature',
+        },
+      });
+    }
+
+    if (!isValid) {
+      fastify.log.warn({ buyerVerusId, jobHash }, 'Invalid review signature');
+      return reply.code(401).send({
+        error: {
+          code: 'INVALID_SIGNATURE',
+          message: 'Signature verification failed. Make sure you signed the exact message format.',
+        },
+      });
+    }
+
+    // Generate VDXF data for the agent to add to their identity
+    const vdxfData = generateVdxfData(buyerIAddress, jobHash, message, rating, signature, timestamp);
+
+    // Calculate expiry (7 days)
+    const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
+
+    // Add to agent's inbox
+    const inboxId = inboxQueries.insert({
+      recipient_verus_id: agentIAddress,
+      type: 'review',
+      sender_verus_id: buyerIAddress,
+      job_hash: jobHash,
+      rating: rating || null,
+      message: message || null,
+      signature,
+      status: 'pending',
+      expires_at: expiresAt,
+      vdxf_data: JSON.stringify(vdxfData),
+    });
+
+    fastify.log.info({ 
+      inboxId,
+      agentVerusId: agentIAddress, 
+      buyerVerusId: buyerIAddress,
+      jobHash,
+      rating,
+    }, 'Review added to agent inbox');
+
+    return reply.code(201).send({
+      data: {
+        inboxId,
+        status: 'pending',
+        message: 'Review verified and added to agent inbox. Agent must add it to their VerusID.',
+        agentVerusId: agentIAddress,
+        buyerVerusId: buyerIAddress,
+        jobHash,
+        rating,
+        expiresAt,
+      },
+    });
+  });
+
+  /**
+   * GET /v1/reviews/message
+   * Get the message format that needs to be signed for a review
+   * (Helper endpoint for clients)
+   */
+  fastify.get('/v1/reviews/message', async (request: FastifyRequest, reply: FastifyReply) => {
+    const query = request.query as Record<string, string>;
+    
+    const agentVerusId = query.agentVerusId;
+    const jobHash = query.jobHash;
+    const message = query.message;
+    const rating = query.rating ? parseInt(query.rating, 10) : undefined;
+    const timestamp = query.timestamp ? parseInt(query.timestamp, 10) : Math.floor(Date.now() / 1000);
+
+    if (!agentVerusId || !jobHash) {
+      return reply.code(400).send({
+        error: {
+          code: 'MISSING_PARAMS',
+          message: 'agentVerusId and jobHash are required',
+        },
+      });
+    }
+
+    const reviewMessage = generateReviewMessage(agentVerusId, jobHash, message, rating, timestamp);
+
+    return {
+      data: {
+        message: reviewMessage,
+        timestamp,
+        instructions: [
+          '1. Copy the message above',
+          '2. Sign it with: verus -testnet signmessage "yourID@" "<message>"',
+          '3. Submit the signature to POST /v1/reviews',
+        ],
+      },
+    };
+  });
+}

@@ -25,3 +25,38 @@ export function normalize(name: string): string {
 export function areConfusable(name1: string, name2: string): boolean {
   return removeConfusables(name1) === removeConfusables(name2);
 }
+
+/**
+ * Check if name contains homoglyph attack characters.
+ * Returns detailed info about what was detected.
+ */
+export interface HomoglyphCheckResult {
+  isAttack: boolean;
+  normalized: string;
+  confusedWith?: string[];
+}
+
+export function hasHomoglyphAttack(name: string): HomoglyphCheckResult {
+  const normalized = removeConfusables(name);
+  const isAttack = normalized !== name;
+  
+  if (!isAttack) {
+    return { isAttack: false, normalized };
+  }
+  
+  // Find which characters were confusable
+  const confusedWith: string[] = [];
+  for (let i = 0; i < name.length; i++) {
+    const char = name[i];
+    const normalizedChar = removeConfusables(char);
+    if (char !== normalizedChar) {
+      confusedWith.push(`'${char}' → '${normalizedChar}'`);
+    }
+  }
+  
+  return {
+    isAttack: true,
+    normalized,
+    confusedWith: [...new Set(confusedWith)], // Unique entries
+  };
+}

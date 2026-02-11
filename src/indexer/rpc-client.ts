@@ -19,6 +19,7 @@ interface TransactionInfo {
   txid: string;
   blockhash: string;
   blockheight: number;
+  confirmations?: number;
   vout: Array<{
     value: number;
     scriptPubKey: {
@@ -27,6 +28,7 @@ interface TransactionInfo {
         name: string;
         identityaddress: string;
         contentmap?: Record<string, string>;
+        contentmultimap?: Record<string, string[]>;
       };
     };
   }>;
@@ -123,6 +125,39 @@ export class VerusRpcClient {
     } catch {
       return false;
     }
+  }
+
+  // Verify a signed message (VerusID signature)
+  async verifyMessage(identity: string, message: string, signature: string): Promise<boolean> {
+    try {
+      const result = await this.call<boolean>('verifymessage', [identity, signature, message]);
+      return result === true;
+    } catch (error) {
+      // Log but don't throw - invalid signatures return false
+      console.error('[RPC] verifyMessage error:', error);
+      return false;
+    }
+  }
+
+  // Sign a message (for testing - requires wallet access)
+  async signMessage(identity: string, message: string): Promise<string> {
+    const result = await this.call<{ hash: string; signature: string }>('signmessage', [identity, message]);
+    return result.signature;
+  }
+
+  // Sign data using signdata RPC (for VerusID login consent)
+  async signData(params: { address: string; datahash?: string; message?: string }): Promise<{ hash: string; signature: string }> {
+    return this.call('signdata', [params]);
+  }
+
+  // Verify signature using verifysignature RPC
+  async verifySignature(params: { address: string; vdxfdata?: string; hash?: string; signature?: string }): Promise<{ valid: boolean }> {
+    return this.call('verifysignature', [params]);
+  }
+
+  // Generic RPC call for custom methods
+  async rpcCall<T = unknown>(method: string, params: unknown[] = []): Promise<T> {
+    return this.call<T>(method, params);
   }
 }
 

@@ -22,6 +22,11 @@ export const config = {
   db: {
     path: process.env.DB_PATH || './data/verus-platform.db',
   },
+  security: {
+    webhookEncryptionKey: process.env.WEBHOOK_ENCRYPTION_KEY || '',
+    cookieSecret: process.env.COOKIE_SECRET || '',
+    corsOrigin: process.env.CORS_ORIGIN || '',
+  },
   indexer: {
     minConfirmations: parseInt(process.env.MIN_CONFIRMATIONS || '6'),
     pollIntervalMs: parseInt(process.env.POLL_INTERVAL_MS || '10000'),

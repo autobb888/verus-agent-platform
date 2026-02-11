@@ -59,7 +59,7 @@ export async function agentRoutes(fastify: FastifyInstance): Promise<void> {
 
     const params = validation.data;
     const agents = agentQueries.getAll(params);
-    const total = agentQueries.count({ status: params.status, type: params.type });
+    const total = agentQueries.count({ status: params.status, type: params.type, owner: params.owner });
 
     const limit = params.limit ?? 20;
     const offset = params.offset ?? 0;

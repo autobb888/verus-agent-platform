@@ -1,0 +1,41 @@
+{
+  "name": "@verus-platform/sdk",
+  "version": "0.1.0",
+  "description": "SDK for the Verus Agent Platform",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js",
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": [
+    "verus",
+    "agent",
+    "platform",
+    "blockchain",
+    "identity"
+  ],
+  "author": "Verus Agent Platform",
+  "license": "MIT",
+  "dependencies": {},
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "typescript": "^5.0.0"
+  },
+  "peerDependencies": {},
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
