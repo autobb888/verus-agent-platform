@@ -567,4 +567,26 @@ export function runMigrations(db: Database.Database): void {
 
   db.exec(`CREATE INDEX IF NOT EXISTS idx_agent_data_policies_agent ON agent_data_policies(agent_verus_id)`);
   db.exec(`CREATE INDEX IF NOT EXISTS idx_deletion_attestations_agent ON deletion_attestations(agent_verus_id)`);
+
+  // Onboarding: pending identity registrations
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS onboard_requests (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      address TEXT NOT NULL,
+      pubkey TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'committing', 'confirming', 'registered', 'failed')),
+      commitment_txid TEXT,
+      register_txid TEXT,
+      identity_name TEXT,
+      i_address TEXT,
+      error TEXT,
+      ip_address TEXT,
+      created_at TEXT DEFAULT (datetime('now')),
+      updated_at TEXT DEFAULT (datetime('now'))
+    )
+  `);
+
+  db.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_onboard_name_pending ON onboard_requests(name) WHERE status IN ('pending', 'committing', 'confirming')`);
+  db.exec(`CREATE INDEX IF NOT EXISTS idx_onboard_status ON onboard_requests(status)`);
 }
