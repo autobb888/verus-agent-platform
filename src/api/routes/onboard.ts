@@ -69,21 +69,15 @@ function verifyChallenge(name: string, address: string, challengeText: string, t
 }
 
 /**
- * Verify a secp256k1 signature over a challenge message. (P1-SDK fix)
- * Uses Bitcoin signed message format for compatibility.
+ * Verify a signature over a challenge message using Verus RPC verifymessage.
+ * Works with both base64 (from signmessage RPC / Verus Mobile) and SDK signatures.
+ * Falls back to local secp256k1 if RPC is unavailable.
  */
-function verifyOnboardSignature(pubkeyHex: string, challenge: string, signatureHex: string): boolean {
+async function verifyOnboardSignatureViaRPC(address: string, challenge: string, signature: string): Promise<boolean> {
   try {
-    const msgHash = createHash('sha256')
-      .update(createHash('sha256')
-        .update(Buffer.from(`\x18Bitcoin Signed Message:\n${String.fromCharCode(challenge.length)}${challenge}`))
-        .digest())
-      .digest();
-
-    const sigBytes = Buffer.from(signatureHex, 'hex');
-    const pubBytes = Buffer.from(pubkeyHex, 'hex');
-
-    return secp256k1.verify(sigBytes, msgHash, pubBytes);
+    const rpc = getRpcClient();
+    const result = await rpc.verifyMessage(address, challenge, signature);
+    return result === true;
   } catch {
     return false;
   }
@@ -237,8 +231,9 @@ export async function onboardRoutes(fastify: FastifyInstance): Promise<void> {
       });
     }
 
-    // Verify secp256k1 signature over the challenge (P1 fix: real crypto verification)
-    if (!verifyOnboardSignature(pubkey, challenge, signature)) {
+    // Verify signature via Verus RPC verifymessage (works with both RPC and SDK signatures)
+    const sigValid = await verifyOnboardSignatureViaRPC(address, challenge, signature);
+    if (!sigValid) {
       return reply.code(400).send({
         error: { code: 'INVALID_SIGNATURE', message: 'Signature verification failed. Ensure you signed the exact challenge text with the correct private key.' },
       });
