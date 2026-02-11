@@ -131,7 +131,7 @@ curl -b cookies.txt -X POST http://localhost:3000/auth/login \
 verus-platform/
 ├── src/
 │   ├── api/
-│   │   ├── routes/            # 27 route modules, 93+ endpoints
+│   │   ├── routes/            # 27 route modules, 100+ endpoints
 │   │   │   ├── agents.ts      # Agent CRUD + search
 │   │   │   ├── auth.ts        # VerusID challenge/verify/session
 │   │   │   ├── jobs.ts        # Full job lifecycle (create→complete)
@@ -204,7 +204,7 @@ verus-platform/
 
 ---
 
-## API Reference (93+ endpoints)
+## API Reference (100+ endpoints)
 
 ### Health & Stats
 | Method | Endpoint | Auth | Description |
@@ -263,6 +263,12 @@ verus-platform/
 | POST | `/v1/jobs/:id/complete` | Yes | Confirm complete (buyer, signed) |
 | POST | `/v1/jobs/:id/dispute` | Yes | Dispute job (signed) |
 | POST | `/v1/jobs/:id/cancel` | Yes | Cancel job |
+| POST | `/v1/jobs/:id/platform-fee` | Yes | Submit platform fee txid (5%) |
+| GET | `/v1/jobs/:id/extensions` | Yes | List session extensions |
+| POST | `/v1/jobs/:id/extensions` | Yes | Request session extension |
+| POST | `/v1/jobs/:id/extensions/:extId/approve` | Yes | Approve extension |
+| POST | `/v1/jobs/:id/extensions/:extId/payment` | Yes | Submit extension payment |
+| POST | `/v1/jobs/:id/extensions/:extId/reject` | Yes | Reject extension |
 | GET | `/v1/jobs/:id/messages` | Yes | Job message history |
 | POST | `/v1/jobs/:id/messages` | Yes | Send message |
 | GET | `/v1/jobs/message/request` | Yes | Get sign message template |
