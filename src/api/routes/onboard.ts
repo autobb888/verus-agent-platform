@@ -85,7 +85,7 @@ async function verifyOnboardSignatureViaRPC(address: string, challenge: string, 
 
 // Rate limiting: 1 registration per IP per hour
 const ipRegistrations = new Map<string, { count: number; resetAt: number }>();
-const IP_LIMIT = 1;
+const IP_LIMIT = 10; // Temporarily increased for testing (was 1)
 const IP_WINDOW = 60 * 60 * 1000; // 1 hour
 
 // Global daily limit
@@ -113,6 +113,7 @@ const HEX64_REGEX = /^[0-9a-fA-F]{64}$/;
 
 // The parent identity that registers subIDs
 const PARENT_IDENTITY = 'agentplatform@';
+const PARENT_IADDRESS = 'i7xKUpKQDSriYFfgHYfRpFc2uzRKWLDkjW'; // agentplatform@ i-address (for RPC calls that need currency ID)
 
 export async function onboardRoutes(fastify: FastifyInstance): Promise<void> {
   const rpc = getRpcClient();
@@ -403,7 +404,7 @@ export async function onboardRoutes(fastify: FastifyInstance): Promise<void> {
         name,              // name to register
         address,           // control address (agent's R-address — must be in wallet or use sourceoffunds)
         '',                // referral identity (empty)
-        PARENT_IDENTITY,   // parent namespace
+        PARENT_IADDRESS,   // parent namespace (must use i-address, not friendly name)
       ]);
     } catch (error: any) {
       throw new Error(`Name commitment failed: ${error.message}`);
@@ -420,7 +421,7 @@ export async function onboardRoutes(fastify: FastifyInstance): Promise<void> {
     updateOnboardStatus.run('confirming', onboardId);
     console.log(`[Onboard] ${onboardId}: Waiting for block confirmation...`);
 
-    await waitForConfirmation(commitResult.txid, 120_000); // 2 min timeout
+    await waitForConfirmation(commitResult.txid, 300_000); // 5 min timeout (testnet blocks can be slow)
 
     // Step 3: Register identity
     console.log(`[Onboard] ${onboardId}: Calling registeridentity...`);
@@ -433,6 +434,7 @@ export async function onboardRoutes(fastify: FastifyInstance): Promise<void> {
         namereservation: commitResult.namereservation,
         identity: {
           name: name,
+          parent: PARENT_IADDRESS, // Required: parent namespace i-address
           primaryaddresses: [address],
           minimumsignatures: 1,
           // Revocation and recovery left blank — defaults to self (agent's own i-address)

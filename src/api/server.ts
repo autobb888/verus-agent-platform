@@ -87,12 +87,12 @@ export async function createServer() {
   await fastify.register(rateLimit, {
     max: config.rateLimit.max,
     timeWindow: config.rateLimit.windowMs,
-    errorResponseBuilder: () => ({
-      error: {
-        code: 'RATE_LIMITED',
-        message: 'Too many requests, please slow down',
-      },
-    }),
+    errorResponseBuilder: (_req: any, context: any) => {
+      const err = new Error('Too many requests, please slow down') as any;
+      err.statusCode = context.statusCode || 429;
+      err.code = 'RATE_LIMITED';
+      return err;
+    },
   });
 
   // Multipart file uploads (Phase 6b)
@@ -107,13 +107,18 @@ export async function createServer() {
 
   // Global error handler - don't leak internal details
   fastify.setErrorHandler((error: Error & { statusCode?: number; code?: string }, request, reply) => {
-    fastify.log.error(error);
+    // Only log server errors at error level; client errors at warn
+    if (!error.statusCode || error.statusCode >= 500) {
+      fastify.log.error(error);
+    } else {
+      fastify.log.warn({ statusCode: error.statusCode, code: error.code, message: error.message }, 'client error');
+    }
     
     // Don't expose internal error details
     const statusCode = error.statusCode || 500;
     reply.code(statusCode).send({
       error: {
-        code: error.code || 'INTERNAL_ERROR',
+        code: error.code === 'FST_ERR_RATE_LIMIT_EXCEEDED' ? 'RATE_LIMITED' : (error.code || 'INTERNAL_ERROR'),
         message: statusCode < 500 
           ? error.message 
           : 'An internal error occurred',

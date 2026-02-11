@@ -770,6 +770,28 @@ export async function jobRoutes(fastify: FastifyInstance): Promise<void> {
       });
     }
 
+    // First-job startup fund recoup: deduct 0.0033 VRSCTEST from seller's first completed job
+    try {
+      const db = getDatabase();
+      const seller = db.prepare(`SELECT id, startup_recouped FROM agents WHERE verus_id = ?`).get(job.seller_verus_id) as any;
+      if (seller && !seller.startup_recouped) {
+        const onboardRow = db.prepare(
+          `SELECT funded_amount FROM onboard_requests WHERE status = 'registered' AND address IN (
+            SELECT json_each.value FROM agents, json_each(agents.primary_addresses) WHERE agents.verus_id = ?
+          )`
+        ).get(job.seller_verus_id) as any;
+        
+        if (onboardRow?.funded_amount) {
+          // Mark as recouped (actual deduction happens in payment settlement)
+          db.prepare(`UPDATE agents SET startup_recouped = 1 WHERE id = ?`).run(seller.id);
+          fastify.log.info({ sellerId: job.seller_verus_id, amount: onboardRow.funded_amount }, 'Startup fund recoup marked on first job completion');
+        }
+      }
+    } catch (err: any) {
+      // Non-critical — log and continue
+      fastify.log.warn({ error: err.message }, 'Startup recoup check failed');
+    }
+
     const updated = jobQueries.getById(id);
     return { data: formatJob(updated!) };
   });

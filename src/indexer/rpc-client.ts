@@ -78,14 +78,16 @@ export class VerusRpcClient {
       }),
     });
 
-    if (!response.ok) {
-      throw new Error(`RPC HTTP error: ${response.status} ${response.statusText}`);
-    }
-
+    // Verus daemon returns HTTP 500 for RPC-level errors (e.g. "Identity not found"),
+    // so we must parse the JSON body before rejecting on HTTP status.
     const data = (await response.json()) as RpcResponse<T>;
     
     if (data.error) {
       throw new Error(`RPC error: ${data.error.code} - ${data.error.message}`);
+    }
+
+    if (!response.ok) {
+      throw new Error(`RPC HTTP error: ${response.status} ${response.statusText}`);
     }
 
     return data.result as T;
