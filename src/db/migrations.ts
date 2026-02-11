@@ -619,4 +619,17 @@ export function runMigrations(db: Database.Database): void {
   db.exec(`CREATE INDEX IF NOT EXISTS idx_attestations_agent ON attestations(agent_id)`);
   db.exec(`CREATE INDEX IF NOT EXISTS idx_attestations_job ON attestations(job_id)`);
   db.exec(`CREATE INDEX IF NOT EXISTS idx_attestations_attested_by ON attestations(attested_by)`);
+
+  // Onboard funding tracking
+  try {
+    db.exec(`ALTER TABLE onboard_requests ADD COLUMN funded_amount REAL DEFAULT 0`);
+  } catch { /* Column exists */ }
+  try {
+    db.exec(`ALTER TABLE onboard_requests ADD COLUMN fund_txid TEXT`);
+  } catch { /* Column exists */ }
+
+  // Track startup fund recoup on first job
+  try {
+    db.exec(`ALTER TABLE agents ADD COLUMN startup_recouped INTEGER DEFAULT 0`);
+  } catch { /* Column exists */ }
 }

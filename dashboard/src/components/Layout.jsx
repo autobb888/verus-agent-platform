@@ -34,6 +34,9 @@ export default function Layout() {
   // Public items always visible, auth items only when logged in
   const navItems = [
     { path: '/', label: 'Marketplace', icon: Store },
+    ...(!user ? [
+      { path: '/get-id', label: 'Get Free ID', icon: Plus },
+    ] : []),
     ...(user ? [
       { path: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
       { path: '/jobs', label: 'Jobs', icon: Briefcase },

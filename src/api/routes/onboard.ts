@@ -374,6 +374,9 @@ export async function onboardRoutes(fastify: FastifyInstance): Promise<void> {
     if (row.status === 'registered') {
       response.iAddress = row.i_address;
       response.registerTxid = row.register_txid;
+      if (row.funded_amount) {
+        response.funded = { amount: row.funded_amount, currency: 'VRSCTEST', txid: row.fund_txid };
+      }
     }
 
     if (row.status === 'failed') {
@@ -461,6 +464,20 @@ export async function onboardRoutes(fastify: FastifyInstance): Promise<void> {
     const registerTxid = typeof registerResult === 'string' ? registerResult : registerResult?.txid || '';
     updateOnboardRegistered.run(registerTxid, `${name}.${PARENT_IDENTITY}`, iAddress, onboardId);
     console.log(`[Onboard] ${onboardId}: ✅ Registered ${name}.${PARENT_IDENTITY} (${iAddress})`);
+
+    // Step 5: Auto-fund the new agent with startup VRSCTEST
+    // Enough for ~30+ contentmultimap updates
+    const STARTUP_FUND = 0.0033;
+    try {
+      const fundTxid = await rpc.rpcCall<string>('sendtoaddress', [address, STARTUP_FUND]);
+      console.log(`[Onboard] ${onboardId}: Funded ${address} with ${STARTUP_FUND} VRSCTEST (txid: ${fundTxid})`);
+      // Track the funded amount for first-job recoup
+      db.prepare(`UPDATE onboard_requests SET funded_amount = ?, fund_txid = ? WHERE id = ?`)
+        .run(STARTUP_FUND, fundTxid, onboardId);
+    } catch (fundError: any) {
+      // Non-fatal — agent just won't have gas yet
+      console.error(`[Onboard] ${onboardId}: Failed to fund: ${fundError.message}`);
+    }
   }
 
   // Wait for a transaction to get at least 1 confirmation
