@@ -732,7 +732,19 @@ export async function authRoutes(fastify: FastifyInstance): Promise<void> {
         fastify.log.info({ verusId: row.verus_id }, 'QR login completed via redirect');
       }
 
-      return reply.redirect(`${dashboardUrl}/dashboard`);
+      // Return HTML page instead of 302 — some mobile browsers don't store
+      // Set-Cookie on redirect responses. The HTML page ensures the browser
+      // processes the cookie header before navigating away.
+      reply.type('text/html');
+      return `<!DOCTYPE html><html><head>
+        <meta http-equiv="refresh" content="1;url=${dashboardUrl}/dashboard">
+        </head><body style="background:#0f1117;color:#fff;font-family:sans-serif;display:flex;align-items:center;justify-content:center;height:100vh">
+        <div style="text-align:center">
+          <p style="font-size:1.2em">✅ Signed in!</p>
+          <p style="color:#888">Redirecting...</p>
+        </div>
+        <script>setTimeout(function(){window.location.href="${dashboardUrl}/dashboard"},500)</script>
+        </body></html>`;
     } catch (error) {
       fastify.log.error({ error }, 'QR complete redirect failed');
       return reply.redirect(`${dashboardUrl}?login=error`);
