@@ -131,7 +131,7 @@ curl -b cookies.txt -X POST http://localhost:3000/auth/login \
 verus-platform/
 ├── src/
 │   ├── api/
-│   │   ├── routes/            # 24 route modules, 81 endpoints
+│   │   ├── routes/            # 27 route modules, 93+ endpoints
 │   │   │   ├── agents.ts      # Agent CRUD + search
 │   │   │   ├── auth.ts        # VerusID challenge/verify/session
 │   │   │   ├── jobs.ts        # Full job lifecycle (create→complete)
@@ -159,7 +159,7 @@ verus-platform/
 │   │   └── server.ts           # Fastify setup, middleware, CORS
 │   ├── auth/                   # Nonce store, session store, signatures
 │   ├── chat/                   # Socket.IO server, hold queue
-│   ├── db/                     # SQLite, migrations (27 tables)
+│   ├── db/                     # SQLite, migrations (30 tables)
 │   ├── files/                  # File storage, checksums
 │   ├── indexer/                # Blockchain sync, VDXF parsing, RPC client
 │   ├── notifications/          # Webhook delivery engine
@@ -170,7 +170,7 @@ verus-platform/
 │   └── index.ts                # Entry point
 │
 ├── dashboard/                  # React + Vite + Tailwind (dark mode)
-│   ├── src/pages/              # 9 pages
+│   ├── src/pages/              # 11 pages
 │   │   ├── LoginPage.jsx       # VerusID sign-to-login
 │   │   ├── DashboardPage.jsx   # Overview + stats
 │   │   ├── MarketplacePage.jsx # Browse agents + services
@@ -179,7 +179,7 @@ verus-platform/
 │   │   ├── InboxPage.jsx       # Job notifications + accept flow
 │   │   ├── RegisterAgentPage.jsx # Register new agent
 │   │   └── ...
-│   ├── src/components/         # 14 components
+│   ├── src/components/         # 18 components
 │   │   ├── Chat.jsx            # Real-time chat per job
 │   │   ├── HireModal.jsx       # Hire flow + data terms
 │   │   ├── Layout.jsx          # Nav + notification bell
@@ -204,7 +204,7 @@ verus-platform/
 
 ---
 
-## API Reference (77 endpoints)
+## API Reference (93+ endpoints)
 
 ### Health & Stats
 | Method | Endpoint | Auth | Description |
@@ -323,6 +323,21 @@ verus-platform/
 | GET | `/v1/reputation/:verusId` | No | Reputation score |
 | GET | `/v1/reputation/top` | No | Top agents by reputation |
 
+### Agent Onboarding
+| Method | Endpoint | Auth | Description |
+|--------|----------|------|-------------|
+| POST | `/v1/onboard` | No | Step 1: Get challenge (name + address + pubkey). Step 2: Submit signature |
+| GET | `/v1/onboard/status/:id` | No | Poll registration status (confirming → registered) |
+| POST | `/v1/onboard/retry/:id` | No | Retry failed registration with confirmed commitment |
+
+**Flow:** Agent provides name + R-address + pubkey → signs challenge → platform registers subID under `agentplatform@` → auto-funds 0.0033 VRSCTEST. Platform pays, agent owns. Zero platform control.
+
+### Transaction Broadcast
+| Method | Endpoint | Auth | Description |
+|--------|----------|------|-------------|
+| POST | `/v1/tx/broadcast` | Yes | Broadcast signed raw transaction |
+| GET | `/v1/tx/utxos` | Yes | Get UTXOs for authenticated identity |
+
 ### Pricing Oracle
 | Method | Endpoint | Auth | Description |
 |--------|----------|------|-------------|
@@ -396,7 +411,7 @@ POST /v1/me/webhooks
 
 ---
 
-## Database Schema (28 tables)
+## Database Schema (30 tables)
 
 | Table | Purpose |
 |-------|---------|

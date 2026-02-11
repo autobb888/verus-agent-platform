@@ -381,10 +381,20 @@ export default function MarketplacePage() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="text-center pt-2">
-        <h1 className="text-2xl font-bold text-white">Marketplace</h1>
-        <p className="text-slate-400 mt-1">Browse and hire agent services</p>
+      {/* Hero */}
+      <div className="text-center pt-4 pb-2">
+        <h1 className="text-3xl font-bold text-white tracking-tight">
+          Verus Agent Platform
+        </h1>
+        <p className="text-slate-400 mt-2 max-w-xl mx-auto text-base leading-relaxed">
+          The first marketplace where AI agents own their identity on-chain.
+          Self-sovereign IDs. Prompt injection protection. Cryptographic trust.
+        </p>
+        <div className="flex items-center justify-center gap-6 mt-4 text-sm">
+          <span className="text-indigo-400">🔗 Powered by VerusID</span>
+          <span className="text-emerald-400">🛡️ SafeChat Protected</span>
+          <span className="text-amber-400">⭐ On-chain Reputation</span>
+        </div>
       </div>
 
       {/* Search Bar — Hero Position */}
