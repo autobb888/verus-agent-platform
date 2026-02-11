@@ -415,6 +415,13 @@ function JobCard({ job, currentUser, onUpdate }) {
             <DeletionAttestationView jobId={job.id} />
           )}
 
+          {/* Review prompt for buyers on completed jobs */}
+          {job.status === 'completed' && !isSeller && (
+            <Link to={`/jobs/${job.id}`} className="inline-flex items-center gap-2 text-indigo-400 hover:text-indigo-300 text-sm font-medium mt-2">
+              ⭐ Leave a Review
+            </Link>
+          )}
+
           {error && (
             <div className="text-red-400 text-sm">{error}</div>
           )}

@@ -6,6 +6,7 @@ import JobStepper from '../components/JobStepper';
 import Chat from '../components/Chat';
 import AlertBanner from '../components/AlertBanner';
 import JobActions from '../components/JobActions';
+import ReviewModal from '../components/ReviewModal';
 
 const API_BASE = import.meta.env.VITE_API_URL || '';
 
@@ -17,6 +18,8 @@ export default function JobDetailPage() {
   const [job, setJob] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [showReview, setShowReview] = useState(false);
+  const [existingReview, setExistingReview] = useState(null);
 
   useEffect(() => {
     fetchJob();
@@ -28,6 +31,17 @@ export default function JobDetailPage() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error?.message || 'Failed to fetch job');
       setJob(data.data);
+      
+      // Check for existing review on this job
+      if (data.data?.jobHash) {
+        try {
+          const reviewRes = await fetch(`${API_BASE}/v1/reviews/job/${data.data.jobHash}`);
+          const reviewData = await reviewRes.json();
+          if (reviewRes.ok && reviewData.data?.length > 0) {
+            setExistingReview(reviewData.data[0]);
+          }
+        } catch { /* no review yet */ }
+      }
     } catch (err) {
       setError(err.message);
     } finally {
@@ -175,6 +189,49 @@ export default function JobDetailPage() {
       {/* Real-time Chat */}
       {(isBuyer || isSeller) && !['completed', 'cancelled'].includes(job.status) && (
         <Chat jobId={id} job={job} />
+      )}
+
+      {/* Review Section — shown when job is completed */}
+      {job.status === 'completed' && (
+        <div className="card">
+          <h3 className="text-lg font-semibold text-white mb-4">Review</h3>
+          {existingReview ? (
+            <div className="space-y-2">
+              <div className="flex items-center gap-2">
+                <span className="text-yellow-400 text-lg">
+                  {'★'.repeat(existingReview.rating)}{'☆'.repeat(5 - existingReview.rating)}
+                </span>
+                <span className="text-gray-400 text-sm">
+                  {existingReview.rating}/5
+                </span>
+              </div>
+              {existingReview.message && (
+                <p className="text-gray-300">{existingReview.message}</p>
+              )}
+              <p className="text-gray-500 text-xs">
+                Reviewed by <ResolvedId verusId={existingReview.buyerVerusId || existingReview.buyer_verus_id} />
+              </p>
+            </div>
+          ) : isBuyer ? (
+            <button
+              onClick={() => setShowReview(true)}
+              className="bg-indigo-600 hover:bg-indigo-500 text-white font-medium px-6 py-3 rounded-lg transition-colors"
+            >
+              ⭐ Leave a Review
+            </button>
+          ) : (
+            <p className="text-gray-500">No review yet</p>
+          )}
+        </div>
+      )}
+
+      {/* Review Modal */}
+      {showReview && (
+        <ReviewModal
+          job={job}
+          onClose={() => setShowReview(false)}
+          onSubmitted={() => fetchJob()}
+        />
       )}
     </div>
   );
