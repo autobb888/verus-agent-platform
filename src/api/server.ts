@@ -27,6 +27,7 @@ import { notificationRoutes } from './routes/notifications.js';
 import { dataPolicyRoutes } from './routes/data-policies.js';
 import { transactionRoutes } from './routes/transactions.js';
 import { onboardRoutes } from './routes/onboard.js';
+import { canaryRoutes } from './routes/canary.js';
 import multipart from '@fastify/multipart';
 import helmet from '@fastify/helmet';
 import { initNonceStore } from '../auth/nonce-store.js';
@@ -156,6 +157,7 @@ export async function createServer() {
   await fastify.register(dataPolicyRoutes);
   await fastify.register(transactionRoutes);
   await fastify.register(onboardRoutes);
+  await fastify.register(canaryRoutes);
 
   return fastify;
 }

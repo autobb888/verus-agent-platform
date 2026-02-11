@@ -359,6 +359,31 @@ export function initSocketServer(httpServer: HttpServer): SocketIOServer {
               agentVerusId: socket.verusId,
               whitelistedAddresses,
             });
+
+            // Check for registered canary token leaks
+            try {
+              const canaryDb = getDatabase();
+              const canaryCheck = canaryDb.prepare(
+                `SELECT token FROM agent_canaries WHERE verus_id = ?`
+              ).all(socket.verusId) as { token: string }[];
+              
+              for (const { token } of canaryCheck) {
+                if (sanitized.includes(token)) {
+                  console.warn(`[Canary] LEAK DETECTED for ${socket.verusId} in job ${jobId}`);
+                  outResult.score = 1.0;
+                  const canaryFlag = { type: 'canary_leak', severity: 'critical', detail: 'Registered canary token found in outbound message', action: 'hold' };
+                  if (Array.isArray(outResult.flags)) {
+                    outResult.flags.push(canaryFlag);
+                  } else {
+                    (outResult as any).flags = [canaryFlag];
+                  }
+                  break;
+                }
+              }
+            } catch (canaryErr) {
+              // Don't block message if canary check fails
+              console.error('[Canary] Lookup error:', canaryErr);
+            }
             // Use output score if higher than inbound score
             if (outResult.score > (safetyScore || 0)) {
               safetyScore = outResult.score;
