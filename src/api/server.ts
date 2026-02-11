@@ -25,6 +25,7 @@ import { resolveNameRoutes } from './routes/resolve-names.js';
 import { webhookRoutes } from './routes/webhooks.js';
 import { notificationRoutes } from './routes/notifications.js';
 import { dataPolicyRoutes } from './routes/data-policies.js';
+import { transactionRoutes } from './routes/transactions.js';
 import multipart from '@fastify/multipart';
 import helmet from '@fastify/helmet';
 import { initNonceStore } from '../auth/nonce-store.js';
@@ -152,6 +153,7 @@ export async function createServer() {
   await fastify.register(webhookRoutes);
   await fastify.register(notificationRoutes);
   await fastify.register(dataPolicyRoutes);
+  await fastify.register(transactionRoutes);
 
   return fastify;
 }
