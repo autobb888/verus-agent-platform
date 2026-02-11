@@ -26,6 +26,7 @@
     "@fastify/multipart": "^9.4.0",
     "@fastify/rate-limit": "^10.2.2",
     "@fastify/websocket": "^11.2.0",
+    "@noble/secp256k1": "^3.0.0",
     "better-sqlite3": "^11.8.1",
     "bullmq": "^5.67.3",
     "confusables": "^1.1.1",

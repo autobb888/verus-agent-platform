@@ -20,12 +20,74 @@
 
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { v4 as uuidv4 } from 'uuid';
-import { createHash } from 'node:crypto';
+import { createHash, createHmac, timingSafeEqual } from 'node:crypto';
+import * as secp256k1 from '@noble/secp256k1';
 import { getDatabase } from '../../db/index.js';
 import { getRpcClient } from '../../indexer/rpc-client.js';
 import { isReservedName } from '../../utils/reserved-names.js';
 import { hasHomoglyphAttack } from '../../utils/homoglyph.js';
 import { config } from '../../config/index.js';
+
+// HMAC secret for challenge tokens (P2-SDK-12)
+const CHALLENGE_SECRET = process.env.ONBOARD_CHALLENGE_SECRET || createHash('sha256').update(process.env.COOKIE_SECRET || 'dev-onboard-secret').digest('hex');
+const CHALLENGE_TTL = 5 * 60 * 1000; // 5 minutes
+
+/**
+ * Generate an HMAC challenge bound to name + address + timestamp.
+ * No server-side state needed — recompute and verify on return.
+ */
+function generateChallenge(name: string, address: string): { challenge: string; token: string } {
+  const timestamp = Date.now().toString();
+  const nonce = uuidv4();
+  const data = `${name}|${address}|${timestamp}|${nonce}`;
+  const hmac = createHmac('sha256', CHALLENGE_SECRET).update(data).digest('hex');
+  return {
+    challenge: `vap-onboard:${nonce}`,
+    token: `${timestamp}|${nonce}|${hmac}`,
+  };
+}
+
+/**
+ * Verify an HMAC challenge token. Returns true if valid and not expired.
+ */
+function verifyChallenge(name: string, address: string, challengeText: string, token: string): boolean {
+  const parts = token.split('|');
+  if (parts.length !== 3) return false;
+
+  const [timestamp, nonce, hmac] = parts;
+  const ts = parseInt(timestamp, 10);
+  if (isNaN(ts) || Date.now() - ts > CHALLENGE_TTL) return false; // expired
+
+  const data = `${name}|${address}|${timestamp}|${nonce}`;
+  const expected = createHmac('sha256', CHALLENGE_SECRET).update(data).digest('hex');
+
+  try {
+    return timingSafeEqual(Buffer.from(hmac, 'hex'), Buffer.from(expected, 'hex'));
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Verify a secp256k1 signature over a challenge message. (P1-SDK fix)
+ * Uses Bitcoin signed message format for compatibility.
+ */
+function verifyOnboardSignature(pubkeyHex: string, challenge: string, signatureHex: string): boolean {
+  try {
+    const msgHash = createHash('sha256')
+      .update(createHash('sha256')
+        .update(Buffer.from(`\x18Bitcoin Signed Message:\n${String.fromCharCode(challenge.length)}${challenge}`))
+        .digest())
+      .digest();
+
+    const sigBytes = Buffer.from(signatureHex, 'hex');
+    const pubBytes = Buffer.from(pubkeyHex, 'hex');
+
+    return secp256k1.verify(sigBytes, msgHash, pubBytes);
+  } catch {
+    return false;
+  }
+}
 
 // Rate limiting: 1 registration per IP per hour
 const ipRegistrations = new Map<string, { count: number; resetAt: number }>();
@@ -61,6 +123,17 @@ const PARENT_IDENTITY = 'agentplatform@';
 export async function onboardRoutes(fastify: FastifyInstance): Promise<void> {
   const rpc = getRpcClient();
   const db = getDatabase();
+
+  // Cleanup stale pending registrations (P3: 30-minute timeout)
+  const cleanupStale = db.prepare(`
+    UPDATE onboard_requests SET status = 'failed', error = 'Timed out', updated_at = datetime('now')
+    WHERE status IN ('pending', 'committing', 'confirming')
+    AND created_at < datetime('now', '-30 minutes')
+  `);
+
+  // Run on startup and every 5 minutes
+  cleanupStale.run();
+  setInterval(() => cleanupStale.run(), 5 * 60 * 1000);
 
   // Prepared statements
   const insertOnboard = db.prepare(`
@@ -137,19 +210,18 @@ export async function onboardRoutes(fastify: FastifyInstance): Promise<void> {
     // --- P2-SDK-6: Verify pubkey ownership ---
     // Agent must sign a challenge to prove they control the keypair
     if (!signature || !challenge) {
-      // Generate a challenge for the agent to sign
-      const newChallenge = uuidv4();
+      // Generate an HMAC-bound challenge (P2-SDK-12: no server-side state needed)
+      const { challenge: chalText, token } = generateChallenge(name, address);
       return reply.code(200).send({
         status: 'challenge',
-        challenge: newChallenge,
-        message: `Sign this challenge with your private key to prove ownership: ${newChallenge}`,
+        challenge: chalText,
+        token,
+        message: `Sign this challenge with your private key to prove ownership: ${chalText}`,
         signatureRequired: true,
       });
     }
 
-    // Verify the signature matches the pubkey
-    // We verify by deriving the address from the pubkey and checking it matches
-    // the provided address, and that the signature is valid for the challenge
+    // Verify pubkey matches the claimed address
     const derivedAddress = pubkeyToAddress(pubkey);
     if (derivedAddress !== address) {
       return reply.code(400).send({
@@ -157,9 +229,20 @@ export async function onboardRoutes(fastify: FastifyInstance): Promise<void> {
       });
     }
 
-    // TODO: Verify signature cryptographically (requires secp256k1 verify)
-    // For now, the pubkey→address match proves ownership of the address
-    // Full sig verification will use @bitgo/utxo-lib in Phase C
+    // Verify HMAC challenge token is valid and not expired (P2-SDK-12)
+    const { token } = request.body as { token?: string };
+    if (!token || !verifyChallenge(name, address, challenge, token)) {
+      return reply.code(400).send({
+        error: { code: 'INVALID_CHALLENGE', message: 'Challenge token is invalid or expired. Request a new challenge.' },
+      });
+    }
+
+    // Verify secp256k1 signature over the challenge (P1 fix: real crypto verification)
+    if (!verifyOnboardSignature(pubkey, challenge, signature)) {
+      return reply.code(400).send({
+        error: { code: 'INVALID_SIGNATURE', message: 'Signature verification failed. Ensure you signed the exact challenge text with the correct private key.' },
+      });
+    }
 
     // --- Rate limiting ---
     const ip = request.ip;

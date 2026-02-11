@@ -190,17 +190,45 @@ export async function transactionRoutes(fastify: FastifyInstance): Promise<void>
       });
     }
 
-    // Verify at least one output involves the session's address or a known platform address
-    // We check outputs (sender may not appear in decoded outputs without full UTXO lookup)
-    // For now: verify the TX is decodable and the user is authenticated — 
-    // full input ownership verification requires UTXO lookups for each input
+    // P2-SDK-11: Verify at least one input belongs to the session's address
+    // Look up input UTXOs to check the spending addresses
+    let sessionOwnsInput = false;
+    const inputAddresses: string[] = [];
+
+    for (const vin of decodedTx.vin || []) {
+      if (!vin.txid || vin.vout === undefined) continue; // coinbase or malformed
+      try {
+        const prevTx = await rpc.rpcCall<{
+          vout: Array<{ scriptPubKey: { addresses?: string[] } }>;
+        }>('getrawtransaction', [vin.txid, 1]);
+        
+        const prevOutput = prevTx?.vout?.[vin.vout];
+        const addrs = prevOutput?.scriptPubKey?.addresses || [];
+        inputAddresses.push(...addrs);
+
+        if (addrs.includes(sessionAddress)) {
+          sessionOwnsInput = true;
+        }
+      } catch {
+        // Can't look up input — skip (may be unconfirmed)
+      }
+    }
+
+    if (!sessionOwnsInput) {
+      console.warn(`[TX] Broadcast REJECTED — no input matches session address ${sessionAddress}. Input addrs: [${inputAddresses.join(', ')}]`);
+      return reply.code(403).send({
+        error: { code: 'NOT_YOUR_TX', message: 'Transaction must spend from your registered address' },
+      });
+    }
+
+    // Collect output info for audit
     const outputAddresses: string[] = [];
     for (const vout of decodedTx.vout || []) {
       const addrs = vout.scriptPubKey?.addresses || [];
       outputAddresses.push(...addrs);
     }
 
-    // Calculate total output value for fee guard
+    // Calculate total output + input values for fee guard
     const totalOutput = (decodedTx.vout || []).reduce(
       (sum: number, v: any) => sum + (v.value || 0), 0
     );
@@ -211,7 +239,7 @@ export async function transactionRoutes(fastify: FastifyInstance): Promise<void>
     }
 
     // Audit log
-    console.log(`[TX] Broadcast request from ${session.verusId} (${sessionAddress}): ${decodedTx.txid || 'unknown'}, outputs to: [${outputAddresses.join(', ')}], total: ${totalOutput} VRSC`);
+    console.log(`[TX] Broadcast from ${session.verusId} (${sessionAddress}): inputs from [${inputAddresses.join(', ')}], outputs to [${outputAddresses.join(', ')}], total: ${totalOutput} VRSC`);
 
     // Broadcast
     try {
