@@ -702,35 +702,32 @@ export async function authRoutes(fastify: FastifyInstance): Promise<void> {
         return reply.redirect(`${dashboardUrl}?login=failed`);
       }
 
-      // If still 'signed', atomically claim it
+      // Mark as completed if still signed
       if (row.status === 'signed') {
-        const claimed = db.prepare(`UPDATE qr_challenges SET status = 'completed' WHERE id = ? AND status = 'signed'`).run(id);
-        if (claimed.changes === 0) {
-          // Already claimed — check if session already exists (race with poll)
-          // Still redirect to dashboard, session might already be set via poll
-          return reply.redirect(`${dashboardUrl}/dashboard`);
-        }
-
-        const sessionId = randomBytes(32).toString('hex');
-        const sessionNow = Date.now();
-        const sessionExpiry = sessionNow + SESSION_LIFETIME_MS;
-
-        db.prepare(`
-          INSERT INTO sessions (id, verus_id, identity_name, created_at, expires_at)
-          VALUES (?, ?, ?, ?, ?)
-        `).run(sessionId, row.verus_id, row.identity_name || row.verus_id, sessionNow, sessionExpiry);
-
-        reply.setCookie(SESSION_COOKIE, sessionId, {
-          httpOnly: true,
-          secure: process.env.NODE_ENV === 'production',
-          sameSite: 'lax',    // 'lax' required for redirect-based flow
-          maxAge: SESSION_LIFETIME_MS / 1000,
-          path: '/',
-          signed: true,
-        });
-
-        fastify.log.info({ verusId: row.verus_id }, 'QR login completed via redirect');
+        db.prepare(`UPDATE qr_challenges SET status = 'completed' WHERE id = ? AND status = 'signed'`).run(id);
       }
+
+      // Always create a fresh session — the poll may have raced and created one
+      // via fetch() whose Set-Cookie was dropped by mobile browsers.
+      const sessionId = randomBytes(32).toString('hex');
+      const sessionNow = Date.now();
+      const sessionExpiry = sessionNow + SESSION_LIFETIME_MS;
+
+      db.prepare(`
+        INSERT INTO sessions (id, verus_id, identity_name, created_at, expires_at)
+        VALUES (?, ?, ?, ?, ?)
+      `).run(sessionId, row.verus_id, row.identity_name || row.verus_id, sessionNow, sessionExpiry);
+
+      reply.setCookie(SESSION_COOKIE, sessionId, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax',
+        maxAge: SESSION_LIFETIME_MS / 1000,
+        path: '/',
+        signed: true,
+      });
+
+      fastify.log.info({ verusId: row.verus_id }, 'QR login completed via redirect');
 
       // Return HTML page instead of 302 — some mobile browsers don't store
       // Set-Cookie on redirect responses. The HTML page ensures the browser
