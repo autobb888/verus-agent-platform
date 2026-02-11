@@ -665,23 +665,23 @@ export async function authRoutes(fastify: FastifyInstance): Promise<void> {
 /**
  * Get session from request (for use in other routes)
  */
-export function getSessionFromRequest(request: FastifyRequest): { verusId: string } | null {
+export function getSessionFromRequest(request: FastifyRequest): { verusId: string; identityName: string | null } | null {
   const sessionId = request.cookies?.[SESSION_COOKIE];
   if (!sessionId) return null;
   
   try {
     const db = getDatabase();
     const session = db.prepare(`
-      SELECT verus_id, expires_at
+      SELECT verus_id, identity_name, expires_at
       FROM sessions
       WHERE id = ?
-    `).get(sessionId) as { verus_id: string; expires_at: number } | undefined;
+    `).get(sessionId) as { verus_id: string; identity_name: string | null; expires_at: number } | undefined;
     
     if (!session || session.expires_at < Date.now()) {
       return null;
     }
     
-    return { verusId: session.verus_id };
+    return { verusId: session.verus_id, identityName: session.identity_name ?? null };
   } catch {
     return null;
   }

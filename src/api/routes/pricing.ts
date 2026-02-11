@@ -10,6 +10,7 @@ import { FastifyInstance } from 'fastify';
 
 // ────────────────────────────────────────────
 // Duplicated pricing tables (avoid SDK dependency in platform)
+// ⚠️  Keep in sync with: ~/vap-agent-sdk/src/pricing/tables.ts
 // ────────────────────────────────────────────
 
 interface LLMCostEntry {
@@ -82,10 +83,10 @@ export async function pricingRoutes(fastify: FastifyInstance): Promise<void> {
     // Parse params with defaults
     const model = q.model || 'gpt-4o-mini';
     const category = (q.category || 'simple') as JobCategory;
-    const inputTokens = Math.max(0, parseInt(q.inputTokens || '2000', 10) || 2000);
-    const outputTokens = Math.max(0, parseInt(q.outputTokens || '1000', 10) || 1000);
+    const inputTokens = Math.min(Math.max(0, parseInt(q.inputTokens || '2000', 10) || 2000), 10_000_000);
+    const outputTokens = Math.min(Math.max(0, parseInt(q.outputTokens || '1000', 10) || 1000), 10_000_000);
     const privacyTier = (q.privacyTier || 'standard') as PrivacyTier;
-    const vrscUsdRate = parseFloat(q.vrscUsdRate || '1.0') || 1.0;
+    const vrscUsdRate = Math.max(0.0001, parseFloat(q.vrscUsdRate || '1.0') || 1.0);
 
     // Validate
     if (!VALID_CATEGORIES.has(category)) {

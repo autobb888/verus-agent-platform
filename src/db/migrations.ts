@@ -595,6 +595,10 @@ export function runMigrations(db: Database.Database): void {
     db.exec(`ALTER TABLE agents ADD COLUMN privacy_tier TEXT DEFAULT 'standard' CHECK(privacy_tier IN ('standard', 'private', 'sovereign'))`);
   } catch { /* Column exists */ }
 
+  try {
+    db.exec(`ALTER TABLE agents ADD COLUMN privacy_tier_verified INTEGER DEFAULT 0`);
+  } catch { /* Column exists */ }
+
   // Phase 7: Privacy attestations table (SDK-signed deletion proofs)
   db.exec(`
     CREATE TABLE IF NOT EXISTS attestations (

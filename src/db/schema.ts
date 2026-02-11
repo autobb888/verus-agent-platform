@@ -10,6 +10,7 @@ export interface Agent {
   status: 'active' | 'inactive' | 'deprecated';
   revoked: number;  // SQLite INTEGER: 0 = false, 1 = true
   privacy_tier?: 'standard' | 'private' | 'sovereign';
+  privacy_tier_verified?: number;  // 0 = self-declared, 1 = platform-verified
   created_at: string;
   updated_at: string;
   indexed_at: string;

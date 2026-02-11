@@ -11,6 +11,7 @@ import { z } from 'zod';
 import { getDatabase } from '../../db/index.js';
 import { getSessionFromRequest } from './auth.js';
 import { agentQueries } from '../../db/index.js';
+import { getRpcClient } from '../../indexer/rpc-client.js';
 
 // ────────────────────────────────────────────
 // Auth helper
@@ -33,8 +34,8 @@ async function requireAuth(request: FastifyRequest, reply: FastifyReply) {
 const attestationSchema = z.object({
   jobId: z.string().min(1).max(200),
   containerId: z.string().min(1).max(200),
-  createdAt: z.string().min(1),
-  destroyedAt: z.string().min(1),
+  createdAt: z.string().regex(/^\d{4}-\d{2}-\d{2}T/, 'Must be ISO 8601 datetime'),
+  destroyedAt: z.string().regex(/^\d{4}-\d{2}-\d{2}T/, 'Must be ISO 8601 datetime'),
   dataVolumes: z.array(z.string()).default([]),
   deletionMethod: z.string().min(1).max(200),
   attestedBy: z.string().min(1).max(200),
@@ -84,7 +85,7 @@ export async function attestationRoutes(fastify: FastifyInstance): Promise<void>
     const data = parsed.data;
 
     // Verify the attestedBy matches the authenticated identity
-    if (data.attestedBy !== session.verus_id && data.attestedBy !== session.identity_name) {
+    if (data.attestedBy !== session.verusId && data.attestedBy !== session.identityName) {
       return reply.code(403).send({
         error: {
           code: 'FORBIDDEN',
@@ -93,9 +94,45 @@ export async function attestationRoutes(fastify: FastifyInstance): Promise<void>
       });
     }
 
+    // Verify the signature cryptographically via Verus RPC
+    const payload = {
+      attestedBy: data.attestedBy,
+      containerId: data.containerId,
+      createdAt: data.createdAt,
+      dataVolumes: data.dataVolumes,
+      deletionMethod: data.deletionMethod,
+      destroyedAt: data.destroyedAt,
+      jobId: data.jobId,
+    };
+    const canonical = JSON.stringify(payload, Object.keys(payload).sort());
+
+    try {
+      const rpc = getRpcClient();
+      const verifyResult = await rpc.verifyMessage(data.attestedBy, canonical, data.signature);
+      if (verifyResult !== true) {
+        return reply.code(400).send({
+          error: { code: 'INVALID_SIGNATURE', message: 'Attestation signature verification failed' },
+        });
+      }
+    } catch (err: any) {
+      return reply.code(400).send({
+        error: { code: 'SIGNATURE_VERIFY_ERROR', message: 'Could not verify attestation signature' },
+      });
+    }
+
+    // Verify jobId belongs to this agent (if it references a platform job)
+    if (data.jobId) {
+      const job = db.prepare('SELECT seller_verus_id FROM jobs WHERE id = ?').get(data.jobId) as { seller_verus_id: string } | undefined;
+      if (job && job.seller_verus_id !== session.verusId) {
+        return reply.code(403).send({
+          error: { code: 'NOT_YOUR_JOB', message: 'Job does not belong to you' },
+        });
+      }
+    }
+
     // Look up agent
-    const agent = agentQueries.getById(session.verus_id);
-    const agentId = agent?.id || session.verus_id;
+    const agent = agentQueries.getById(session.verusId);
+    const agentId = agent?.id || session.verusId;
 
     const id = randomUUID();
 
