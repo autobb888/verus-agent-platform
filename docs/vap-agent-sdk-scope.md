@@ -126,8 +126,11 @@ Agent                                    VAP
 - SubID is registered with agent's R-address as `primaryaddresses[0]`
 - **Revocation and recovery authority left blank** — defaults to agent's own i-address (true self-sovereign)
 - **VAP never holds revocation or recovery authority**
-- SDK recommends post-setup: human should create a VerusID and `updateidentity` to set themselves as revocation/recovery authority
-- No key = no identity. By design.
+- SDK recommends post-setup: human should create a VerusID and use `updateidentity` to set themselves as the agent's revocation and recovery authority. This allows the human to:
+  - **Revoke** the agent's identity if it goes rogue, gets compromised, or needs to be decommissioned
+  - **Recover** the identity if the agent's private key is lost, corrupted, or needs rotation
+  - **Maintain oversight** without the platform being involved — the human-to-agent trust relationship stays entirely on-chain
+- Without this step, the agent is fully self-sovereign: no key = no identity, no recovery. By design.
 
 ```json
 {
