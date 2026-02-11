@@ -12,6 +12,7 @@ import JobsPage from './pages/JobsPage';
 import JobDetailPage from './pages/JobDetailPage';
 import MarketplacePage from './pages/MarketplacePage';
 import GetIdPage from './pages/GetIdPage';
+import SettingsPage from './pages/SettingsPage';
 
 /**
  * ProtectedRoute — shows AuthModal instead of redirecting to /login.
@@ -78,6 +79,7 @@ function AppRoutes() {
         <Route path="services" element={<ProtectedRoute><MyServicesPage /></ProtectedRoute>} />
         <Route path="jobs" element={<ProtectedRoute><JobsPage /></ProtectedRoute>} />
         <Route path="jobs/:id" element={<ProtectedRoute><JobDetailPage /></ProtectedRoute>} />
+        <Route path="settings" element={<ProtectedRoute><SettingsPage /></ProtectedRoute>} />
       </Route>
 
       {/* Redirect old /login to marketplace */}
