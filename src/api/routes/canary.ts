@@ -98,4 +98,82 @@ export async function canaryRoutes(fastify: FastifyInstance): Promise<void> {
     const row = findByToken.get(token) as any;
     return row?.verus_id || null;
   };
+
+  // ------------------------------------------
+  // Communication Policy
+  // ------------------------------------------
+
+  // Ensure column exists (migration-safe)
+  try {
+    db.exec(`ALTER TABLE agents ADD COLUMN communication_policy TEXT DEFAULT 'safechat_only'`);
+  } catch { /* column already exists */ }
+  try {
+    db.exec(`ALTER TABLE agents ADD COLUMN external_channels TEXT DEFAULT NULL`);
+  } catch { /* column already exists */ }
+
+  const VALID_POLICIES = ['safechat_only', 'safechat_preferred', 'external'];
+
+  const updatePolicy = db.prepare(`
+    UPDATE agents SET communication_policy = ?, external_channels = ?, updated_at = datetime('now')
+    WHERE verus_id = ?
+  `);
+
+  // POST /v1/me/communication-policy
+  fastify.post('/v1/me/communication-policy', { preHandler: requireAuth }, async (request, reply) => {
+    const session = (request as any).session;
+    const { policy, externalChannels } = request.body as {
+      policy?: string;
+      externalChannels?: { type: string; handle?: string }[];
+    };
+
+    if (!policy || !VALID_POLICIES.includes(policy)) {
+      return reply.code(400).send({
+        error: { code: 'INVALID_POLICY', message: `Policy must be one of: ${VALID_POLICIES.join(', ')}` },
+      });
+    }
+
+    // Validate external channels if not safechat_only
+    if (policy !== 'safechat_only' && (!externalChannels || externalChannels.length === 0)) {
+      return reply.code(400).send({
+        error: { code: 'CHANNELS_REQUIRED', message: 'External channels must be specified when policy is not safechat_only' },
+      });
+    }
+
+    const channelsJson = externalChannels ? JSON.stringify(externalChannels) : null;
+    const result = updatePolicy.run(policy, channelsJson, session.verusId);
+
+    if (result.changes === 0) {
+      return reply.code(404).send({
+        error: { code: 'AGENT_NOT_FOUND', message: 'No agent found for your identity' },
+      });
+    }
+
+    console.log(`[Policy] ${session.verusId} set communication policy to: ${policy}`);
+
+    return reply.send({
+      status: 'updated',
+      policy,
+      externalChannels: externalChannels || null,
+    });
+  });
+
+  // GET /v1/me/communication-policy
+  fastify.get('/v1/me/communication-policy', { preHandler: requireAuth }, async (request, reply) => {
+    const session = (request as any).session;
+
+    const agent = db.prepare(
+      `SELECT communication_policy, external_channels FROM agents WHERE verus_id = ?`
+    ).get(session.verusId) as any;
+
+    if (!agent) {
+      return reply.code(404).send({
+        error: { code: 'AGENT_NOT_FOUND', message: 'No agent found for your identity' },
+      });
+    }
+
+    return reply.send({
+      policy: agent.communication_policy || 'safechat_only',
+      externalChannels: agent.external_channels ? JSON.parse(agent.external_channels) : null,
+    });
+  });
 }
