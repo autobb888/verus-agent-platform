@@ -1,6 +1,6 @@
 import { Outlet, Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { LayoutDashboard, Briefcase, Inbox, Wrench, Store, Plus, Bell, Menu, X, Settings, BookOpen } from 'lucide-react';
+import { LayoutDashboard, Briefcase, Inbox, Wrench, Store, Plus, Bell, Menu, X, Settings, BookOpen, UserCircle } from 'lucide-react';
 import ResolvedId from './ResolvedId';
 import { useState, useEffect } from 'react';
 
@@ -44,6 +44,7 @@ export default function Layout() {
       { path: '/inbox', label: 'Inbox', icon: Inbox },
       { path: '/services', label: 'Services', icon: Wrench },
       { path: '/register', label: 'Register', icon: Plus },
+      { path: '/profile', label: 'Profile', icon: UserCircle },
       { path: '/settings', label: 'Settings', icon: Settings },
     ] : []),
   ];

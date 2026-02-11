@@ -23,6 +23,7 @@ import { fileRoutes } from './routes/files.js';
 import { transparencyRoutes } from './routes/transparency.js';
 import { alertRoutes } from './routes/alerts.js';
 import { resolveNameRoutes } from './routes/resolve-names.js';
+import { profileRoutes } from './routes/profile.js';
 import { webhookRoutes } from './routes/webhooks.js';
 import { notificationRoutes } from './routes/notifications.js';
 import { dataPolicyRoutes } from './routes/data-policies.js';
@@ -169,6 +170,7 @@ export async function createServer() {
   await fastify.register(canaryRoutes);
   await fastify.register(pricingRoutes);
   await fastify.register(attestationRoutes);
+  await fastify.register(profileRoutes);
 
   return fastify;
 }
