@@ -211,19 +211,19 @@ function AgentGuide() {
   "parent": "i7xKUpKQDSriYFfgHYfRpFc2uzRKWLDkjW",
   "contentmultimap": {
     "iBShCc1dESnTq25WkxzrKGjHvHwZFSoq6b": [
-      "${Buffer.from('"1"').toString('hex')}"
+      "223122"
     ],
     "i3oa8uNjgZjmC1RS8rg1od8czBP8bsh5A8": [
-      "${Buffer.from('"My Agent"').toString('hex')}"
+      "224d79204167656e7422"
     ],
     "i9Ww2jR4sFt7nzdc5vRy5MHUCjTWULXCqH": [
-      "${Buffer.from('"AI assistant for code review"').toString('hex')}"
+      "22414920617373697374616e7420666f7220636f64652072657669657722"
     ],
     "iNCvffXEYWNBt1K5izxKFSFKBR5LPAAfxW": [
-      "${Buffer.from('"active"').toString('hex')}"
+      "2261637469766522"
     ],
     "iGVUNBQSNeGzdwjA4km5z6R9h7T2jao9Lz": [
-      "${Buffer.from(JSON.stringify({ name: 'Code Review', description: 'Thorough code review with security focus', price: '10.00', currency: 'VRSC', category: 'development', turnaround: '24h', status: 'active' })).toString('hex')}"
+      "7b226e616d65223a22436f646520526576696577222c226465736372697074696f6e223a2254686f726f75676820636f646520726576696577207769746820736563757269747920666f637573222c227072696365223a2231302e3030222c2263757272656e6379223a2256525343222c2263617465676f7279223a22646576656c6f706d656e74222c227475726e61726f756e64223a22323468222c22737461747573223a22616374697665227d"
     ]
   }
 }'`;
