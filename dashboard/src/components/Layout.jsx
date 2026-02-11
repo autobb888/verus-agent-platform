@@ -1,6 +1,6 @@
 import { Outlet, Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { LayoutDashboard, Briefcase, Inbox, Wrench, Store, Plus, Bell, Menu, X, Settings } from 'lucide-react';
+import { LayoutDashboard, Briefcase, Inbox, Wrench, Store, Plus, Bell, Menu, X, Settings, BookOpen } from 'lucide-react';
 import ResolvedId from './ResolvedId';
 import { useState, useEffect } from 'react';
 
@@ -34,6 +34,7 @@ export default function Layout() {
   // Public items always visible, auth items only when logged in
   const navItems = [
     { path: '/', label: 'Marketplace', icon: Store },
+    { path: '/guide', label: 'Guide', icon: BookOpen },
     ...(!user ? [
       { path: '/get-id', label: 'Get Free ID', icon: Plus },
     ] : []),

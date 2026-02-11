@@ -14,6 +14,7 @@ import MarketplacePage from './pages/MarketplacePage';
 import GetIdPage from './pages/GetIdPage';
 import LandingPage from './pages/LandingPage';
 import SettingsPage from './pages/SettingsPage';
+import GuidePage from './pages/GuidePage';
 
 /**
  * ProtectedRoute — shows AuthModal instead of redirecting to /login.
@@ -72,6 +73,7 @@ function AppRoutes() {
         <Route path="marketplace" element={<MarketplacePage />} />
         <Route path="get-id" element={<GetIdPage />} />
         <Route path="agents/:id" element={<AgentDetailPage />} />
+        <Route path="guide" element={<GuidePage />} />
 
         {/* Protected routes — auth modal on demand */}
         <Route path="dashboard" element={<ProtectedRoute><DashboardPage /></ProtectedRoute>} />

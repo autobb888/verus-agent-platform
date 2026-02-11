@@ -18,6 +18,7 @@ export default function HireModal({ service, agent, onClose, onSuccess }) {
   const [allowTraining, setAllowTraining] = useState(false);
   const [allowThirdParty, setAllowThirdParty] = useState(false);
   const [requireDeletion, setRequireDeletion] = useState(true);
+  const [safechatEnabled, setSafechatEnabled] = useState(true);
 
   // Combine date and time into deadline string
   const deadline = useMemo(() => {
@@ -51,7 +52,9 @@ export default function HireModal({ service, agent, onClose, onSuccess }) {
   const sellerVerusId = service?.verusId || agent?.id;
   const amount = Number(service?.price) || 0;
   const currency = service?.currency || 'VRSCTEST';
-  const signMessage = `VAP-JOB|To:${sellerVerusId}|Desc:${description}|Amt:${amount} ${currency}|Deadline:${deadline || 'None'}|Ts:${timestamp}|I request this job and agree to pay upon completion.`;
+  const feeAmount = (amount * 0.05).toFixed(4);
+  const totalCost = (amount * 1.05).toFixed(4);
+  const signMessage = `VAP-JOB|To:${sellerVerusId}|Desc:${description}|Amt:${amount} ${currency}|Fee:${feeAmount} ${currency}|SafeChat:${safechatEnabled ? 'yes' : 'no'}|Deadline:${deadline || 'None'}|Ts:${timestamp}|I request this job and agree to pay upon completion.`;
 
   async function handleSubmit(e) {
     e.preventDefault();
@@ -76,6 +79,7 @@ export default function HireModal({ service, agent, onClose, onSuccess }) {
           currency: service?.currency || 'VRSCTEST',
           deadline: deadline || undefined,
           paymentTerms: 'prepay',
+          safechatEnabled,
           dataTerms: {
             retention: dataRetention,
             allowTraining,
@@ -239,6 +243,39 @@ export default function HireModal({ service, agent, onClose, onSuccess }) {
                 <span className="text-xs" style={{ color: 'var(--text-secondary)' }}>Allow sharing with third parties</span>
               </label>
             </div>
+          </div>
+
+          {/* SafeChat Protection */}
+          <div className="rounded-xl border p-4 space-y-3" style={{ borderColor: 'var(--border-subtle)', backgroundColor: 'var(--bg-raised)' }}>
+            <h4 className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>🛡️ SafeChat Protection</h4>
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input type="checkbox" checked={safechatEnabled} onChange={e => setSafechatEnabled(e.target.checked)}
+                className="rounded border-gray-600 bg-gray-800 text-verus-blue focus:ring-verus-blue" />
+              <span className="text-xs" style={{ color: 'var(--text-secondary)' }}>Enable SafeChat — 6-layer prompt injection protection for both parties</span>
+            </label>
+            <p className="text-xs" style={{ color: 'var(--text-tertiary)' }}>SafeChat scans all messages for manipulation, protecting you and the agent.</p>
+          </div>
+
+          {/* Payment Breakdown */}
+          <div className="rounded-xl border p-4" style={{ borderColor: 'var(--border-subtle)', backgroundColor: 'var(--bg-raised)' }}>
+            <h4 className="text-sm font-semibold mb-3" style={{ color: 'var(--text-primary)' }}>💰 Payment Breakdown</h4>
+            <div className="space-y-2 text-sm">
+              <div className="flex justify-between">
+                <span style={{ color: 'var(--text-secondary)' }}>Agent Payment</span>
+                <span style={{ color: 'var(--text-primary)' }}>{amount} {currency}</span>
+              </div>
+              <div className="flex justify-between">
+                <span style={{ color: 'var(--text-secondary)' }}>Platform Fee (5%)</span>
+                <span style={{ color: 'var(--text-primary)' }}>{feeAmount} {currency}</span>
+              </div>
+              <div className="border-t pt-2 mt-2 flex justify-between font-semibold" style={{ borderColor: 'var(--border-subtle)' }}>
+                <span style={{ color: 'var(--text-primary)' }}>Total</span>
+                <span className="text-verus-blue">{totalCost} {currency}</span>
+              </div>
+            </div>
+            <p className="text-xs mt-3" style={{ color: 'var(--text-tertiary)' }}>
+              You'll send two transactions after the agent accepts: one to the agent ({amount} {currency}) and one platform fee ({feeAmount} {currency}).
+            </p>
           </div>
 
           {/* Signature section */}

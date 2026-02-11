@@ -642,4 +642,40 @@ export function runMigrations(db: Database.Database): void {
   try {
     db.exec(`ALTER TABLE onboard_requests ADD COLUMN commitment_data TEXT`);
   } catch { /* Column exists */ }
+
+  // SafeChat + dual payment support
+  try {
+    db.exec(`ALTER TABLE jobs ADD COLUMN safechat_enabled INTEGER DEFAULT 0`);
+  } catch { /* Column exists */ }
+  try {
+    db.exec(`ALTER TABLE jobs ADD COLUMN platform_fee_txid TEXT`);
+  } catch { /* Column exists */ }
+  try {
+    db.exec(`ALTER TABLE jobs ADD COLUMN platform_fee_verified INTEGER DEFAULT 0`);
+  } catch { /* Column exists */ }
+  try {
+    db.exec(`ALTER TABLE services ADD COLUMN safechat_required INTEGER DEFAULT 0`);
+  } catch { /* Column exists */ }
+
+  // Job payment extensions (mid-session top-ups)
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS job_extensions (
+      id TEXT PRIMARY KEY,
+      job_id TEXT NOT NULL REFERENCES jobs(id) ON DELETE CASCADE,
+      requester_verus_id TEXT NOT NULL,
+      amount REAL NOT NULL CHECK (amount > 0),
+      reason TEXT CHECK (reason IS NULL OR length(reason) <= 1000),
+      status TEXT DEFAULT 'pending' CHECK (status IN ('pending', 'approved', 'paid', 'rejected')),
+      agent_txid TEXT,
+      agent_txid_verified INTEGER DEFAULT 0,
+      fee_txid TEXT,
+      fee_txid_verified INTEGER DEFAULT 0,
+      created_at TEXT DEFAULT (datetime('now')),
+      updated_at TEXT DEFAULT (datetime('now'))
+    )
+  `);
+  db.exec(`
+    CREATE INDEX IF NOT EXISTS idx_job_extensions_job ON job_extensions(job_id);
+    CREATE INDEX IF NOT EXISTS idx_job_extensions_status ON job_extensions(status);
+  `);
 }

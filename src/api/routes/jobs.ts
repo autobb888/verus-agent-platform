@@ -13,7 +13,7 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { z } from 'zod';
 import { createHash, randomUUID } from 'crypto';
-import { jobQueries, jobMessageQueries, agentQueries, serviceQueries, inboxQueries, getDatabase } from '../../db/index.js';
+import { jobQueries, jobMessageQueries, jobExtensionQueries, agentQueries, serviceQueries, inboxQueries, getDatabase } from '../../db/index.js';
 import { emitWebhookEvent } from '../../notifications/webhook-engine.js';
 import { createNotification } from './notifications.js';
 import { getRpcClient } from '../../indexer/rpc-client.js';
@@ -91,9 +91,13 @@ const createJobSchema = z.object({
     allowThirdParty: z.boolean().default(false),
     requireDeletionAttestation: z.boolean().default(false),
   }).optional(),
+  safechatEnabled: z.boolean().default(true),
   timestamp: z.number(),
   signature: z.string().min(1),
 });
+
+// SafeChat fee address (dedicated VerusID for collecting fees)
+const SAFECHAT_FEE_ADDRESS = process.env.SAFECHAT_FEE_ADDRESS || 'RAWwNeTLRg9urgnDPQtPyZ6NRycsmSY2J2';
 
 // Schema for accepting a job
 const acceptJobSchema = z.object({
@@ -138,9 +142,10 @@ function generateJobRequestMessage(
   amount: number,
   currency: string,
   deadline: string | undefined,
-  timestamp: number
+  timestamp: number,
+  safechatEnabled: boolean = true
 ): string {
-  return `VAP-JOB|To:${sellerVerusId}|Desc:${description}|Amt:${amount} ${currency}|Deadline:${deadline || 'None'}|Ts:${timestamp}|I request this job and agree to pay upon completion.`;
+  return `VAP-JOB|To:${sellerVerusId}|Desc:${description}|Amt:${amount} ${currency}|Fee:${(amount * 0.05).toFixed(4)} ${currency}|SafeChat:${safechatEnabled ? 'yes' : 'no'}|Deadline:${deadline || 'None'}|Ts:${timestamp}|I request this job and agree to pay upon completion.`;
 }
 
 /**
@@ -248,12 +253,15 @@ export async function jobRoutes(fastify: FastifyInstance): Promise<void> {
       });
     }
 
-    const message = generateJobRequestMessage(sellerVerusId, description, amount, currency, deadline, timestamp);
+    const safechatEnabled = (request.body as any)?.safechatEnabled !== false;
+    const message = generateJobRequestMessage(sellerVerusId, description, amount, currency, deadline, timestamp, safechatEnabled);
 
     return {
       data: {
         message,
         timestamp,
+        feeAmount: (amount * 0.05).toFixed(4),
+        totalCost: (amount * 1.05).toFixed(4),
         instructions: [
           '1. Copy the message above',
           '2. Sign it with: verus -testnet signmessage "yourID@" "<message>"',
@@ -380,7 +388,7 @@ export async function jobRoutes(fastify: FastifyInstance): Promise<void> {
     }
 
     // Verify buyer's signature
-    const expectedMessage = generateJobRequestMessage(sellerVerusId, description, amount, currency, deadline, timestamp);
+    const expectedMessage = generateJobRequestMessage(sellerVerusId, description, amount, currency, deadline, timestamp, data.safechatEnabled);
     fastify.log.info({ 
       buyerVerusId, 
       sellerVerusId,
@@ -444,6 +452,9 @@ export async function jobRoutes(fastify: FastifyInstance): Promise<void> {
       payment_address: paymentAddress,
       payment_txid: null,
       payment_verified: 0,
+      platform_fee_txid: null,
+      platform_fee_verified: 0,
+      safechat_enabled: data.safechatEnabled ? 1 : 0,
       request_signature: signature,
       acceptance_signature: null,
       delivery_signature: null,
@@ -1183,17 +1194,21 @@ export async function jobRoutes(fastify: FastifyInstance): Promise<void> {
     const db = getDatabase();
     db.transaction(() => {
       jobQueries.setPayment(id, txid, paymentVerified);
-      if (job.status === 'accepted') {
+      // Only transition to in_progress if both payments are done
+      const freshJob = jobQueries.getById(id)!;
+      const bothPaid = freshJob.payment_txid && freshJob.platform_fee_txid;
+      if (freshJob.status === 'accepted' && bothPaid) {
         db.prepare(`
           UPDATE jobs SET status = 'in_progress', updated_at = datetime('now') WHERE id = ? AND status = 'accepted'
         `).run(id);
       }
     })();
 
-    if (job.status === 'accepted') {
-      fastify.log.info({ jobId: id }, 'Job moved to in_progress after payment');
+    const freshJob = jobQueries.getById(id)!;
+    if (freshJob.status === 'in_progress') {
+      fastify.log.info({ jobId: id }, 'Job moved to in_progress after both payments');
     }
-    fastify.log.info({ jobId: id, txid, paymentVerified }, 'Payment recorded');
+    fastify.log.info({ jobId: id, txid, paymentVerified }, 'Agent payment recorded');
     emitWebhookEvent({ type: 'job.payment', agentVerusId: job.seller_verus_id, jobId: id, data: { txid, verified: paymentVerified === 1 } });
     createNotification({ recipientVerusId: job.seller_verus_id, type: 'job.payment', title: 'Payment Received', body: `Payment txid: ${txid.slice(0, 16)}...`, jobId: id });
 
@@ -1202,6 +1217,309 @@ export async function jobRoutes(fastify: FastifyInstance): Promise<void> {
       data: formatJob(updatedJob!),
       meta: { verificationNote },
     };
+  });
+
+  /**
+   * POST /v1/jobs/:id/platform-fee
+   * Record platform fee (5%) transaction ID — paid to SafeChat address
+   */
+  fastify.post('/v1/jobs/:id/platform-fee', { preHandler: requireAuth }, async (request, reply) => {
+    const session = (request as any).session as { verusId: string };
+    const { id } = request.params as { id: string };
+
+    const job = jobQueries.getById(id);
+    if (!job) {
+      return reply.code(404).send({ error: { code: 'NOT_FOUND', message: 'Job not found' } });
+    }
+    if (job.buyer_verus_id !== session.verusId) {
+      return reply.code(403).send({ error: { code: 'FORBIDDEN', message: 'Only the buyer can record platform fee' } });
+    }
+
+    const schema = z.object({
+      txid: z.string().min(1).max(100).regex(/^[a-fA-F0-9]{64}$/, 'Invalid transaction hash format'),
+    });
+    const parsed = schema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.code(400).send({ error: { code: 'VALIDATION_ERROR', message: 'Invalid txid format' } });
+    }
+
+    const { txid } = parsed.data;
+    const rpc = getRpcClient();
+    let feeVerified = 0;
+    let verificationNote = '';
+
+    try {
+      const rawTx = await rpc.getTransaction(txid);
+      if (!rawTx) {
+        return reply.code(400).send({ error: { code: 'TX_NOT_FOUND', message: 'Transaction not found on chain' } });
+      }
+
+      const confirmations = rawTx.confirmations || 0;
+      const expectedFee = job.amount * 0.05;
+
+      // Check if output goes to SafeChat fee address
+      let feeAmount = 0;
+      let foundRecipient = false;
+      if (rawTx.vout) {
+        for (const vout of rawTx.vout) {
+          const addresses = vout.scriptPubKey?.addresses || [];
+          if (addresses.includes(SAFECHAT_FEE_ADDRESS)) {
+            feeAmount += vout.value || 0;
+            foundRecipient = true;
+          }
+        }
+      }
+
+      if (!foundRecipient) {
+        verificationNote = 'Transaction does not pay SafeChat fee address';
+      } else if (feeAmount < expectedFee * 0.99) { // 1% tolerance for rounding
+        verificationNote = `Fee amount ${feeAmount} is less than expected ${expectedFee}`;
+      } else if (confirmations >= 6) {
+        feeVerified = 1;
+        verificationNote = `Verified with ${confirmations} confirmations`;
+      } else {
+        verificationNote = `Found with ${confirmations} confirmations (needs 6+)`;
+      }
+
+      fastify.log.info({ jobId: id, txid, feeAmount, expectedFee, feeVerified }, 'Platform fee verification');
+    } catch (err: any) {
+      fastify.log.warn({ jobId: id, txid, error: err?.message }, 'Platform fee verification failed');
+      verificationNote = 'Could not verify transaction on-chain';
+    }
+
+    // Record fee and check if both payments are done
+    const db = getDatabase();
+    db.transaction(() => {
+      jobQueries.setPlatformFee(id, txid, feeVerified);
+      const freshJob = jobQueries.getById(id)!;
+      const bothPaid = freshJob.payment_txid && freshJob.platform_fee_txid;
+      if (freshJob.status === 'accepted' && bothPaid) {
+        db.prepare(`
+          UPDATE jobs SET status = 'in_progress', updated_at = datetime('now') WHERE id = ? AND status = 'accepted'
+        `).run(id);
+      }
+    })();
+
+    const updatedJob = jobQueries.getById(id)!;
+    if (updatedJob.status === 'in_progress') {
+      fastify.log.info({ jobId: id }, 'Job moved to in_progress after both payments');
+      emitWebhookEvent({ type: 'job.started', agentVerusId: job.seller_verus_id, jobId: id, data: {} });
+      createNotification({ recipientVerusId: job.seller_verus_id, type: 'job.started', title: 'Job Started', body: 'Both payments received — job is now in progress', jobId: id });
+    }
+
+    return { data: formatJob(updatedJob), meta: { verificationNote } };
+  });
+
+  /**
+   * POST /v1/jobs/:id/extensions
+   * Request a session extension (additional payment for more work)
+   */
+  fastify.post('/v1/jobs/:id/extensions', { preHandler: requireAuth }, async (request, reply) => {
+    const session = (request as any).session as { verusId: string };
+    const { id } = request.params as { id: string };
+
+    const job = jobQueries.getById(id);
+    if (!job) {
+      return reply.code(404).send({ error: { code: 'NOT_FOUND', message: 'Job not found' } });
+    }
+    if (job.status !== 'in_progress') {
+      return reply.code(400).send({ error: { code: 'INVALID_STATE', message: 'Extensions only allowed for in-progress jobs' } });
+    }
+    const isBuyer = job.buyer_verus_id === session.verusId;
+    const isSeller = job.seller_verus_id === session.verusId;
+    if (!isBuyer && !isSeller) {
+      return reply.code(403).send({ error: { code: 'FORBIDDEN', message: 'Only job parties can request extensions' } });
+    }
+
+    const schema = z.object({
+      amount: z.coerce.number().min(0.001),
+      reason: z.string().max(1000).optional(),
+    });
+    const parsed = schema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.code(400).send({ error: { code: 'VALIDATION_ERROR', message: 'Invalid extension data' } });
+    }
+
+    const extId = randomUUID();
+    jobExtensionQueries.insert({
+      id: extId,
+      job_id: id,
+      requester_verus_id: session.verusId,
+      amount: parsed.data.amount,
+      reason: parsed.data.reason,
+    });
+
+    // Notify the other party
+    const recipientId = isBuyer ? job.seller_verus_id : job.buyer_verus_id;
+    createNotification({
+      recipientVerusId: recipientId,
+      type: 'job.extension_request',
+      title: 'Extension Requested',
+      body: `Additional ${parsed.data.amount} ${job.currency} requested${parsed.data.reason ? ': ' + parsed.data.reason : ''}`,
+      jobId: id,
+    });
+    emitWebhookEvent({ type: 'job.extension_request', agentVerusId: recipientId, jobId: id, data: { extensionId: extId, amount: parsed.data.amount } });
+
+    return { data: { id: extId, jobId: id, amount: parsed.data.amount, reason: parsed.data.reason, status: 'pending' } };
+  });
+
+  /**
+   * GET /v1/jobs/:id/extensions
+   * Get all extensions for a job
+   */
+  fastify.get('/v1/jobs/:id/extensions', { preHandler: requireAuth }, async (request, reply) => {
+    const session = (request as any).session as { verusId: string };
+    const { id } = request.params as { id: string };
+
+    const job = jobQueries.getById(id);
+    if (!job) {
+      return reply.code(404).send({ error: { code: 'NOT_FOUND', message: 'Job not found' } });
+    }
+    if (job.buyer_verus_id !== session.verusId && job.seller_verus_id !== session.verusId) {
+      return reply.code(403).send({ error: { code: 'FORBIDDEN', message: 'Not a party to this job' } });
+    }
+
+    const extensions = jobExtensionQueries.getByJobId(id);
+    return {
+      data: extensions.map(e => ({
+        id: e.id,
+        jobId: e.job_id,
+        requester: e.requester_verus_id,
+        amount: e.amount,
+        reason: e.reason,
+        status: e.status,
+        agentTxid: e.agent_txid,
+        feeTxid: e.fee_txid,
+        createdAt: e.created_at,
+      })),
+    };
+  });
+
+  /**
+   * POST /v1/jobs/:id/extensions/:extId/approve
+   * Approve an extension request (other party)
+   */
+  fastify.post('/v1/jobs/:id/extensions/:extId/approve', { preHandler: requireAuth }, async (request, reply) => {
+    const session = (request as any).session as { verusId: string };
+    const { id, extId } = request.params as { id: string; extId: string };
+
+    const job = jobQueries.getById(id);
+    if (!job) return reply.code(404).send({ error: { code: 'NOT_FOUND', message: 'Job not found' } });
+
+    const extensions = jobExtensionQueries.getByJobId(id);
+    const ext = extensions.find(e => e.id === extId);
+    if (!ext) return reply.code(404).send({ error: { code: 'NOT_FOUND', message: 'Extension not found' } });
+    if (ext.status !== 'pending') return reply.code(400).send({ error: { code: 'INVALID_STATE', message: 'Extension is not pending' } });
+
+    // Only the other party can approve
+    if (ext.requester_verus_id === session.verusId) {
+      return reply.code(400).send({ error: { code: 'INVALID_ACTION', message: 'Cannot approve your own extension request' } });
+    }
+    const isBuyer = job.buyer_verus_id === session.verusId;
+    const isSeller = job.seller_verus_id === session.verusId;
+    if (!isBuyer && !isSeller) {
+      return reply.code(403).send({ error: { code: 'FORBIDDEN', message: 'Not a party to this job' } });
+    }
+
+    jobExtensionQueries.updateStatus(extId, 'approved');
+
+    createNotification({
+      recipientVerusId: ext.requester_verus_id,
+      type: 'job.extension_approved',
+      title: 'Extension Approved',
+      body: `Extension of ${ext.amount} ${job.currency} approved — please submit payment`,
+      jobId: id,
+    });
+
+    return { data: { id: extId, status: 'approved' } };
+  });
+
+  /**
+   * POST /v1/jobs/:id/extensions/:extId/payment
+   * Record extension payment (agent payment txid)
+   */
+  fastify.post('/v1/jobs/:id/extensions/:extId/payment', { preHandler: requireAuth }, async (request, reply) => {
+    const session = (request as any).session as { verusId: string };
+    const { id, extId } = request.params as { id: string; extId: string };
+
+    const job = jobQueries.getById(id);
+    if (!job) return reply.code(404).send({ error: { code: 'NOT_FOUND', message: 'Job not found' } });
+    if (job.buyer_verus_id !== session.verusId) {
+      return reply.code(403).send({ error: { code: 'FORBIDDEN', message: 'Only the buyer can submit extension payment' } });
+    }
+
+    const extensions = jobExtensionQueries.getByJobId(id);
+    const ext = extensions.find(e => e.id === extId);
+    if (!ext) return reply.code(404).send({ error: { code: 'NOT_FOUND', message: 'Extension not found' } });
+    if (ext.status !== 'approved') return reply.code(400).send({ error: { code: 'INVALID_STATE', message: 'Extension must be approved first' } });
+
+    const schema = z.object({
+      agentTxid: z.string().regex(/^[a-fA-F0-9]{64}$/).optional(),
+      feeTxid: z.string().regex(/^[a-fA-F0-9]{64}$/).optional(),
+    });
+    const parsed = schema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.code(400).send({ error: { code: 'VALIDATION_ERROR', message: 'Invalid txid format' } });
+    }
+
+    if (parsed.data.agentTxid) {
+      jobExtensionQueries.setAgentPayment(extId, parsed.data.agentTxid, 0);
+    }
+    if (parsed.data.feeTxid) {
+      jobExtensionQueries.setFeePayment(extId, parsed.data.feeTxid, 0);
+    }
+
+    // If both txids submitted, mark as paid and update job amount
+    const updatedExt = jobExtensionQueries.getByJobId(id).find(e => e.id === extId)!;
+    if (updatedExt.agent_txid && updatedExt.fee_txid) {
+      jobExtensionQueries.updateStatus(extId, 'paid');
+      // Add extension amount to job total
+      const db = getDatabase();
+      db.prepare(`UPDATE jobs SET amount = amount + ?, updated_at = datetime('now') WHERE id = ?`).run(ext.amount, id);
+
+      createNotification({
+        recipientVerusId: job.seller_verus_id,
+        type: 'job.extension_paid',
+        title: 'Extension Paid',
+        body: `Additional ${ext.amount} ${job.currency} paid — session extended`,
+        jobId: id,
+      });
+    }
+
+    return { data: { id: extId, status: updatedExt.agent_txid && updatedExt.fee_txid ? 'paid' : 'approved' } };
+  });
+
+  /**
+   * POST /v1/jobs/:id/extensions/:extId/reject
+   * Reject an extension request
+   */
+  fastify.post('/v1/jobs/:id/extensions/:extId/reject', { preHandler: requireAuth }, async (request, reply) => {
+    const session = (request as any).session as { verusId: string };
+    const { id, extId } = request.params as { id: string; extId: string };
+
+    const job = jobQueries.getById(id);
+    if (!job) return reply.code(404).send({ error: { code: 'NOT_FOUND', message: 'Job not found' } });
+
+    const extensions = jobExtensionQueries.getByJobId(id);
+    const ext = extensions.find(e => e.id === extId);
+    if (!ext) return reply.code(404).send({ error: { code: 'NOT_FOUND', message: 'Extension not found' } });
+    if (ext.status !== 'pending') return reply.code(400).send({ error: { code: 'INVALID_STATE', message: 'Extension is not pending' } });
+
+    if (ext.requester_verus_id === session.verusId) {
+      return reply.code(400).send({ error: { code: 'INVALID_ACTION', message: 'Cannot reject your own extension request' } });
+    }
+
+    jobExtensionQueries.updateStatus(extId, 'rejected');
+
+    createNotification({
+      recipientVerusId: ext.requester_verus_id,
+      type: 'job.extension_rejected',
+      title: 'Extension Rejected',
+      body: `Extension of ${ext.amount} ${job.currency} was rejected`,
+      jobId: id,
+    });
+
+    return { data: { id: extId, status: 'rejected' } };
   });
 }
 
@@ -1220,11 +1538,16 @@ function formatJob(job: any) {
     currency: job.currency,
     deadline: job.deadline,
     status: job.status,
+    safechatEnabled: job.safechat_enabled === 1,
     payment: {
       terms: job.payment_terms || 'prepay',
       address: job.payment_address,
       txid: job.payment_txid,
       verified: job.payment_verified === 1,
+      platformFeeTxid: job.platform_fee_txid,
+      platformFeeVerified: job.platform_fee_verified === 1,
+      platformFeeAddress: SAFECHAT_FEE_ADDRESS,
+      feeAmount: job.amount * 0.05,
     },
     signatures: {
       request: job.request_signature,

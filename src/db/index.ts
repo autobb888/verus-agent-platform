@@ -715,10 +715,11 @@ export const jobQueries = {
         id, job_hash, buyer_verus_id, seller_verus_id, service_id,
         description, amount, currency, deadline,
         payment_terms, payment_address, payment_txid, payment_verified,
+        platform_fee_txid, platform_fee_verified, safechat_enabled,
         request_signature, acceptance_signature, delivery_signature, completion_signature,
         status, delivery_hash, delivery_message,
         requested_at, accepted_at, delivered_at, completed_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       id,
       job.job_hash,
@@ -733,6 +734,9 @@ export const jobQueries = {
       job.payment_address,
       job.payment_txid,
       job.payment_verified,
+      job.platform_fee_txid || null,
+      job.platform_fee_verified || 0,
+      job.safechat_enabled || 0,
       job.request_signature,
       job.acceptance_signature,
       job.delivery_signature,
@@ -848,6 +852,49 @@ export const jobQueries = {
       UPDATE jobs SET payment_verified = 1, updated_at = datetime('now') WHERE id = ?
     `).run(id);
     return result.changes > 0;
+  },
+
+  setPlatformFee: (id: string, txid: string, verified: number = 0) => {
+    const db = getDatabase();
+    const result = db.prepare(`
+      UPDATE jobs SET platform_fee_txid = ?, platform_fee_verified = ?, updated_at = datetime('now') WHERE id = ?
+    `).run(txid, verified, id);
+    return result.changes > 0;
+  },
+
+  setSafechatEnabled: (id: string, enabled: number) => {
+    const db = getDatabase();
+    db.prepare(`UPDATE jobs SET safechat_enabled = ?, updated_at = datetime('now') WHERE id = ?`).run(enabled, id);
+  },
+};
+
+// Job extension queries
+export const jobExtensionQueries = {
+  getByJobId: (jobId: string) => {
+    const db = getDatabase();
+    return db.prepare(`SELECT * FROM job_extensions WHERE job_id = ? ORDER BY created_at ASC`).all(jobId) as any[];
+  },
+
+  insert: (ext: { id: string; job_id: string; requester_verus_id: string; amount: number; reason?: string }) => {
+    const db = getDatabase();
+    db.prepare(`
+      INSERT INTO job_extensions (id, job_id, requester_verus_id, amount, reason) VALUES (?, ?, ?, ?, ?)
+    `).run(ext.id, ext.job_id, ext.requester_verus_id, ext.amount, ext.reason || null);
+  },
+
+  updateStatus: (id: string, status: string) => {
+    const db = getDatabase();
+    db.prepare(`UPDATE job_extensions SET status = ?, updated_at = datetime('now') WHERE id = ?`).run(status, id);
+  },
+
+  setAgentPayment: (id: string, txid: string, verified: number = 0) => {
+    const db = getDatabase();
+    db.prepare(`UPDATE job_extensions SET agent_txid = ?, agent_txid_verified = ?, updated_at = datetime('now') WHERE id = ?`).run(txid, verified, id);
+  },
+
+  setFeePayment: (id: string, txid: string, verified: number = 0) => {
+    const db = getDatabase();
+    db.prepare(`UPDATE job_extensions SET fee_txid = ?, fee_txid_verified = ?, updated_at = datetime('now') WHERE id = ?`).run(txid, verified, id);
   },
 };
 

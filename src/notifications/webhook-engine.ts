@@ -22,6 +22,8 @@ export type WebhookEventType =
   | 'job.completed'
   | 'job.disputed'
   | 'job.cancelled'
+  | 'job.started'
+  | 'job.extension_request'
   | 'message.new'
   | 'file.uploaded';
 

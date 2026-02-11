@@ -137,8 +137,13 @@ export interface Job {
   // Payment
   payment_terms: 'prepay' | 'postpay' | 'split';
   payment_address: string | null;  // Where to send payment
-  payment_txid: string | null;     // Proof of payment
+  payment_txid: string | null;     // Proof of agent payment
   payment_verified: number;        // 0 = unverified, 1 = verified
+  platform_fee_txid: string | null;   // Proof of 5% fee payment to SafeChat ID
+  platform_fee_verified: number;      // 0 = unverified, 1 = verified
+  
+  // SafeChat
+  safechat_enabled: number;        // 0 = disabled, 1 = enabled
   
   // Signatures (proof of agreement)
   request_signature: string;   // Buyer's signature on job request
