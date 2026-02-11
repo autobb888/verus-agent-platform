@@ -114,6 +114,7 @@ const HEX64_REGEX = /^[0-9a-fA-F]{64}$/;
 // The parent identity that registers subIDs
 const PARENT_IDENTITY = 'agentplatform@';
 const PARENT_IADDRESS = process.env.PARENT_IADDRESS || 'i7xKUpKQDSriYFfgHYfRpFc2uzRKWLDkjW'; // agentplatform@ i-address (P3-OB-3)
+const PLATFORM_WALLET_ADDRESS = process.env.PLATFORM_WALLET_ADDRESS || 'RAWwNeTLRg9urgnDPQtPyZ6NRycsmSY2J2'; // Platform's daemon wallet address for controladdress
 
 export async function onboardRoutes(fastify: FastifyInstance): Promise<void> {
   const rpc = getRpcClient();
@@ -402,7 +403,7 @@ export async function onboardRoutes(fastify: FastifyInstance): Promise<void> {
       // We use the platform's address as control, then transfer ownership via registeridentity
       commitResult = await rpc.rpcCall('registernamecommitment', [
         name,              // name to register
-        address,           // control address (agent's R-address — must be in wallet or use sourceoffunds)
+        PLATFORM_WALLET_ADDRESS, // control address (must be in daemon wallet — LB-6)
         '',                // referral identity (empty)
         PARENT_IADDRESS,   // parent namespace (must use i-address, not friendly name)
       ]);

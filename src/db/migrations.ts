@@ -632,4 +632,9 @@ export function runMigrations(db: Database.Database): void {
   try {
     db.exec(`ALTER TABLE agents ADD COLUMN startup_recouped INTEGER DEFAULT 0`);
   } catch { /* Column exists */ }
+
+  // QR challenges: identity_name for session creation (LB-3)
+  try {
+    db.exec(`ALTER TABLE qr_challenges ADD COLUMN identity_name TEXT`);
+  } catch { /* Column exists */ }
 }

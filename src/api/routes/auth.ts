@@ -561,11 +561,21 @@ export async function authRoutes(fastify: FastifyInstance): Promise<void> {
       
       // Update challenge with signed info
       if (row) {
+        // Store verus_id and identity_name (fullyqualifiedname) for session creation
+        let identityName = verusId;
+        try {
+          const rpc = getRpcClient();
+          const idInfo = await rpc.getIdentity(verusId);
+          if (idInfo?.identity?.fullyqualifiedname) {
+            identityName = idInfo.identity.fullyqualifiedname;
+          }
+        } catch { /* fall back to verusId */ }
+
         db.prepare(`
           UPDATE qr_challenges 
-          SET status = 'signed', verus_id = ?
+          SET status = 'signed', verus_id = ?, identity_name = ?
           WHERE id = ?
-        `).run(verusId, row.id);
+        `).run(verusId, identityName, row.id);
       }
       
       fastify.log.info({ signingId, verusId }, 'QR login consent verified');
@@ -598,12 +608,13 @@ export async function authRoutes(fastify: FastifyInstance): Promise<void> {
       const db = getDatabase();
       
       const row = db.prepare(`
-        SELECT status, verus_id, expires_at
+        SELECT status, verus_id, identity_name, expires_at
         FROM qr_challenges
         WHERE id = ?
       `).get(id) as {
         status: string;
         verus_id: string | null;
+        identity_name: string | null;
         expires_at: number;
       } | undefined;
       
@@ -637,9 +648,9 @@ export async function authRoutes(fastify: FastifyInstance): Promise<void> {
         const sessionExpiry = sessionNow + SESSION_LIFETIME_MS;
         
         db.prepare(`
-          INSERT INTO sessions (id, verus_id, created_at, expires_at)
-          VALUES (?, ?, ?, ?)
-        `).run(sessionId, row.verus_id, sessionNow, sessionExpiry);
+          INSERT INTO sessions (id, verus_id, identity_name, created_at, expires_at)
+          VALUES (?, ?, ?, ?, ?)
+        `).run(sessionId, row.verus_id, row.identity_name || row.verus_id, sessionNow, sessionExpiry);
         
         // Set session cookie
         reply.setCookie(SESSION_COOKIE, sessionId, {
