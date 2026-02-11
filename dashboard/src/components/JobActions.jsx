@@ -1,5 +1,6 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
+import QRCode from 'react-qr-code';
 
 const API_BASE = import.meta.env.VITE_API_URL || '';
 
@@ -14,6 +15,85 @@ function buildSignCmd(idName, message) {
  * Reusable job action panels (accept, pay, deliver, complete, dispute, cancel).
  * Used by both JobsPage (card expand) and JobDetailPage.
  */
+
+/**
+ * PaymentQR — shows a Verus payment QR code and auto-polls for incoming txid.
+ */
+function PaymentQR({ address, amount, currency, label, jobId, onTxDetected }) {
+  const [polling, setPolling] = useState(true);
+  const intervalRef = useRef(null);
+  const seenTxidsRef = useRef(new Set());
+
+  // Verus payment URI
+  const paymentUri = `vrsc:${address}?amount=${amount}${label ? `&label=${encodeURIComponent(label)}` : ''}`;
+
+  useEffect(() => {
+    // Snapshot existing txids on mount so we only detect NEW ones
+    let mounted = true;
+
+    async function snapshotExisting() {
+      try {
+        const res = await fetch(`${API_BASE}/v1/jobs/${jobId}`, { credentials: 'include' });
+        if (res.ok) {
+          const data = await res.json();
+          if (data.data?.payment?.txid) seenTxidsRef.current.add(data.data.payment.txid);
+          if (data.data?.payment?.platformFeeTxid) seenTxidsRef.current.add(data.data.payment.platformFeeTxid);
+        }
+      } catch {}
+    }
+    snapshotExisting();
+
+    // Poll the address for new transactions via platform proxy
+    intervalRef.current = setInterval(async () => {
+      if (!mounted) return;
+      try {
+        // Use the health endpoint to check — we'll actually check job status
+        // since we can't directly query the address without RPC access
+        const res = await fetch(`${API_BASE}/v1/jobs/${jobId}`, { credentials: 'include' });
+        if (!res.ok) return;
+        const data = await res.json();
+        const job = data.data;
+
+        // Check if a new payment appeared
+        if (job?.payment?.txid && !seenTxidsRef.current.has(job.payment.txid)) {
+          onTxDetected?.(job.payment.txid, 'agent');
+          seenTxidsRef.current.add(job.payment.txid);
+          return;
+        }
+        if (job?.payment?.platformFeeTxid && !seenTxidsRef.current.has(job.payment.platformFeeTxid)) {
+          onTxDetected?.(job.payment.platformFeeTxid, 'fee');
+          seenTxidsRef.current.add(job.payment.platformFeeTxid);
+          return;
+        }
+      } catch {}
+    }, 10000); // poll every 10s
+
+    return () => {
+      mounted = false;
+      if (intervalRef.current) clearInterval(intervalRef.current);
+    };
+  }, [jobId]);
+
+  return (
+    <div className="flex flex-col items-center gap-3">
+      <div className="bg-white p-3 rounded-lg">
+        <QRCode value={paymentUri} size={180} level="M" />
+      </div>
+      <p className="text-xs text-center" style={{ color: 'var(--text-tertiary)' }}>
+        Scan with Verus Mobile to pay <span className="text-white font-medium">{amount} {currency}</span>
+      </p>
+      <div className="w-full bg-gray-950 rounded p-2 text-center">
+        <p className="text-xs font-mono break-all" style={{ color: 'var(--text-secondary)' }}>{address}</p>
+      </div>
+      {polling && (
+        <div className="flex items-center gap-2 text-xs" style={{ color: 'var(--text-tertiary)' }}>
+          <div className="animate-spin rounded-full h-3 w-3 border-b border-verus-blue"></div>
+          Waiting for payment...
+        </div>
+      )}
+    </div>
+  );
+}
 
 function ExtensionPanel({ job, loading, onSubmit, onCancel }) {
   const [extAmount, setExtAmount] = useState('');
@@ -297,15 +377,25 @@ export default function JobActions({ job, onUpdate }) {
         <div className="bg-gray-900 rounded-lg p-4 space-y-3 border border-gray-700">
           <h4 className="text-white font-medium text-sm">Step 1: Pay Agent</h4>
           <p className="text-gray-400 text-xs">
-            Send <span className="text-white font-medium">{job.amount} {job.currency}</span> to the agent, then paste the transaction ID.
+            Send <span className="text-white font-medium">{job.amount} {job.currency}</span> to the agent. Scan the QR or paste the transaction ID manually.
           </p>
-          <div className="bg-gray-950 rounded p-3">
-            <span className="text-xs text-gray-500">Agent payment address:</span>
-            <p className="text-verus-blue font-mono text-sm mt-1 break-all">{job.payment?.address || job.sellerVerusId}</p>
-          </div>
+
+          <PaymentQR
+            address={job.payment?.address || job.sellerVerusId}
+            amount={job.amount}
+            currency={job.currency}
+            label={`VAP Job Payment - ${job.id?.slice(0, 8)}`}
+            jobId={job.id}
+            onTxDetected={(txid, type) => {
+              if (type === 'agent') {
+                setSignatureInput(txid);
+              }
+            }}
+          />
+
           <p className="text-gray-500 text-xs">After this, you'll also pay the 5% platform fee ({job.payment?.feeAmount?.toFixed(4)} {job.currency}) in a second transaction.</p>
           <div>
-            <label className="block text-xs text-gray-400 mb-1">Transaction ID (64-char hex)</label>
+            <label className="block text-xs text-gray-400 mb-1">Transaction ID (64-char hex) — auto-fills when payment detected</label>
             <input
               type="text" value={signatureInput} onChange={(e) => setSignatureInput(e.target.value)}
               className="w-full bg-gray-950 border border-gray-700 rounded-lg px-3 py-2 text-white font-mono text-sm focus:border-verus-blue focus:outline-none"
@@ -330,15 +420,25 @@ export default function JobActions({ job, onUpdate }) {
         <div className="bg-gray-900 rounded-lg p-4 space-y-3 border border-gray-700">
           <h4 className="text-white font-medium text-sm">Step 2: Pay Platform Fee</h4>
           <p className="text-gray-400 text-xs">
-            Send <span className="text-white font-medium">{job.payment?.feeAmount?.toFixed(4)} {job.currency}</span> (5% fee) to the SafeChat address.
+            Send <span className="text-white font-medium">{job.payment?.feeAmount?.toFixed(4)} {job.currency}</span> (5% fee) to the SafeChat address. Scan the QR or paste manually.
           </p>
-          <div className="bg-gray-950 rounded p-3">
-            <span className="text-xs text-gray-500">SafeChat fee address:</span>
-            <p className="text-verus-blue font-mono text-sm mt-1 break-all">{job.payment?.platformFeeAddress}</p>
-          </div>
+
+          <PaymentQR
+            address={job.payment?.platformFeeAddress}
+            amount={job.payment?.feeAmount?.toFixed(4)}
+            currency={job.currency}
+            label={`VAP Platform Fee - ${job.id?.slice(0, 8)}`}
+            jobId={job.id}
+            onTxDetected={(txid, type) => {
+              if (type === 'fee') {
+                setSignatureInput(txid);
+              }
+            }}
+          />
+
           <p className="text-green-400 text-xs">✓ Agent payment already submitted. This is the final step — job starts after both payments.</p>
           <div>
-            <label className="block text-xs text-gray-400 mb-1">Transaction ID (64-char hex)</label>
+            <label className="block text-xs text-gray-400 mb-1">Transaction ID (64-char hex) — auto-fills when payment detected</label>
             <input
               type="text" value={signatureInput} onChange={(e) => setSignatureInput(e.target.value)}
               className="w-full bg-gray-950 border border-gray-700 rounded-lg px-3 py-2 text-white font-mono text-sm focus:border-verus-blue focus:outline-none"
