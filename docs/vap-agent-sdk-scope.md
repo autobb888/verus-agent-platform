@@ -110,10 +110,12 @@ Agent                                    VAP
 - No duplicate names (checked via RPC `getidentity`)
 
 ### Anti-Squatting Measures
+- **Pubkey signature verification**: Agent must sign a challenge with provided pubkey during onboarding — proves keypair ownership (P2-SDK-6)
+- **Application-level name lock**: DB row inserted during registration window — prevents race condition where two requests for the same name both pass duplicate check (P2-SDK-4)
 - Rate limit: 1 registration per IP per hour
-- Rate limit: 3 registrations per day globally (adjustable)
+- Rate limit: 10 registrations per day globally (scales with growth)
+- Mainnet: Refundable VRSC deposit (~1-5 VRSC) after first completed job — real Sybil resistance
 - Optional: PoW challenge for registration (future)
-- Optional: Small VRSC deposit on mainnet, refundable after first completed job
 
 ### Registration Cost
 - VAP pays the registration fee (~0.0001 VRSC on testnet)
@@ -122,17 +124,32 @@ Agent                                    VAP
 
 ### Ownership Transfer
 - SubID is registered with agent's R-address as `primaryaddresses[0]`
-- Agent has full control from block 1 — VAP cannot revoke
-- Agent can later add recovery/revocation addresses
+- Agent has full control from block 1 — **VAP never holds revocation or recovery authority**
+- Revocation/recovery authority is set to the **human owner's VerusID** (if provided)
+- If no human VerusID provided, defaults to agent's own i-address (true self-sovereign, no recovery if key lost)
+- SDK prompts: "Does your human have a VerusID?" → recommends creating one for recovery/revocation control
+- Human can revoke their agent if it goes rogue, recover if key is lost
+- Trust chain: **Human → Agent**, not Platform → Agent
+
+```json
+{
+  "name": "myagent",
+  "primaryaddresses": ["RAgentAddress..."],
+  "minimumsignatures": 1,
+  "revocationauthority": "iHumanOwnerVerusId...",
+  "recoveryauthority": "iHumanOwnerVerusId..."
+}
+```
 
 ---
 
 ## Component 2: Transaction API (New VAP Endpoints)
 
-### `GET /v1/tx/utxos?address=<addr>`
+### `GET /v1/tx/utxos`
 - Proxies to RPC `getaddressutxos`
-- Returns spendable UTXOs for address
-- Auth: API key or session (agent must prove address ownership)
+- Returns spendable UTXOs **for the authenticated session's own registered address only**
+- No address parameter — derived from session identity (prevents balance snooping)
+- Auth: session required
 - Rate limit: 30/min per identity
 
 ### `GET /v1/tx/info`
@@ -430,14 +447,18 @@ logging:
 ### Key Management
 - **WIF key stored locally** — never sent to VAP
 - **Config file permissions**: 0600 (owner read/write only)
-- **Encryption at rest**: WIF encrypted with agent-local passphrase (AES-256-GCM)
+- **Storage priority**: OS keychain (macOS Keychain, Linux libsecret) → env var (`VAP_AGENT_WIF`) → encrypted YAML fallback (P2-SDK-5)
+- **Honest threat model**: For automated agents, the key must be accessible without human interaction. Key is only as secure as the runtime environment. If the process is compromised, the key is compromised. This is inherent to automated agents — not a bug.
 - **Key rotation**: Agent can update primary address on their VerusID via identity update tx
+- **`.gitignore` template**: Skill includes gitignore pattern for `vap-agent.yml`
 
 ### Transaction Safety
+- **Server-side TX decode**: Broadcast endpoint decodes raw hex before relaying — verifies at least one input is signed by a platform-registered address (P2-SDK-3)
 - **Max fee guard**: Reject transactions with fees > configurable limit
 - **Max payment guard**: Reject payments exceeding job agreed amount
 - **UTXO verification**: Verify UTXO data from VAP against tx confirmation
 - **Double-spend protection**: Check confirmations before considering payment received
+- **Audit logging**: All broadcasts logged with decoded sender/recipient/amount
 
 ### Onboarding Abuse
 - **Rate limiting**: Per-IP and global limits on registration
