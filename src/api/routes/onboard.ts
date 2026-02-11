@@ -384,6 +384,104 @@ export async function onboardRoutes(fastify: FastifyInstance): Promise<void> {
   });
 
   // ------------------------------------------
+  // POST /v1/onboard/retry/:id
+  // Retry a failed registration that has a valid commitment TX
+  // ------------------------------------------
+  fastify.post('/v1/onboard/retry/:id', {
+    config: { rateLimit: { max: 3, timeWindow: 3600_000 } },
+  }, async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const row = getOnboard.get(id) as any;
+
+    if (!row) {
+      return reply.code(404).send({ error: { code: 'NOT_FOUND', message: 'Onboard request not found' } });
+    }
+
+    if (row.status !== 'failed') {
+      return reply.code(400).send({ error: { code: 'NOT_FAILED', message: `Cannot retry — status is ${row.status}` } });
+    }
+
+    if (!row.commitment_txid) {
+      return reply.code(400).send({ error: { code: 'NO_COMMITMENT', message: 'No commitment TX to resume from. Start a new registration.' } });
+    }
+
+    // Check if commitment is confirmed
+    try {
+      const tx = await rpc.rpcCall<any>('gettransaction', [row.commitment_txid]);
+      if (!tx || tx.confirmations < 1) {
+        return reply.code(400).send({ error: { code: 'NOT_CONFIRMED', message: 'Commitment TX not yet confirmed. Wait for a block and try again.' } });
+      }
+    } catch {
+      return reply.code(400).send({ error: { code: 'TX_NOT_FOUND', message: 'Commitment TX not found on-chain' } });
+    }
+
+    // Get the namereservation from stored commitment data
+    let commitData: any;
+    if (row.commitment_data) {
+      try {
+        commitData = JSON.parse(row.commitment_data);
+      } catch { /* corrupted data */ }
+    }
+
+    if (!commitData?.namereservation) {
+      return reply.code(400).send({
+        error: { code: 'NO_RESERVATION', message: 'Commitment data not stored (pre-retry feature). Start a new registration.' },
+      });
+    }
+
+    const namereservation = commitData.namereservation;
+
+    // Reset status and resume from registeridentity step
+    db.prepare(`UPDATE onboard_requests SET status = 'confirming', error = NULL, updated_at = datetime('now') WHERE id = ?`).run(id);
+
+    // Resume: call registeridentity directly
+    const doRegister = async () => {
+      console.log(`[Onboard] ${id}: Retrying registeridentity for "${row.name}"...`);
+      const registerResult = await rpc.rpcCall('registeridentity', [{
+        txid: row.commitment_txid,
+        namereservation,
+        identity: {
+          name: row.name,
+          parent: PARENT_IADDRESS,
+          primaryaddresses: [row.address],
+          minimumsignatures: 1,
+        },
+      }]);
+
+      await sleep(5_000);
+      let iAddress = '';
+      try {
+        const identity = await rpc.getIdentity(`${row.name}.${PARENT_IDENTITY}`);
+        iAddress = identity?.identity?.identityaddress || '';
+      } catch { iAddress = 'pending-lookup'; }
+
+      const regTxid = typeof registerResult === 'string' ? registerResult : (registerResult as any)?.txid || '';
+      updateOnboardRegistered.run(regTxid, `${row.name}.${PARENT_IDENTITY}`, iAddress, id);
+      console.log(`[Onboard] ${id}: ✅ Retry registered ${row.name}.${PARENT_IDENTITY} (${iAddress})`);
+
+      // Auto-fund
+      const STARTUP_FUND = 0.0033;
+      try {
+        const fundTxid = await rpc.rpcCall<string>('sendtoaddress', [row.address, STARTUP_FUND]);
+        db.prepare(`UPDATE onboard_requests SET funded_amount = ?, fund_txid = ? WHERE id = ?`).run(STARTUP_FUND, fundTxid, id);
+      } catch { /* non-fatal */ }
+    };
+
+    doRegister().catch(err => {
+      console.error(`[Onboard] Retry failed for ${id}:`, err.message);
+      updateOnboardFailed.run(err.message, id);
+    });
+
+    return reply.code(202).send({
+      status: 'retrying',
+      onboardId: id,
+      name: row.name,
+      identity: `${row.name}.${PARENT_IDENTITY}`,
+      message: 'Retrying registration from confirmed commitment. Poll /v1/onboard/status/:id for updates.',
+    });
+  });
+
+  // ------------------------------------------
   // Async registration processor
   // ------------------------------------------
   async function processRegistration(
@@ -416,6 +514,8 @@ export async function onboardRoutes(fastify: FastifyInstance): Promise<void> {
     }
 
     updateOnboardCommit.run(commitResult.txid, onboardId);
+    // Store full commitment data for retry capability
+    db.prepare(`UPDATE onboard_requests SET commitment_data = ? WHERE id = ?`).run(JSON.stringify(commitResult), onboardId);
     console.log(`[Onboard] ${onboardId}: Commitment txid: ${commitResult.txid}`);
 
     // Step 2: Wait for 1 block confirmation

@@ -637,4 +637,9 @@ export function runMigrations(db: Database.Database): void {
   try {
     db.exec(`ALTER TABLE qr_challenges ADD COLUMN identity_name TEXT`);
   } catch { /* Column exists */ }
+
+  // Store full commitment result for retry capability
+  try {
+    db.exec(`ALTER TABLE onboard_requests ADD COLUMN commitment_data TEXT`);
+  } catch { /* Column exists */ }
 }
