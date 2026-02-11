@@ -17,20 +17,35 @@ function buildSignCmd(idName, message) {
  */
 
 /**
- * PaymentQR — shows a Verus payment QR code and auto-polls for incoming txid.
+ * PaymentQR — generates a VerusPay invoice QR via the server endpoint.
+ * Verus Mobile natively understands VerusPay invoices.
  */
-function PaymentQR({ address, amount, currency, label, jobId, onTxDetected }) {
+function PaymentQR({ jobId, type, amount, currency, onTxDetected }) {
+  const [qrData, setQrData] = useState(null);
+  const [qrError, setQrError] = useState(null);
   const [polling, setPolling] = useState(true);
   const intervalRef = useRef(null);
   const seenTxidsRef = useRef(new Set());
 
-  // Verus payment URI
-  const paymentUri = `vrsc:${address}?amount=${amount}${label ? `&label=${encodeURIComponent(label)}` : ''}`;
-
+  // Fetch VerusPay invoice from server
   useEffect(() => {
-    // Snapshot existing txids on mount so we only detect NEW ones
     let mounted = true;
+    async function fetchQr() {
+      try {
+        const res = await fetch(`${API_BASE}/v1/jobs/${jobId}/payment-qr?type=${type}`, { credentials: 'include' });
+        if (res.ok && mounted) {
+          const data = await res.json();
+          setQrData(data.data);
+        } else if (mounted) {
+          setQrError('Failed to generate payment QR');
+        }
+      } catch {
+        if (mounted) setQrError('Failed to generate payment QR');
+      }
+    }
+    fetchQr();
 
+    // Snapshot existing txids
     async function snapshotExisting() {
       try {
         const res = await fetch(`${API_BASE}/v1/jobs/${jobId}`, { credentials: 'include' });
@@ -43,48 +58,59 @@ function PaymentQR({ address, amount, currency, label, jobId, onTxDetected }) {
     }
     snapshotExisting();
 
-    // Poll the address for new transactions via platform proxy
+    // Poll for payment detection
     intervalRef.current = setInterval(async () => {
       if (!mounted) return;
       try {
-        // Use the health endpoint to check — we'll actually check job status
-        // since we can't directly query the address without RPC access
         const res = await fetch(`${API_BASE}/v1/jobs/${jobId}`, { credentials: 'include' });
         if (!res.ok) return;
         const data = await res.json();
         const job = data.data;
-
-        // Check if a new payment appeared
         if (job?.payment?.txid && !seenTxidsRef.current.has(job.payment.txid)) {
           onTxDetected?.(job.payment.txid, 'agent');
           seenTxidsRef.current.add(job.payment.txid);
-          return;
         }
         if (job?.payment?.platformFeeTxid && !seenTxidsRef.current.has(job.payment.platformFeeTxid)) {
           onTxDetected?.(job.payment.platformFeeTxid, 'fee');
           seenTxidsRef.current.add(job.payment.platformFeeTxid);
-          return;
         }
       } catch {}
-    }, 10000); // poll every 10s
+    }, 10000);
 
     return () => {
       mounted = false;
       if (intervalRef.current) clearInterval(intervalRef.current);
     };
-  }, [jobId]);
+  }, [jobId, type]);
+
+  if (qrError) {
+    return <p className="text-xs text-red-400">{qrError}</p>;
+  }
+
+  if (!qrData) {
+    return (
+      <div className="flex items-center justify-center py-6">
+        <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-verus-blue"></div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col items-center gap-3">
       <div className="bg-white p-3 rounded-lg">
-        <QRCode value={paymentUri} size={180} level="M" />
+        <QRCode value={qrData.qrString} size={200} level="M" />
       </div>
       <p className="text-xs text-center" style={{ color: 'var(--text-tertiary)' }}>
-        Scan with Verus Mobile to pay <span className="text-white font-medium">{amount} {currency}</span>
+        Scan with Verus Mobile to pay <span className="text-white font-medium">{qrData.amount?.toFixed?.(4) || amount} {currency}</span>
       </p>
       <div className="w-full bg-gray-950 rounded p-2 text-center">
-        <p className="text-xs font-mono break-all" style={{ color: 'var(--text-secondary)' }}>{address}</p>
+        <p className="text-xs font-mono break-all" style={{ color: 'var(--text-secondary)' }}>{qrData.address}</p>
       </div>
+      {qrData.deeplink && (
+        <a href={qrData.deeplink} className="text-xs text-verus-blue hover:underline">
+          Open in Verus Mobile →
+        </a>
+      )}
       {polling && (
         <div className="flex items-center gap-2 text-xs" style={{ color: 'var(--text-tertiary)' }}>
           <div className="animate-spin rounded-full h-3 w-3 border-b border-verus-blue"></div>
@@ -381,15 +407,12 @@ export default function JobActions({ job, onUpdate }) {
           </p>
 
           <PaymentQR
-            address={job.payment?.address || job.sellerVerusId}
+            jobId={job.id}
+            type="agent"
             amount={job.amount}
             currency={job.currency}
-            label={`VAP Job Payment - ${job.id?.slice(0, 8)}`}
-            jobId={job.id}
-            onTxDetected={(txid, type) => {
-              if (type === 'agent') {
-                setSignatureInput(txid);
-              }
+            onTxDetected={(txid, t) => {
+              if (t === 'agent') setSignatureInput(txid);
             }}
           />
 
@@ -424,15 +447,12 @@ export default function JobActions({ job, onUpdate }) {
           </p>
 
           <PaymentQR
-            address={job.payment?.platformFeeAddress}
-            amount={job.payment?.feeAmount?.toFixed(4)}
-            currency={job.currency}
-            label={`VAP Platform Fee - ${job.id?.slice(0, 8)}`}
             jobId={job.id}
-            onTxDetected={(txid, type) => {
-              if (type === 'fee') {
-                setSignatureInput(txid);
-              }
+            type="fee"
+            amount={job.payment?.feeAmount}
+            currency={job.currency}
+            onTxDetected={(txid, t) => {
+              if (t === 'fee') setSignatureInput(txid);
             }}
           />
 

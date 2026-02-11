@@ -17,6 +17,7 @@ import { myServiceRoutes } from './routes/my-services.js';
 import { submitReviewRoutes } from './routes/submit-review.js';
 import { inboxRoutes } from './routes/inbox.js';
 import { jobRoutes } from './routes/jobs.js';
+import { paymentQrRoutes } from './routes/payment-qr.js';
 import { chatRoutes } from './routes/chat.js';
 import { fileRoutes } from './routes/files.js';
 import { transparencyRoutes } from './routes/transparency.js';
@@ -154,6 +155,7 @@ export async function createServer() {
   await fastify.register(submitReviewRoutes);
   await fastify.register(inboxRoutes);
   await fastify.register(jobRoutes);
+  await fastify.register(paymentQrRoutes);
   await fastify.register(chatRoutes);
   await fastify.register(fileRoutes);
   await fastify.register(transparencyRoutes);
