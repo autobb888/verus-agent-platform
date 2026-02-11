@@ -28,6 +28,8 @@ import { dataPolicyRoutes } from './routes/data-policies.js';
 import { transactionRoutes } from './routes/transactions.js';
 import { onboardRoutes } from './routes/onboard.js';
 import { canaryRoutes } from './routes/canary.js';
+import { pricingRoutes } from './routes/pricing.js';
+import { attestationRoutes } from './routes/attestations.js';
 import multipart from '@fastify/multipart';
 import helmet from '@fastify/helmet';
 import { initNonceStore } from '../auth/nonce-store.js';
@@ -158,6 +160,8 @@ export async function createServer() {
   await fastify.register(transactionRoutes);
   await fastify.register(onboardRoutes);
   await fastify.register(canaryRoutes);
+  await fastify.register(pricingRoutes);
+  await fastify.register(attestationRoutes);
 
   return fastify;
 }

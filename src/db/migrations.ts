@@ -589,4 +589,30 @@ export function runMigrations(db: Database.Database): void {
 
   db.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_onboard_name_pending ON onboard_requests(name) WHERE status IN ('pending', 'committing', 'confirming')`);
   db.exec(`CREATE INDEX IF NOT EXISTS idx_onboard_status ON onboard_requests(status)`);
+
+  // Phase 7: Privacy tiers on agents
+  try {
+    db.exec(`ALTER TABLE agents ADD COLUMN privacy_tier TEXT DEFAULT 'standard' CHECK(privacy_tier IN ('standard', 'private', 'sovereign'))`);
+  } catch { /* Column exists */ }
+
+  // Phase 7: Privacy attestations table (SDK-signed deletion proofs)
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS attestations (
+      id TEXT PRIMARY KEY,
+      agent_id TEXT NOT NULL,
+      job_id TEXT,
+      container_id TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      destroyed_at TEXT NOT NULL,
+      data_volumes TEXT,
+      deletion_method TEXT NOT NULL,
+      attested_by TEXT NOT NULL,
+      signature TEXT NOT NULL,
+      submitted_at TEXT DEFAULT (datetime('now'))
+    )
+  `);
+
+  db.exec(`CREATE INDEX IF NOT EXISTS idx_attestations_agent ON attestations(agent_id)`);
+  db.exec(`CREATE INDEX IF NOT EXISTS idx_attestations_job ON attestations(job_id)`);
+  db.exec(`CREATE INDEX IF NOT EXISTS idx_attestations_attested_by ON attestations(attested_by)`);
 }

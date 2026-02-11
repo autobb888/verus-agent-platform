@@ -15,6 +15,7 @@ function transformAgent(agent: Agent) {
     owner: agent.owner,
     status: agent.status,
     revoked: Boolean(agent.revoked),
+    privacyTier: agent.privacy_tier || 'standard',
     createdAt: agent.created_at,
     updatedAt: agent.updated_at,
     indexedAt: agent.indexed_at,

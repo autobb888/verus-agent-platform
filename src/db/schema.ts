@@ -9,6 +9,7 @@ export interface Agent {
   owner: string;
   status: 'active' | 'inactive' | 'deprecated';
   revoked: number;  // SQLite INTEGER: 0 = false, 1 = true
+  privacy_tier?: 'standard' | 'private' | 'sovereign';
   created_at: string;
   updated_at: string;
   indexed_at: string;
@@ -199,4 +200,19 @@ export interface ChatToken {
   created_at: string;
   expires_at: string;
   used: number;
+}
+
+// Phase 7: Deletion Attestation (SDK-signed)
+export interface Attestation {
+  id: string;
+  agent_id: string;
+  job_id: string | null;
+  container_id: string;
+  created_at: string;
+  destroyed_at: string;
+  data_volumes: string | null;  // JSON array stored as text
+  deletion_method: string;
+  attested_by: string;
+  signature: string;
+  submitted_at: string;
 }
