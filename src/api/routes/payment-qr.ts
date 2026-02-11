@@ -5,7 +5,7 @@
  */
 
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
-import { jobQueries } from '../../db/index.js';
+import { jobQueries, getDatabase } from '../../db/index.js';
 import { getSessionFromRequest } from './auth.js';
 // @ts-ignore — no type declarations
 import BN from 'bn.js';
@@ -133,7 +133,18 @@ export async function paymentQrRoutes(fastify: FastifyInstance): Promise<void> {
         },
       };
     } else {
-      const feeAmount = job.amount * 0.05;
+      // Calculate discounted fee based on data terms
+      const db = getDatabase();
+      const dt = db.prepare('SELECT * FROM job_data_terms WHERE job_id = ?').get(id) as any;
+      let feeRate = 0.05;
+      if (dt) {
+        let discount = 0;
+        if (dt.allow_training === 1) discount += 0.10;
+        if (dt.allow_third_party === 1) discount += 0.10;
+        if (dt.require_deletion_attestation === 0) discount += 0.05;
+        feeRate = 0.05 * (1 - discount);
+      }
+      const feeAmount = job.amount * feeRate;
       const invoice = generateInvoice(SAFECHAT_FEE_ADDRESS, feeAmount, systemId, IS_TESTNET);
       return {
         data: {

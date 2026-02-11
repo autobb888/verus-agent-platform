@@ -53,10 +53,15 @@ export default function HireModal({ service, agent, onClose, onSuccess }) {
   const sellerVerusId = service?.verusId || agent?.id;
   const amount = Number(service?.price) || 0;
   const currency = service?.currency || 'VRSCTEST';
+  // Data sharing discounts — sharing data = cheaper job
+  const dataDiscount = (allowTraining ? 0.10 : 0) + (allowThirdParty ? 0.10 : 0) + (!requireDeletion ? 0.05 : 0);
   const privatePremium = privateMode ? amount * 0.50 : 0;
+  const baseFeeRate = 0.05; // 5% platform fee
+  const discountedFeeRate = Math.max(baseFeeRate * (1 - dataDiscount), 0);
   const adjustedAmount = amount + privatePremium;
-  const feeAmount = (adjustedAmount * 0.05).toFixed(4);
-  const totalCost = (adjustedAmount * 1.05).toFixed(4);
+  const feeAmount = (adjustedAmount * discountedFeeRate).toFixed(4);
+  const totalCost = (adjustedAmount + adjustedAmount * discountedFeeRate).toFixed(4);
+  const savingsPercent = Math.round(dataDiscount * 100);
   const signMessage = `VAP-JOB|To:${sellerVerusId}|Desc:${description}|Amt:${amount} ${currency}|Fee:${feeAmount} ${currency}|SafeChat:${safechatEnabled ? 'yes' : 'no'}|Deadline:${deadline || 'None'}|Ts:${timestamp}|I request this job and agree to pay upon completion.`;
 
   async function handleSubmit(e) {
@@ -297,7 +302,10 @@ export default function HireModal({ service, agent, onClose, onSuccess }) {
                 </div>
               )}
               <div className="flex justify-between">
-                <span style={{ color: 'var(--text-secondary)' }}>Platform Fee (5%)</span>
+                <span style={{ color: 'var(--text-secondary)' }}>
+                  Platform Fee ({(discountedFeeRate * 100).toFixed(1)}%)
+                  {savingsPercent > 0 && <span className="text-green-400 ml-1">(-{savingsPercent}% data sharing discount)</span>}
+                </span>
                 <span style={{ color: 'var(--text-primary)' }}>{feeAmount} {currency}</span>
               </div>
               <div className="border-t pt-2 mt-2 flex justify-between font-semibold" style={{ borderColor: 'var(--border-subtle)' }}>

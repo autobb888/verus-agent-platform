@@ -92,12 +92,33 @@ const createJobSchema = z.object({
     requireDeletionAttestation: z.boolean().default(false),
   }).optional(),
   safechatEnabled: z.boolean().default(true),
+  privateMode: z.boolean().default(false),
   timestamp: z.number(),
   signature: z.string().min(1),
 });
 
 // SafeChat fee address (dedicated VerusID for collecting fees)
 const SAFECHAT_FEE_ADDRESS = process.env.SAFECHAT_FEE_ADDRESS || 'RAWwNeTLRg9urgnDPQtPyZ6NRycsmSY2J2';
+
+// Platform fee base rate: 5%
+const BASE_FEE_RATE = 0.05;
+
+/**
+ * Calculate the discounted platform fee rate based on data sharing preferences.
+ * Sharing data = cheaper job. Data has value.
+ * - Allow training: -10% off fee
+ * - Allow third-party sharing: -10% off fee
+ * - No deletion attestation: -5% off fee
+ * Max discount: 25% off the 5% fee → effective 3.75%
+ */
+function calculateFeeRate(dataTerms?: { allowTraining?: boolean; allowThirdParty?: boolean; requireDeletionAttestation?: boolean }): number {
+  if (!dataTerms) return BASE_FEE_RATE;
+  let discount = 0;
+  if (dataTerms.allowTraining) discount += 0.10;
+  if (dataTerms.allowThirdParty) discount += 0.10;
+  if (!dataTerms.requireDeletionAttestation) discount += 0.05;
+  return BASE_FEE_RATE * (1 - discount);
+}
 
 // Schema for accepting a job
 const acceptJobSchema = z.object({
@@ -1245,6 +1266,7 @@ export async function jobRoutes(fastify: FastifyInstance): Promise<void> {
 
     const { txid } = parsed.data;
     const rpc = getRpcClient();
+    const db = getDatabase();
     let feeVerified = 0;
     let verificationNote = '';
 
@@ -1255,7 +1277,14 @@ export async function jobRoutes(fastify: FastifyInstance): Promise<void> {
       }
 
       const confirmations = rawTx.confirmations || 0;
-      const expectedFee = job.amount * 0.05;
+      // Calculate discounted fee based on data terms
+      const dt = db.prepare('SELECT * FROM job_data_terms WHERE job_id = ?').get(id) as any;
+      const feeRate = calculateFeeRate(dt ? {
+        allowTraining: dt?.allow_training === 1,
+        allowThirdParty: dt?.allow_third_party === 1,
+        requireDeletionAttestation: dt?.require_deletion_attestation === 1,
+      } : undefined);
+      const expectedFee = job.amount * feeRate;
 
       // Check if output goes to SafeChat fee address
       let feeAmount = 0;
@@ -1288,7 +1317,6 @@ export async function jobRoutes(fastify: FastifyInstance): Promise<void> {
     }
 
     // Record fee and check if both payments are done
-    const db = getDatabase();
     db.transaction(() => {
       jobQueries.setPlatformFee(id, txid, feeVerified);
       const freshJob = jobQueries.getById(id)!;
@@ -1539,16 +1567,27 @@ function formatJob(job: any) {
     deadline: job.deadline,
     status: job.status,
     safechatEnabled: job.safechat_enabled === 1,
-    payment: {
-      terms: job.payment_terms || 'prepay',
-      address: job.payment_address,
-      txid: job.payment_txid,
-      verified: job.payment_verified === 1,
-      platformFeeTxid: job.platform_fee_txid,
-      platformFeeVerified: job.platform_fee_verified === 1,
-      platformFeeAddress: SAFECHAT_FEE_ADDRESS,
-      feeAmount: job.amount * 0.05,
-    },
+    payment: (() => {
+      // Look up data terms to calculate discounted fee
+      const db = getDatabase();
+      const dt = db.prepare('SELECT * FROM job_data_terms WHERE job_id = ?').get(job.id) as any;
+      const feeRate = calculateFeeRate(dt ? {
+        allowTraining: dt.allow_training === 1,
+        allowThirdParty: dt.allow_third_party === 1,
+        requireDeletionAttestation: dt.require_deletion_attestation === 1,
+      } : undefined);
+      return {
+        terms: job.payment_terms || 'prepay',
+        address: job.payment_address,
+        txid: job.payment_txid,
+        verified: job.payment_verified === 1,
+        platformFeeTxid: job.platform_fee_txid,
+        platformFeeVerified: job.platform_fee_verified === 1,
+        platformFeeAddress: SAFECHAT_FEE_ADDRESS,
+        feeRate,
+        feeAmount: job.amount * feeRate,
+      };
+    })(),
     signatures: {
       request: job.request_signature,
       acceptance: job.acceptance_signature,
