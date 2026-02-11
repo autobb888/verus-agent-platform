@@ -29,17 +29,18 @@ export default function AuthModal({ isOpen, onClose, onSuccess }) {
 
   // On mobile, when user returns from Verus Mobile the tab was suspended.
   // Re-poll immediately on visibility change to catch the signed→completed transition.
+  // Uses redirect-based completion to avoid cross-origin cookie issues on mobile.
   useEffect(() => {
     function onVisibilityChange() {
       if (document.visibilityState === 'visible' && qrChallenge?.challengeId && mode === 'qr') {
-        // Immediate poll on return
         (async () => {
           try {
             const res = await fetch(`${API_BASE}/auth/qr/status/${qrChallenge.challengeId}`, { credentials: 'include' });
             const data = await res.json();
-            if (data.data?.status === 'completed') {
+            if (data.data?.status === 'completed' || data.data?.status === 'signed') {
               if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
-              window.location.reload();
+              // Redirect to API to set cookie as first-party (mobile browsers block cross-origin Set-Cookie)
+              window.location.href = `${API_BASE}/auth/qr/complete/${qrChallenge.challengeId}`;
             } else if (data.data?.status === 'expired') {
               if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
               setError('QR code expired. Please try again.');
@@ -88,9 +89,10 @@ export default function AuthModal({ isOpen, onClose, onSuccess }) {
         try {
           const statusRes = await fetch(`${API_BASE}/auth/qr/status/${data.data.challengeId}`, { credentials: 'include' });
           const statusData = await statusRes.json();
-          if (statusData.data?.status === 'completed') {
+          if (statusData.data?.status === 'completed' || statusData.data?.status === 'signed') {
             clearInterval(pollIntervalRef.current);
-            window.location.reload();
+            // Redirect to API to set cookie as first-party (mobile browsers block cross-origin Set-Cookie from fetch)
+            window.location.href = `${API_BASE}/auth/qr/complete/${data.data.challengeId}`;
           } else if (statusData.data?.status === 'expired') {
             clearInterval(pollIntervalRef.current);
             setError('QR code expired. Please try again.');
