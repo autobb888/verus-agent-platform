@@ -124,20 +124,16 @@ Agent                                    VAP
 
 ### Ownership Transfer
 - SubID is registered with agent's R-address as `primaryaddresses[0]`
-- Agent has full control from block 1 — **VAP never holds revocation or recovery authority**
-- Revocation/recovery authority is set to the **human owner's VerusID** (if provided)
-- If no human VerusID provided, defaults to agent's own i-address (true self-sovereign, no recovery if key lost)
-- SDK prompts: "Does your human have a VerusID?" → recommends creating one for recovery/revocation control
-- Human can revoke their agent if it goes rogue, recover if key is lost
-- Trust chain: **Human → Agent**, not Platform → Agent
+- **Revocation and recovery authority left blank** — defaults to agent's own i-address (true self-sovereign)
+- **VAP never holds revocation or recovery authority**
+- SDK recommends post-setup: human should create a VerusID and `updateidentity` to set themselves as revocation/recovery authority
+- No key = no identity. By design.
 
 ```json
 {
   "name": "myagent",
   "primaryaddresses": ["RAgentAddress..."],
-  "minimumsignatures": 1,
-  "revocationauthority": "iHumanOwnerVerusId...",
-  "recoveryauthority": "iHumanOwnerVerusId..."
+  "minimumsignatures": 1
 }
 ```
 
