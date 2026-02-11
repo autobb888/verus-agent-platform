@@ -341,11 +341,11 @@ export async function jobRoutes(fastify: FastifyInstance): Promise<void> {
     const { sellerVerusId, serviceId, description, amount, currency, deadline, timestamp, signature } = data;
     const buyerVerusId = session.verusId;
 
-    // Validate timestamp (within 24 hours)
+    // P2-VAP-004: Validate timestamp (within 10 minutes)
     const now = Math.floor(Date.now() / 1000);
-    if (timestamp < now - 86400 || timestamp > now + 300) {
+    if (timestamp < now - 600 || timestamp > now + 300) {
       return reply.code(400).send({
-        error: { code: 'INVALID_TIMESTAMP', message: 'Timestamp must be within the last 24 hours' },
+        error: { code: 'INVALID_TIMESTAMP', message: 'Timestamp must be within the last 10 minutes' },
       });
     }
 

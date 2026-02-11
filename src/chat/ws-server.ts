@@ -429,8 +429,18 @@ export function initSocketServer(httpServer: HttpServer): SocketIOServer {
 
       if (outputBlocked) return;
 
-      // Save to DB
-      const signed = signature ? 1 : 0;
+      // P2-VAP-003: Verify signature via RPC before marking as signed
+      let signed = 0;
+      if (signature) {
+        try {
+          const { getRpcClient } = await import('../indexer/rpc-client.js');
+          const rpc = getRpcClient();
+          const isValid = await rpc.verifyMessage(socket.verusId, sanitized, signature);
+          signed = isValid ? 1 : 0;
+        } catch {
+          signed = 0; // Can't verify = not signed
+        }
+      }
       const messageId = jobMessageQueries.insert({
         job_id: jobId,
         sender_verus_id: socket.verusId,

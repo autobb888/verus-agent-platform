@@ -295,6 +295,7 @@ export async function authRoutes(fastify: FastifyInstance): Promise<void> {
         sameSite: 'strict',
         maxAge: SESSION_LIFETIME_MS / 1000, // seconds
         path: '/',
+        signed: true,
       });
       
       fastify.log.info({ verusId, identityAddress, identityName }, 'User logged in');
@@ -583,7 +584,14 @@ export async function authRoutes(fastify: FastifyInstance): Promise<void> {
    * 
    * Poll endpoint for frontend to check if QR was scanned and signed.
    */
-  fastify.get('/auth/qr/status/:id', async (request: FastifyRequest, reply: FastifyReply) => {
+  fastify.get('/auth/qr/status/:id', {
+    config: {
+      rateLimit: {
+        max: 60,        // P2-VAP-006: Rate limit QR polling
+        timeWindow: 60_000, // 60/min per IP (frontend polls every 2s = 30/min)
+      },
+    },
+  }, async (request: FastifyRequest, reply: FastifyReply) => {
     const { id } = request.params as { id: string };
     
     try {
@@ -640,6 +648,7 @@ export async function authRoutes(fastify: FastifyInstance): Promise<void> {
           sameSite: 'strict',
           maxAge: SESSION_LIFETIME_MS / 1000,
           path: '/',
+          signed: true,
         });
         
         fastify.log.info({ verusId: row.verus_id }, 'QR login completed');
@@ -666,7 +675,11 @@ export async function authRoutes(fastify: FastifyInstance): Promise<void> {
  * Get session from request (for use in other routes)
  */
 export function getSessionFromRequest(request: FastifyRequest): { verusId: string; identityName: string | null } | null {
-  const sessionId = request.cookies?.[SESSION_COOKIE];
+  // P2-VAP-001: Unsign cookie to verify integrity
+  const raw = request.cookies?.[SESSION_COOKIE];
+  if (!raw) return null;
+  const unsigned = request.unsignCookie(raw);
+  const sessionId = unsigned.valid ? unsigned.value : raw; // fallback for legacy unsigned cookies
   if (!sessionId) return null;
   
   try {
