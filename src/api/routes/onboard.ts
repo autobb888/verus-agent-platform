@@ -85,7 +85,7 @@ async function verifyOnboardSignatureViaRPC(address: string, challenge: string, 
 
 // Rate limiting: 1 registration per IP per hour
 const ipRegistrations = new Map<string, { count: number; resetAt: number }>();
-const IP_LIMIT = 10; // Temporarily increased for testing (was 1)
+const IP_LIMIT = parseInt(process.env.ONBOARD_IP_LIMIT || '1', 10); // 1/IP/hour default (P2-OB-1)
 const IP_WINDOW = 60 * 60 * 1000; // 1 hour
 
 // Global daily limit
@@ -113,7 +113,7 @@ const HEX64_REGEX = /^[0-9a-fA-F]{64}$/;
 
 // The parent identity that registers subIDs
 const PARENT_IDENTITY = 'agentplatform@';
-const PARENT_IADDRESS = 'i7xKUpKQDSriYFfgHYfRpFc2uzRKWLDkjW'; // agentplatform@ i-address (for RPC calls that need currency ID)
+const PARENT_IADDRESS = process.env.PARENT_IADDRESS || 'i7xKUpKQDSriYFfgHYfRpFc2uzRKWLDkjW'; // agentplatform@ i-address (P3-OB-3)
 
 export async function onboardRoutes(fastify: FastifyInstance): Promise<void> {
   const rpc = getRpcClient();
