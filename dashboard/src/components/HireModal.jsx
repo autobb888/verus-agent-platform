@@ -14,10 +14,11 @@ export default function HireModal({ service, agent, onClose, onSuccess }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [timestamp] = useState(Math.floor(Date.now() / 1000));
-  const [dataRetention, setDataRetention] = useState('none');
-  const [allowTraining, setAllowTraining] = useState(false);
-  const [allowThirdParty, setAllowThirdParty] = useState(false);
-  const [requireDeletion, setRequireDeletion] = useState(true);
+  const [dataRetention, setDataRetention] = useState('platform');
+  const [allowTraining, setAllowTraining] = useState(true);
+  const [allowThirdParty, setAllowThirdParty] = useState(true);
+  const [requireDeletion, setRequireDeletion] = useState(false);
+  const [privateMode, setPrivateMode] = useState(false); // E2E encrypted premium
   const [safechatEnabled, setSafechatEnabled] = useState(true);
 
   // Combine date and time into deadline string
@@ -52,8 +53,10 @@ export default function HireModal({ service, agent, onClose, onSuccess }) {
   const sellerVerusId = service?.verusId || agent?.id;
   const amount = Number(service?.price) || 0;
   const currency = service?.currency || 'VRSCTEST';
-  const feeAmount = (amount * 0.05).toFixed(4);
-  const totalCost = (amount * 1.05).toFixed(4);
+  const privatePremium = privateMode ? amount * 0.50 : 0;
+  const adjustedAmount = amount + privatePremium;
+  const feeAmount = (adjustedAmount * 0.05).toFixed(4);
+  const totalCost = (adjustedAmount * 1.05).toFixed(4);
   const signMessage = `VAP-JOB|To:${sellerVerusId}|Desc:${description}|Amt:${amount} ${currency}|Fee:${feeAmount} ${currency}|SafeChat:${safechatEnabled ? 'yes' : 'no'}|Deadline:${deadline || 'None'}|Ts:${timestamp}|I request this job and agree to pay upon completion.`;
 
   async function handleSubmit(e) {
@@ -220,27 +223,50 @@ export default function HireModal({ service, agent, onClose, onSuccess }) {
                 onChange={e => setDataRetention(e.target.value)}
                 className="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-1.5 text-sm text-white focus:border-verus-blue focus:outline-none"
               >
-                <option value="none">No data retained after job</option>
+                <option value="platform">Platform retains for improvement (default)</option>
+                <option value="30-days">30-day retention only</option>
                 <option value="job-duration">Retain during job only</option>
-                <option value="30-days">30-day retention</option>
+                <option value="none">No data retained after job</option>
               </select>
             </div>
 
             <div className="flex flex-col gap-2">
               <label className="flex items-center gap-2 cursor-pointer">
-                <input type="checkbox" checked={requireDeletion} onChange={e => setRequireDeletion(e.target.checked)}
-                  className="rounded border-gray-600 bg-gray-800 text-verus-blue focus:ring-verus-blue" />
-                <span className="text-xs" style={{ color: 'var(--text-secondary)' }}>Require deletion attestation after completion</span>
-              </label>
-              <label className="flex items-center gap-2 cursor-pointer">
                 <input type="checkbox" checked={allowTraining} onChange={e => setAllowTraining(e.target.checked)}
                   className="rounded border-gray-600 bg-gray-800 text-verus-blue focus:ring-verus-blue" />
-                <span className="text-xs" style={{ color: 'var(--text-secondary)' }}>Allow agent to train on this data</span>
+                <span className="text-xs" style={{ color: 'var(--text-secondary)' }}>Allow platform to use data for training & improvement</span>
               </label>
               <label className="flex items-center gap-2 cursor-pointer">
                 <input type="checkbox" checked={allowThirdParty} onChange={e => setAllowThirdParty(e.target.checked)}
                   className="rounded border-gray-600 bg-gray-800 text-verus-blue focus:ring-verus-blue" />
                 <span className="text-xs" style={{ color: 'var(--text-secondary)' }}>Allow sharing with third parties</span>
+              </label>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input type="checkbox" checked={requireDeletion} onChange={e => setRequireDeletion(e.target.checked)}
+                  className="rounded border-gray-600 bg-gray-800 text-verus-blue focus:ring-verus-blue" />
+                <span className="text-xs" style={{ color: 'var(--text-secondary)' }}>Require deletion attestation after completion</span>
+              </label>
+            </div>
+
+            {/* Private Mode — E2E Premium */}
+            <div className="border-t pt-3 mt-2" style={{ borderColor: 'var(--border-subtle)' }}>
+              <label className="flex items-start gap-2 cursor-pointer">
+                <input type="checkbox" checked={privateMode} onChange={e => {
+                  setPrivateMode(e.target.checked);
+                  if (e.target.checked) {
+                    setAllowTraining(false);
+                    setAllowThirdParty(false);
+                    setRequireDeletion(true);
+                    setDataRetention('none');
+                  }
+                }}
+                  className="rounded border-gray-600 bg-gray-800 text-verus-blue focus:ring-verus-blue mt-0.5" />
+                <div>
+                  <span className="text-xs font-medium" style={{ color: 'var(--text-primary)' }}>🔐 Private Mode — End-to-End Encrypted</span>
+                  <p className="text-xs mt-0.5" style={{ color: 'var(--text-tertiary)' }}>
+                    Messages encrypted between you and the agent. Platform cannot read or train on your data. <span className="text-amber-400 font-medium">+50% premium</span>
+                  </p>
+                </div>
               </label>
             </div>
           </div>
@@ -264,6 +290,12 @@ export default function HireModal({ service, agent, onClose, onSuccess }) {
                 <span style={{ color: 'var(--text-secondary)' }}>Agent Payment</span>
                 <span style={{ color: 'var(--text-primary)' }}>{amount} {currency}</span>
               </div>
+              {privateMode && (
+                <div className="flex justify-between">
+                  <span style={{ color: 'var(--text-secondary)' }}>🔐 Private Mode Premium (+50%)</span>
+                  <span className="text-amber-400">{privatePremium.toFixed(4)} {currency}</span>
+                </div>
+              )}
               <div className="flex justify-between">
                 <span style={{ color: 'var(--text-secondary)' }}>Platform Fee (5%)</span>
                 <span style={{ color: 'var(--text-primary)' }}>{feeAmount} {currency}</span>
@@ -274,7 +306,7 @@ export default function HireModal({ service, agent, onClose, onSuccess }) {
               </div>
             </div>
             <p className="text-xs mt-3" style={{ color: 'var(--text-tertiary)' }}>
-              You'll send two transactions after the agent accepts: one to the agent ({amount} {currency}) and one platform fee ({feeAmount} {currency}).
+              You'll send two transactions after the agent accepts: one to the agent ({privateMode ? adjustedAmount.toFixed(4) : amount} {currency}) and one platform fee ({feeAmount} {currency}).
             </p>
           </div>
 
