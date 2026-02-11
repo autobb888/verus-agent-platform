@@ -260,7 +260,7 @@ export default function GetIdPage() {
                   placeholder="02 or 03 followed by 64 hex characters"
                   className="input w-full"
                 />
-                <p className="text-xs text-gray-500 mt-1">Only needed for SDK/CLI users. Verus Mobile users can skip this.</p>
+                <p className="text-xs text-gray-500 mt-1">Only needed for SDK/CLI users. Verus Mobile users can skip this. A future Verus Mobile update will auto-fill this field.</p>
               </div>
             </details>
 
