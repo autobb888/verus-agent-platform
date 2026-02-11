@@ -179,9 +179,9 @@ export async function onboardRoutes(fastify: FastifyInstance): Promise<void> {
     };
 
     // --- Input validation ---
-    if (!name || !address || !pubkey) {
+    if (!name || !address) {
       return reply.code(400).send({
-        error: { code: 'MISSING_FIELDS', message: 'name, address, and pubkey are required' },
+        error: { code: 'MISSING_FIELDS', message: 'name and address are required' },
       });
     }
 
@@ -197,13 +197,13 @@ export async function onboardRoutes(fastify: FastifyInstance): Promise<void> {
       });
     }
 
-    if (!PUBKEY_REGEX.test(pubkey)) {
+    if (pubkey && !PUBKEY_REGEX.test(pubkey)) {
       return reply.code(400).send({
         error: { code: 'INVALID_PUBKEY', message: 'Pubkey must be a 33-byte compressed secp256k1 key (hex)' },
       });
     }
 
-    // --- P2-SDK-6: Verify pubkey ownership ---
+    // --- P2-SDK-6: Verify pubkey ownership (if provided) ---
     // Agent must sign a challenge to prove they control the keypair
     if (!signature || !challenge) {
       // Generate an HMAC-bound challenge (P2-SDK-12: no server-side state needed)
@@ -217,12 +217,14 @@ export async function onboardRoutes(fastify: FastifyInstance): Promise<void> {
       });
     }
 
-    // Verify pubkey matches the claimed address
-    const derivedAddress = pubkeyToAddress(pubkey);
-    if (derivedAddress !== address) {
-      return reply.code(400).send({
-        error: { code: 'PUBKEY_MISMATCH', message: 'Pubkey does not match the provided address' },
-      });
+    // Verify pubkey matches the claimed address (if pubkey provided)
+    if (pubkey) {
+      const derivedAddress = pubkeyToAddress(pubkey);
+      if (derivedAddress !== address) {
+        return reply.code(400).send({
+          error: { code: 'PUBKEY_MISMATCH', message: 'Pubkey does not match the provided address' },
+        });
+      }
     }
 
     // Verify HMAC challenge token is valid and not expired (P2-SDK-12)
@@ -307,7 +309,7 @@ export async function onboardRoutes(fastify: FastifyInstance): Promise<void> {
     // --- Create onboard request (name lock) ---
     const onboardId = uuidv4();
     try {
-      insertOnboard.run(onboardId, lowerName, address, pubkey, ip);
+      insertOnboard.run(onboardId, lowerName, address, pubkey || null, ip);
     } catch (error: any) {
       if (error.message.includes('UNIQUE constraint')) {
         return reply.code(409).send({
@@ -328,7 +330,7 @@ export async function onboardRoutes(fastify: FastifyInstance): Promise<void> {
     console.log(`[Onboard] New request: ${lowerName}.${PARENT_IDENTITY} → ${address} (${onboardId})`);
 
     // --- Start async registration process ---
-    processRegistration(onboardId, lowerName, address, pubkey).catch(err => {
+    processRegistration(onboardId, lowerName, address, pubkey || '').catch(err => {
       console.error(`[Onboard] Registration failed for ${onboardId}:`, err.message);
       updateOnboardFailed.run(err.message, onboardId);
     });

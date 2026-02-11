@@ -14,7 +14,7 @@ export default function GetIdPage() {
   const [step, setStep] = useState(1);
   const [name, setName] = useState('');
   const [address, setAddress] = useState('');
-  const [pubkey, setPubkey] = useState('');
+  const [pubkey, setPubkey] = useState(''); // Optional — not required for mobile users
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState(null);
@@ -179,8 +179,7 @@ export default function GetIdPage() {
             <ol className="text-sm text-gray-400 space-y-1 list-decimal list-inside">
               <li>Create a new wallet (or import existing)</li>
               <li>Switch to <span className="text-verus-blue">VRSCTEST</span> network (Settings → Networks)</li>
-              <li>Go to your wallet and find your <span className="text-verus-blue">R-address</span></li>
-              <li>Also note your <span className="text-verus-blue">public key</span> (Settings → Wallet Info)</li>
+              <li>Go to your wallet and find your <span className="text-verus-blue">R-address</span> (receive screen)</li>
             </ol>
           </div>
 
@@ -231,9 +230,9 @@ export default function GetIdPage() {
       {/* Step 3: Enter R-address + pubkey */}
       {step === 3 && (
         <div className="card !p-8">
-          <h2 className="text-xl font-semibold text-white mb-4">🔑 Step 3: Your Wallet Details</h2>
+          <h2 className="text-xl font-semibold text-white mb-4">🔑 Step 3: Your Wallet Address</h2>
           <p className="text-gray-300 mb-6">
-            Paste your R-address and public key from Verus Mobile.
+            Paste your R-address from Verus Mobile.
             This connects your new <span className="font-mono text-verus-blue">{name}.agentplatform@</span> identity to your wallet.
           </p>
 
@@ -251,23 +250,25 @@ export default function GetIdPage() {
               <p className="text-xs text-gray-500 mt-1">Starts with R. Found in your wallet's receive screen.</p>
             </div>
 
-            <div className="mb-6">
-              <label className="block text-sm font-medium text-gray-300 mb-2">Public Key</label>
-              <input
-                type="text"
-                value={pubkey}
-                onChange={(e) => setPubkey(e.target.value.trim())}
-                placeholder="02 or 03 followed by 64 hex characters"
-                className="input w-full"
-              />
-              <p className="text-xs text-gray-500 mt-1">66 hex characters. Found in Settings → Wallet Info.</p>
-            </div>
+            <details className="mb-6">
+              <summary className="text-xs text-gray-500 cursor-pointer hover:text-gray-300">Advanced: Public Key (optional)</summary>
+              <div className="mt-2">
+                <input
+                  type="text"
+                  value={pubkey}
+                  onChange={(e) => setPubkey(e.target.value.trim())}
+                  placeholder="02 or 03 followed by 64 hex characters"
+                  className="input w-full"
+                />
+                <p className="text-xs text-gray-500 mt-1">Only needed for SDK/CLI users. Verus Mobile users can skip this.</p>
+              </div>
+            </details>
 
             <div className="flex gap-3">
               <button type="button" onClick={() => setStep(2)} className="btn-secondary flex-1 py-3">
                 ← Back
               </button>
-              <button type="submit" disabled={loading || !address || !pubkey}
+              <button type="submit" disabled={loading || !address}
                 className="btn-primary flex-1 py-3 disabled:opacity-50">
                 {loading ? 'Registering...' : 'Register Identity'}
               </button>
