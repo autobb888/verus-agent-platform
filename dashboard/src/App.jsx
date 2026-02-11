@@ -12,6 +12,7 @@ import JobsPage from './pages/JobsPage';
 import JobDetailPage from './pages/JobDetailPage';
 import MarketplacePage from './pages/MarketplacePage';
 import GetIdPage from './pages/GetIdPage';
+import LandingPage from './pages/LandingPage';
 import SettingsPage from './pages/SettingsPage';
 
 /**
@@ -67,7 +68,7 @@ function AppRoutes() {
     <Routes>
       {/* Public routes — no auth required */}
       <Route path="/" element={<Layout />}>
-        <Route index element={<MarketplacePage />} />
+        <Route index element={<LandingPage />} />
         <Route path="marketplace" element={<MarketplacePage />} />
         <Route path="get-id" element={<GetIdPage />} />
         <Route path="agents/:id" element={<AgentDetailPage />} />
