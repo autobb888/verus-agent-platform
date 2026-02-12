@@ -574,7 +574,7 @@ export function runMigrations(db: Database.Database): void {
       id TEXT PRIMARY KEY,
       name TEXT NOT NULL,
       address TEXT NOT NULL,
-      pubkey TEXT NOT NULL,
+      pubkey TEXT,
       status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'committing', 'confirming', 'registered', 'failed')),
       commitment_txid TEXT,
       register_txid TEXT,

@@ -4,9 +4,9 @@ import { Link } from 'react-router-dom';
 const API_BASE = import.meta.env.VITE_API_URL || '';
 
 const STEPS = [
-  { num: 1, title: 'Get Verus Mobile', desc: 'Download the wallet to hold your identity' },
+  { num: 1, title: 'Get a Verus Wallet', desc: 'Download a wallet to hold your identity' },
   { num: 2, title: 'Choose a Name', desc: 'Pick your unique agentplatform@ identity' },
-  { num: 3, title: 'Enter Your Address', desc: 'Paste your R-address from Verus Mobile' },
+  { num: 3, title: 'Enter Your Address', desc: 'Paste your R-address from your Verus wallet' },
   { num: 4, title: 'Done!', desc: 'Your identity is ready to use' },
 ];
 
@@ -146,16 +146,17 @@ export default function GetIdPage() {
         </div>
       )}
 
-      {/* Step 1: Download Verus Mobile */}
+      {/* Step 1: Get a Verus Wallet */}
       {step === 1 && (
         <div className="card !p-8">
-          <h2 className="text-xl font-semibold text-white mb-4">📱 Step 1: Get Verus Mobile</h2>
+          <h2 className="text-xl font-semibold text-white mb-4">🔑 Step 1: Get a Verus Wallet</h2>
           <p className="text-gray-300 mb-6">
-            You'll need the Verus Mobile wallet to hold your identity and sign transactions.
+            You'll need a Verus wallet to hold your identity and sign transactions.
             Your identity lives on the blockchain — not on our platform.
           </p>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
+          <h3 className="text-sm font-medium text-gray-300 mb-3">📱 Verus Mobile</h3>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
             <a href="https://apps.apple.com/app/verus-mobile/id1528675517" target="_blank" rel="noopener"
               className="flex items-center gap-3 p-4 bg-gray-800 rounded-lg hover:bg-gray-700 transition">
               <span className="text-2xl">🍎</span>
@@ -174,17 +175,29 @@ export default function GetIdPage() {
             </a>
           </div>
 
+          <h3 className="text-sm font-medium text-gray-300 mb-3">🖥️ Verus Desktop / CLI</h3>
+          <div className="mb-6">
+            <a href="https://verus.io/wallet/desktop" target="_blank" rel="noopener"
+              className="flex items-center gap-3 p-4 bg-gray-800 rounded-lg hover:bg-gray-700 transition">
+              <span className="text-2xl">💻</span>
+              <div>
+                <div className="text-white font-medium">Verus Desktop</div>
+                <div className="text-gray-400 text-sm">Windows / macOS / Linux</div>
+              </div>
+            </a>
+          </div>
+
           <div className="bg-gray-800/50 rounded-lg p-4 mb-6">
             <h3 className="text-sm font-medium text-gray-300 mb-2">After installing:</h3>
             <ol className="text-sm text-gray-400 space-y-1 list-decimal list-inside">
               <li>Create a new wallet (or import existing)</li>
               <li>Switch to <span className="text-verus-blue">VRSCTEST</span> network (Settings → Networks)</li>
-              <li>Go to your wallet and find your <span className="text-verus-blue">R-address</span> (receive screen)</li>
+              <li>Find your <span className="text-verus-blue">R-address</span> (receive screen in Mobile, or Debug Console in Desktop)</li>
             </ol>
           </div>
 
           <button onClick={() => setStep(2)} className="btn-primary w-full py-3">
-            I have Verus Mobile →
+            I have a Verus wallet →
           </button>
         </div>
       )}
@@ -232,7 +245,7 @@ export default function GetIdPage() {
         <div className="card !p-8">
           <h2 className="text-xl font-semibold text-white mb-4">🔑 Step 3: Your Wallet Address</h2>
           <p className="text-gray-300 mb-6">
-            Paste your R-address from Verus Mobile.
+            Paste your R-address from your Verus wallet.
             This connects your new <span className="font-mono text-verus-blue">{name}.agentplatform@</span> identity to your wallet.
           </p>
 
