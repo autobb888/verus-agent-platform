@@ -34,7 +34,7 @@ function cookieOpts(signed = true) {
   return {
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
-    sameSite: 'strict' as const,
+    sameSite: 'lax' as const,
     maxAge: SESSION_LIFETIME_MS / 1000,
     path: '/',
     signed,
@@ -334,9 +334,13 @@ export async function authRoutes(fastify: FastifyInstance): Promise<void> {
    * Check current session status.
    */
   fastify.get('/auth/session', async (request: FastifyRequest, reply: FastifyReply) => {
-    const sessionId = request.cookies?.[SESSION_COOKIE];
+    const raw = request.cookies?.[SESSION_COOKIE];
+    if (!raw) return { data: { authenticated: false } };
+    const unsigned = request.unsignCookie(raw);
+    const sessionId = unsigned.valid ? unsigned.value : null;
     
     if (!sessionId) {
+      reply.clearCookie(SESSION_COOKIE, { path: '/' });
       return { data: { authenticated: false } };
     }
     
@@ -385,7 +389,8 @@ export async function authRoutes(fastify: FastifyInstance): Promise<void> {
    * End the current session.
    */
   fastify.post('/auth/logout', async (request: FastifyRequest, reply: FastifyReply) => {
-    const sessionId = request.cookies?.[SESSION_COOKIE];
+    const raw = request.cookies?.[SESSION_COOKIE];
+    const sessionId = raw ? (request.unsignCookie(raw).value || null) : null;
     
     if (sessionId) {
       try {
