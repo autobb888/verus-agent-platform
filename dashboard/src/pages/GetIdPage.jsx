@@ -282,6 +282,7 @@ export default function GetIdPage() {
         <ChallengeSignStep
           challenge={result.challenge}
           name={name}
+          address={address}
           onSubmit={handleSubmitSignature}
           onBack={() => setStep(3)}
           loading={loading}
@@ -373,33 +374,71 @@ export default function GetIdPage() {
   );
 }
 
-function ChallengeSignStep({ challenge, name, onSubmit, onBack, loading }) {
+function CopyButton({ text, label }) {
+  const [copied, setCopied] = useState(false);
+  return (
+    <button
+      onClick={() => { navigator.clipboard.writeText(text); setCopied(true); setTimeout(() => setCopied(false), 2000); }}
+      className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300"
+    >
+      {copied ? '✓ Copied!' : (label || '📋 Copy')}
+    </button>
+  );
+}
+
+function ChallengeSignStep({ challenge, name, address, onSubmit, onBack, loading }) {
   const [signature, setSignature] = useState('');
+  const signCommand = `signmessage "${address}" "${challenge}"`;
 
   return (
     <div className="card !p-8">
       <h2 className="text-xl font-semibold text-white mb-4">✍️ Sign the Challenge</h2>
       <p className="text-gray-300 mb-4">
-        To prove you own this wallet, sign this challenge message in Verus Mobile or the Verus CLI:
+        To prove you own this wallet, sign the challenge below using your R-address.
+        You can do this in <strong>Verus Mobile</strong> or the <strong>Verus CLI/GUI console</strong>.
       </p>
 
-      <div className="bg-gray-950 rounded p-3 mb-4 font-mono text-xs text-gray-300 break-all">
-        {challenge}
-      </div>
-
-      <div className="bg-gray-800/50 rounded-lg p-3 mb-4">
-        <p className="text-xs text-gray-400">
-          In Verus Mobile: Go to your identity → Sign Message → paste the challenge above → copy the signature.
+      {/* Method 1: CLI command with copy button */}
+      <div className="mb-5">
+        <div className="flex items-center justify-between mb-2">
+          <label className="text-sm font-medium text-gray-400">CLI / GUI Console Command</label>
+          <CopyButton text={signCommand} label="📋 Copy Command" />
+        </div>
+        <div className="bg-gray-950 rounded-lg p-3 font-mono text-xs text-green-400 break-all overflow-x-auto">
+          <span className="text-gray-500">verus </span>{signCommand}
+        </div>
+        <p className="text-xs text-gray-500 mt-1.5">
+          Paste this into the Verus CLI or the Debug Console in Verus Desktop (Help → Debug Window → Console).
         </p>
       </div>
 
+      {/* Method 2: Verus Mobile instructions */}
+      <div className="bg-gray-800/50 rounded-lg p-4 mb-5 border border-gray-700/50">
+        <p className="text-sm font-medium text-gray-300 mb-2">📱 Using Verus Mobile instead?</p>
+        <ol className="text-xs text-gray-400 space-y-1.5 list-decimal list-inside">
+          <li>Open Verus Mobile → go to your identity</li>
+          <li>Tap <strong className="text-gray-300">Sign Message</strong></li>
+          <li>Paste the challenge string below:</li>
+        </ol>
+        <div className="flex items-center gap-2 mt-2">
+          <div className="bg-gray-950 rounded p-2 font-mono text-xs text-gray-300 break-all flex-1">
+            {challenge}
+          </div>
+          <CopyButton text={challenge} label="📋 Copy" />
+        </div>
+        <p className="text-xs text-gray-400 mt-2">
+          <span className="inline-block">4.</span> Copy the resulting signature and paste it below.
+        </p>
+      </div>
+
+      {/* Signature input */}
       <div className="mb-6">
         <label className="block text-sm font-medium text-gray-300 mb-2">Paste Signature</label>
         <input
           type="text"
           value={signature}
           onChange={(e) => setSignature(e.target.value)}
-          placeholder="Paste signature here..."
+          placeholder="Paste your signature here..."
           className="input w-full"
           autoFocus
         />
