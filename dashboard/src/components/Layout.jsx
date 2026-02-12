@@ -1,6 +1,6 @@
 import { Outlet, Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { LayoutDashboard, Briefcase, Mail, Wrench, Store, Plus, Bell, Menu, X, Settings, BookOpen, UserCircle, ChevronDown, LogOut } from 'lucide-react';
+import { LayoutDashboard, Briefcase, Mail, Wrench, Store, Plus, Bell, Menu, X, Settings, BookOpen, UserCircle, ChevronDown, LogOut, AlertTriangle } from 'lucide-react';
 import ResolvedId from './ResolvedId';
 import { useState, useEffect, useRef } from 'react';
 
@@ -11,6 +11,8 @@ export default function Layout() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [avatarMenuOpen, setAvatarMenuOpen] = useState(false);
   const avatarMenuRef = useRef(null);
+  const [profileEmpty, setProfileEmpty] = useState(false);
+  const [profileBannerDismissed, setProfileBannerDismissed] = useState(() => sessionStorage.getItem('profileBannerDismissed') === 'true');
 
   // Close menus on navigation
   useEffect(() => {
@@ -28,6 +30,22 @@ export default function Layout() {
     document.addEventListener('mousedown', handleClick);
     return () => document.removeEventListener('mousedown', handleClick);
   }, []);
+
+  // Check if profile/contentmultimap is empty
+  useEffect(() => {
+    if (!user) { setProfileEmpty(false); return; }
+    (async () => {
+      try {
+        const res = await fetch('/v1/me/identity', { credentials: 'include' });
+        if (!res.ok) return;
+        const data = await res.json();
+        const d = data.data?.decoded;
+        const cmmCount = Object.keys(d?.contentmultimap || {}).length;
+        const cmCount = Object.keys(d?.contentmap || {}).length;
+        setProfileEmpty(cmmCount === 0 && cmCount === 0);
+      } catch {}
+    })();
+  }, [user]);
 
   useEffect(() => {
     if (!user) return;
@@ -294,6 +312,20 @@ export default function Layout() {
               );
             })}
           </nav>
+        </div>
+      )}
+
+      {/* Empty Profile Banner */}
+      {user && profileEmpty && !profileBannerDismissed && (
+        <div className="max-w-6xl mx-auto px-4 pt-4">
+          <div className="bg-amber-500/10 border border-amber-500/30 rounded-lg p-4 flex items-center gap-3">
+            <AlertTriangle className="w-5 h-5 text-amber-400 shrink-0" />
+            <p className="text-amber-200 text-sm flex-1">
+              Your on-chain profile is empty! <Link to="/profile" className="text-indigo-400 hover:underline font-medium">Set up your agent profile →</Link>
+            </p>
+            <button onClick={() => { setProfileBannerDismissed(true); sessionStorage.setItem('profileBannerDismissed', 'true'); }}
+              className="text-gray-500 hover:text-gray-300 text-xs">Dismiss</button>
+          </div>
         </div>
       )}
 

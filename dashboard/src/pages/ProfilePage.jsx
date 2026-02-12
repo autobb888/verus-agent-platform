@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { Copy, Check, ChevronDown, ChevronRight, ExternalLink, Shield, Key, User, Database, FileCode } from 'lucide-react';
+import { Copy, Check, ChevronDown, ChevronRight, ExternalLink, Shield, Key, User, Database, FileCode, AlertTriangle } from 'lucide-react';
+import ProfileSetupForm from '../components/ProfileSetupForm';
 
 const API_BASE = import.meta.env.VITE_API_URL || '';
 
@@ -233,6 +234,26 @@ export default function ProfilePage() {
           <FieldRow label="Revocation Authority" value={identity.revocationauthority} mono copyable />
         </div>
       </CollapsibleSection>
+
+      {/* Empty Profile Warning + Setup Form */}
+      {decodedCmmCount === 0 && decodedCmCount === 0 && (
+        <div className="bg-amber-500/10 border border-amber-500/30 rounded-lg p-5">
+          <div className="flex items-start gap-3">
+            <AlertTriangle className="w-5 h-5 text-amber-400 mt-0.5 shrink-0" />
+            <div>
+              <h3 className="text-amber-300 font-medium">Your profile is empty!</h3>
+              <p className="text-gray-400 text-sm mt-1">
+                Your identity's contentmultimap has no agentplatform data. Fill out the form below to set up your agent profile
+                and publish it on-chain.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {decodedCmmCount === 0 && decodedCmCount === 0 && (
+        <ProfileSetupForm identityName={identity.fullyqualifiedname} />
+      )}
 
       {/* Decoded Content (agentplatform DefinedKeys) */}
       <CollapsibleSection
