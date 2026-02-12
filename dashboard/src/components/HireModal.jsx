@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import TimePicker from './TimePicker';
 
@@ -20,6 +20,12 @@ export default function HireModal({ service, agent, onClose, onSuccess }) {
   const [requireDeletion, setRequireDeletion] = useState(true);
   const [privateMode, setPrivateMode] = useState(false); // E2E encrypted premium
   const [safechatEnabled, setSafechatEnabled] = useState(true);
+
+  // Lock body scroll when modal is open
+  useEffect(() => {
+    document.body.style.overflow = 'hidden';
+    return () => { document.body.style.overflow = ''; };
+  }, []);
 
   // Combine date and time into deadline string
   const deadline = useMemo(() => {
@@ -115,8 +121,8 @@ export default function HireModal({ service, agent, onClose, onSuccess }) {
   }
 
   return (
-    <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
-      <div className="bg-gray-800 rounded-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+    <div className="fixed inset-0 bg-black/60 flex items-end sm:items-center justify-center z-50 sm:p-4" onClick={onClose}>
+      <div className="bg-gray-800 rounded-t-xl sm:rounded-xl max-w-2xl w-full max-h-[95vh] sm:max-h-[90vh] overflow-y-auto overscroll-contain" onClick={e => e.stopPropagation()}>
         {/* Header */}
         <div className="p-6 border-b border-gray-700">
           <div className="flex justify-between items-start">
