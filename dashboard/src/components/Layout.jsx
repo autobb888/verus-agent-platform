@@ -38,12 +38,13 @@ export default function Layout() {
     (async () => {
       try {
         const res = await fetch('/v1/me/identity', { credentials: 'include' });
-        if (!res.ok) return;
+        if (!res.ok) { console.warn('[Layout] /v1/me/identity returned', res.status); return; }
         const data = await res.json();
         const d = data.data?.decoded;
         const cmmCount = Object.keys(d?.contentmultimap || {}).length;
         const cmCount = Object.keys(d?.contentmap || {}).length;
         const empty = cmmCount === 0 && cmCount === 0;
+        console.log('[Layout] profile check:', { cmmCount, cmCount, empty });
         setProfileEmpty(empty);
         if (empty && !sessionStorage.getItem('profileToastShown')) {
           sessionStorage.setItem('profileToastShown', 'true');
