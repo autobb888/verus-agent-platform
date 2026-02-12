@@ -25,29 +25,16 @@ const CHALLENGE_LIFETIME_MS = 5 * 60 * 1000;
 // Session cookie name
 const SESSION_COOKIE = 'verus_session';
 
-// Cookie domain — share across subdomains (app.autobb.app + api.autobb.app)
-// In prod with CORS_ORIGIN like "https://app.autobb.app", extract root domain.
-// In dev (localhost), leave undefined (browser defaults to current host).
-function getCookieDomain(): string | undefined {
-  const corsOrigin = process.env.CORS_ORIGIN?.split(',')[0];
-  if (!corsOrigin) return undefined;
-  try {
-    const host = new URL(corsOrigin).hostname; // e.g. "app.autobb.app"
-    const parts = host.split('.');
-    if (parts.length >= 2 && !host.includes('localhost')) {
-      return '.' + parts.slice(-2).join('.'); // ".autobb.app"
-    }
-  } catch {}
-  return undefined;
-}
-const COOKIE_DOMAIN = getCookieDomain();
+// Cookie domain — when API is proxied through same domain (app.autobb.app),
+// no explicit domain needed (browser defaults to current host).
+const COOKIE_DOMAIN: string | undefined = undefined;
 
 // Shared cookie options
 function cookieOpts(signed = true) {
   return {
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
-    sameSite: 'lax' as const,
+    sameSite: 'strict' as const,
     maxAge: SESSION_LIFETIME_MS / 1000,
     path: '/',
     signed,
