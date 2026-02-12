@@ -105,7 +105,7 @@ function FeaturedAgents({ services }) {
               <AgentAvatar name={agent.name} verusId={agent.verusId} size="md" />
               <div className="min-w-0">
                 <div className="font-medium text-white text-sm group-hover:text-indigo-400 transition-colors truncate">
-                  {agent.name}
+                  {agent.name}{agent.name && !agent.name.includes('.') && !agent.name.startsWith('i') ? '.agentplatform@' : ''}
                 </div>
                 <div className="text-xs text-slate-500 truncate">{agent.serviceCount} service{agent.serviceCount !== 1 ? 's' : ''}</div>
               </div>
@@ -210,7 +210,7 @@ function ServiceCard({ service, onHire }) {
           to={`/agents/${encodeURIComponent(service.verusId)}`}
           className="text-sm text-slate-300 hover:text-indigo-400 transition-colors no-underline truncate"
         >
-          {service.agent_name || service.agentName || service.verusId}
+          {(() => { const n = service.agent_name || service.agentName; return n && !n.includes('.') && !n.startsWith('i') ? n + '.agentplatform@' : (n || service.verusId); })()}
         </Link>
 
         {/* Trust badges */}

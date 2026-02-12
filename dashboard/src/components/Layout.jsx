@@ -122,6 +122,10 @@ export default function Layout() {
                     </span>
                   )}
                 </Link>
+                {/* Short name on mobile, full ResolvedId on desktop */}
+                <span className="sm:hidden text-sm font-medium truncate max-w-[100px]" style={{ color: 'var(--text-primary)' }}>
+                  {(user?.identityName || '').split('.')[0] || user?.verusId?.slice(0, 8)}
+                </span>
                 <div className="min-w-0 hidden sm:block">
                   <ResolvedId
                     address={user?.verusId}
