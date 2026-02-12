@@ -224,9 +224,16 @@ export default function AuthModal({ isOpen, onClose, onSuccess }) {
                 <pre className="bg-gray-900 rounded-lg p-3 text-xs text-gray-300 overflow-x-auto whitespace-pre-wrap break-all border border-gray-700 max-h-24 overflow-y-auto">
                   {challenge.challenge}
                 </pre>
-                <p className="text-xs text-gray-500 mt-1">
-                  Run: <code className="bg-gray-900 px-1 rounded">signmessage "yourID@" "{challenge.challenge}"</code>
-                </p>
+                <div className="mt-2 relative">
+                  <pre className="bg-gray-900 rounded-lg p-2 text-xs text-green-400 overflow-x-auto whitespace-pre-wrap break-all border border-gray-700">
+{`signmessage "${verusId || 'yourID@'}" "${challenge.challenge}"`}
+                  </pre>
+                  <button
+                    type="button"
+                    onClick={() => navigator.clipboard.writeText(`signmessage "${verusId || 'yourID@'}" "${challenge.challenge}"`)}
+                    className="absolute top-1 right-1 text-xs text-gray-500 hover:text-gray-300 px-1.5 py-0.5 bg-gray-800 rounded"
+                  >📋 Copy</button>
+                </div>
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-300 mb-1">VerusID</label>
