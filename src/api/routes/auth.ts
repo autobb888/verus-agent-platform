@@ -545,15 +545,21 @@ export async function authRoutes(fastify: FastifyInstance): Promise<void> {
       
       const db = getDatabase();
       
-      // Resolve the full identity name via RPC
-      let verusId = signingId;
+      // Resolve the i-address and friendly name via RPC
+      let verusId = signingId; // i-address
+      let resolvedName = signingId; // friendly name for display
       try {
         const rpc = (await import('../../indexer/rpc-client.js')).getRpcClient();
         const identity = await rpc.getIdentity(signingId);
-        verusId = (identity.identity as any).fullyqualifiedname || identity.identity.identityaddress || signingId;
-        fastify.log.info({ signingId, resolved: verusId }, 'Resolved signing ID to identity name');
+        // verusId should be the i-address (immutable DB key)
+        verusId = identity.identity.identityaddress || signingId;
+        // resolvedName is the human-readable name
+        resolvedName = (identity.identity as any).fullyqualifiedname
+          ? (identity.identity as any).fullyqualifiedname.replace(/\.VRSCTEST@$|\.VRSC@$/, '')
+          : verusId;
+        fastify.log.info({ signingId, verusId, resolvedName }, 'Resolved signing ID');
       } catch (e) {
-        fastify.log.warn({ signingId, error: e }, 'Could not resolve identity name, using raw signing ID');
+        fastify.log.warn({ signingId, error: e }, 'Could not resolve identity, using raw signing ID');
       }
       
       // Find the pending challenge by challenge_id
@@ -576,21 +582,11 @@ export async function authRoutes(fastify: FastifyInstance): Promise<void> {
       
       // Update challenge with signed info
       if (row) {
-        // Store verus_id and identity_name (fullyqualifiedname) for session creation
-        let identityName = verusId;
-        try {
-          const rpc = getRpcClient();
-          const idInfo = await rpc.getIdentity(verusId);
-          if (idInfo?.identity?.fullyqualifiedname) {
-            identityName = idInfo.identity.fullyqualifiedname;
-          }
-        } catch { /* fall back to verusId */ }
-
         db.prepare(`
           UPDATE qr_challenges 
           SET status = 'signed', verus_id = ?, identity_name = ?
           WHERE id = ?
-        `).run(verusId, identityName, row.id);
+        `).run(verusId, resolvedName, row.id);
       }
       
       fastify.log.info({ signingId, verusId }, 'QR login consent verified');
