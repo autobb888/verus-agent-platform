@@ -351,10 +351,47 @@ export default function GetIdPage() {
                 </div>
               </div>
 
+              {/* Secure Your Identity */}
+              <div className="bg-gray-800/50 rounded-lg p-4 mb-6">
+                <h3 className="text-sm font-medium text-white mb-3">🔒 Secure Your Identity</h3>
+                <p className="text-xs text-gray-400 mb-4">
+                  We recommend setting your revocation & recovery to a personal VerusID you control,
+                  and adding a private (z) address for shielded transactions.
+                </p>
+
+                <div className="space-y-3">
+                  <div>
+                    <div className="text-xs text-gray-400 mb-1">1. Generate a z-address (in Verus CLI/Desktop console):</div>
+                    <div className="relative">
+                      <pre className="bg-gray-900 rounded p-2 text-xs text-green-400 overflow-x-auto">z_getnewaddress</pre>
+                      <button
+                        onClick={() => navigator.clipboard.writeText('z_getnewaddress')}
+                        className="absolute top-1 right-1 text-xs text-gray-500 hover:text-gray-300 px-1"
+                      >📋</button>
+                    </div>
+                  </div>
+
+                  <div>
+                    <div className="text-xs text-gray-400 mb-1">2. Update your identity (replace values with your own):</div>
+                    <div className="relative">
+                      <pre className="bg-gray-900 rounded p-2 text-xs text-green-400 overflow-x-auto whitespace-pre-wrap">{`updateidentity '{"name":"${name}","parent":"i7xKUpKQDSriYFfgHYfRpFc2uzRKWLDkjW","privateaddress":"YOUR_Z_ADDRESS","revocationauthority":"YOUR_PERSONAL_ID@","recoveryauthority":"YOUR_PERSONAL_ID@"}'`}</pre>
+                      <button
+                        onClick={() => navigator.clipboard.writeText(`updateidentity '{"name":"${name}","parent":"i7xKUpKQDSriYFfgHYfRpFc2uzRKWLDkjW","privateaddress":"YOUR_Z_ADDRESS","revocationauthority":"YOUR_PERSONAL_ID@","recoveryauthority":"YOUR_PERSONAL_ID@"}'`)}
+                        className="absolute top-1 right-1 text-xs text-gray-500 hover:text-gray-300 px-1"
+                      >📋</button>
+                    </div>
+                    <p className="text-xs text-gray-500 mt-1">
+                      Replace <code className="text-gray-400">YOUR_Z_ADDRESS</code> with the z-address from step 1,
+                      and <code className="text-gray-400">YOUR_PERSONAL_ID@</code> with a VerusID you own (for account recovery).
+                    </p>
+                  </div>
+                </div>
+              </div>
+
               <div className="bg-gray-800/50 rounded-lg p-4 mb-6">
                 <h3 className="text-sm font-medium text-gray-300 mb-2">What's next?</h3>
                 <ol className="text-sm text-gray-400 space-y-2 list-decimal list-inside">
-                  <li>Open Verus Mobile — your new ID should appear automatically</li>
+                  <li>Open your Verus wallet — your new ID should appear automatically</li>
                   <li><Link to="/login" className="text-verus-blue hover:underline">Log in to the dashboard</Link> with your new identity</li>
                   <li>Register your first agent or browse the marketplace</li>
                 </ol>
