@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import CopyButton from '../components/CopyButton';
 
 const API_BASE = import.meta.env.VITE_API_URL || '';
 
@@ -366,10 +367,7 @@ export default function GetIdPage() {
                     <div className="text-xs text-gray-400 mb-1">1. Generate a z-address (in Verus CLI/Desktop console):</div>
                     <div className="relative">
                       <pre className="bg-gray-900 rounded p-2 text-xs text-green-400 overflow-x-auto">z_getnewaddress</pre>
-                      <button
-                        onClick={() => navigator.clipboard.writeText('z_getnewaddress')}
-                        className="absolute top-1 right-1 text-xs text-gray-500 hover:text-gray-300 px-1"
-                      >📋</button>
+                      <CopyButton text="z_getnewaddress" className="absolute top-1 right-1" />
                     </div>
                   </div>
 
@@ -377,10 +375,7 @@ export default function GetIdPage() {
                     <div className="text-xs text-gray-400 mb-1">2. Update your identity (replace values with your own):</div>
                     <div className="relative">
                       <pre className="bg-gray-900 rounded p-2 text-xs text-green-400 overflow-x-auto whitespace-pre-wrap">{`updateidentity '{"name":"${name}","parent":"i7xKUpKQDSriYFfgHYfRpFc2uzRKWLDkjW","privateaddress":"YOUR_Z_ADDRESS","revocationauthority":"YOUR_PERSONAL_ID@","recoveryauthority":"YOUR_PERSONAL_ID@"}'`}</pre>
-                      <button
-                        onClick={() => navigator.clipboard.writeText(`updateidentity '{"name":"${name}","parent":"i7xKUpKQDSriYFfgHYfRpFc2uzRKWLDkjW","privateaddress":"YOUR_Z_ADDRESS","revocationauthority":"YOUR_PERSONAL_ID@","recoveryauthority":"YOUR_PERSONAL_ID@"}'`)}
-                        className="absolute top-1 right-1 text-xs text-gray-500 hover:text-gray-300 px-1"
-                      >📋</button>
+                      <CopyButton text={`updateidentity '{"name":"${name}","parent":"i7xKUpKQDSriYFfgHYfRpFc2uzRKWLDkjW","privateaddress":"YOUR_Z_ADDRESS","revocationauthority":"YOUR_PERSONAL_ID@","recoveryauthority":"YOUR_PERSONAL_ID@"}'`} className="absolute top-1 right-1" />
                     </div>
                     <p className="text-xs text-gray-500 mt-1">
                       Replace <code className="text-gray-400">YOUR_Z_ADDRESS</code> with the z-address from step 1,
@@ -426,18 +421,6 @@ export default function GetIdPage() {
   );
 }
 
-function CopyButton({ text, label }) {
-  const [copied, setCopied] = useState(false);
-  return (
-    <button
-      onClick={() => { navigator.clipboard.writeText(text); setCopied(true); setTimeout(() => setCopied(false), 2000); }}
-      className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300"
-    >
-      {copied ? '✓ Copied!' : (label || '📋 Copy')}
-    </button>
-  );
-}
-
 function ChallengeSignStep({ challenge, name, address, onSubmit, onBack, loading }) {
   const [signature, setSignature] = useState('');
   const signCommand = `signmessage "${address}" "${challenge}"`;
@@ -454,7 +437,7 @@ function ChallengeSignStep({ challenge, name, address, onSubmit, onBack, loading
       <div className="mb-5">
         <div className="flex items-center justify-between mb-2">
           <label className="text-sm font-medium text-gray-400">CLI / GUI Console Command</label>
-          <CopyButton text={signCommand} label="📋 Copy Command" />
+          <CopyButton text={signCommand} label="📋 Copy Command" variant="pill" />
         </div>
         <div className="bg-gray-950 rounded-lg p-3 font-mono text-xs text-green-400 break-all overflow-x-auto">
           <span className="text-gray-500">verus </span>{signCommand}
@@ -476,7 +459,7 @@ function ChallengeSignStep({ challenge, name, address, onSubmit, onBack, loading
           <div className="bg-gray-950 rounded p-2 font-mono text-xs text-gray-300 break-all flex-1">
             {challenge}
           </div>
-          <CopyButton text={challenge} label="📋 Copy" />
+          <CopyButton text={challenge} label="📋 Copy" variant="pill" />
         </div>
         <p className="text-xs text-gray-400 mt-2">
           <span className="inline-block">4.</span> Copy the resulting signature and paste it below.
