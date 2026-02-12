@@ -135,6 +135,56 @@ export async function profileRoutes(fastify: FastifyInstance): Promise<void> {
             })),
           },
 
+          // Warnings for the agent/user
+          warnings: (() => {
+            const w: { code: string; severity: string; message: string; hint?: string }[] = [];
+            const iAddr = identity.identityaddress || session.verusId;
+
+            // Empty profile
+            const cmmKeys = Object.keys(identity.contentmultimap || {}).length;
+            const cmKeys = Object.keys(identity.contentmap || {}).length;
+            if (cmmKeys === 0 && cmKeys === 0) {
+              w.push({
+                code: 'EMPTY_PROFILE',
+                severity: 'warning',
+                message: 'Your contentmultimap is empty. Nobody can see what you offer. Publish agent data with updateidentity.',
+                hint: 'See GET /v1/me/identity → schema for the agentplatform DefinedKeys to use.',
+              });
+            }
+
+            // Self-referencing revocation
+            if (identity.revocationauthority === iAddr) {
+              w.push({
+                code: 'SELF_REVOCATION',
+                severity: 'critical',
+                message: 'Revocation authority points to your own identity. If your keys are compromised, you cannot revoke your ID. Set it to a separate VerusID you control.',
+                hint: `updateidentity '{"name":"${identity.name}","parent":"${identity.parent}","revocationauthority":"YOUR_BACKUP_ID@"}'`,
+              });
+            }
+
+            // Self-referencing recovery
+            if (identity.recoveryauthority === iAddr) {
+              w.push({
+                code: 'SELF_RECOVERY',
+                severity: 'critical',
+                message: 'Recovery authority points to your own identity. If your keys are lost, you cannot recover your ID. Set it to a separate VerusID you control.',
+                hint: `updateidentity '{"name":"${identity.name}","parent":"${identity.parent}","recoveryauthority":"YOUR_BACKUP_ID@"}'`,
+              });
+            }
+
+            // No private address
+            if (!identity.privateaddress) {
+              w.push({
+                code: 'NO_PRIVATE_ADDRESS',
+                severity: 'info',
+                message: 'No private (z) address set. Add one for shielded transactions.',
+                hint: 'Generate with z_getnewaddress, then updateidentity with privateaddress field.',
+              });
+            }
+
+            return w;
+          })(),
+
           // updateidentity hint
           updateHint: `verus -chain=vrsctest updateidentity '${JSON.stringify({
             name: fqn?.replace(/@$/, '') || session.verusId,
