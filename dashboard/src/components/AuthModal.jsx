@@ -27,9 +27,7 @@ export default function AuthModal({ isOpen, onClose, onSuccess }) {
     };
   }, []);
 
-  // On mobile, when user returns from Verus Mobile the tab was suspended.
-  // Re-poll immediately on visibility change to catch the signed→completed transition.
-  // Uses redirect-based completion to avoid cross-origin cookie issues on mobile.
+  // On mobile, re-poll immediately when user returns from Verus Mobile (tab was suspended).
   useEffect(() => {
     function onVisibilityChange() {
       if (document.visibilityState === 'visible' && qrChallenge?.challengeId && mode === 'qr') {
@@ -37,18 +35,15 @@ export default function AuthModal({ isOpen, onClose, onSuccess }) {
           try {
             const res = await fetch(`${API_BASE}/auth/qr/status/${qrChallenge.challengeId}`, { credentials: 'include' });
             const data = await res.json();
-            if (data.data?.status === 'completed' || data.data?.status === 'signed') {
+            if (data.data?.status === 'completed') {
               if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
-              // Redirect to API to set cookie as first-party (mobile browsers block cross-origin Set-Cookie)
-              window.location.href = `${API_BASE}/auth/qr/complete/${qrChallenge.challengeId}`;
+              window.location.reload();
             } else if (data.data?.status === 'expired') {
               if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
               setError('QR code expired. Please try again.');
               setMode('choose');
             }
-          } catch (err) {
-            console.error('Visibility poll error:', err);
-          }
+          } catch {}
         })();
       }
     }
@@ -89,10 +84,9 @@ export default function AuthModal({ isOpen, onClose, onSuccess }) {
         try {
           const statusRes = await fetch(`${API_BASE}/auth/qr/status/${data.data.challengeId}`, { credentials: 'include' });
           const statusData = await statusRes.json();
-          if (statusData.data?.status === 'completed' || statusData.data?.status === 'signed') {
+          if (statusData.data?.status === 'completed') {
             clearInterval(pollIntervalRef.current);
-            // Redirect to API to set cookie as first-party (mobile browsers block cross-origin Set-Cookie from fetch)
-            window.location.href = `${API_BASE}/auth/qr/complete/${data.data.challengeId}`;
+            window.location.reload();
           } else if (statusData.data?.status === 'expired') {
             clearInterval(pollIntervalRef.current);
             setError('QR code expired. Please try again.');

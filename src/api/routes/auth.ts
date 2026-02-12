@@ -689,66 +689,6 @@ export async function authRoutes(fastify: FastifyInstance): Promise<void> {
     }
   });
 
-  /**
-   * GET /auth/qr/complete/:id
-   * 
-   * Redirect-based login completion for mobile browsers.
-   * Mobile Safari/Chrome may silently drop Set-Cookie from cross-origin fetch() responses.
-   * This endpoint is navigated to directly (window.location), so the cookie is set as first-party.
-   */
-  fastify.get('/auth/qr/complete/:id', async (request: FastifyRequest, reply: FastifyReply) => {
-    const { id } = request.params as { id: string };
-    const dashboardUrl = process.env.CORS_ORIGIN?.split(',')[0] || 'http://localhost:5173';
-
-    try {
-      const db = getDatabase();
-      const row = db.prepare(`
-        SELECT status, verus_id, identity_name FROM qr_challenges WHERE id = ?
-      `).get(id) as { status: string; verus_id: string | null; identity_name: string | null } | undefined;
-
-      if (!row || !row.verus_id || (row.status !== 'signed' && row.status !== 'completed')) {
-        return reply.redirect(`${dashboardUrl}?login=failed`);
-      }
-
-      // Mark as completed if still signed
-      if (row.status === 'signed') {
-        db.prepare(`UPDATE qr_challenges SET status = 'completed' WHERE id = ? AND status = 'signed'`).run(id);
-      }
-
-      // Always create a fresh session — the poll may have raced and created one
-      // via fetch() whose Set-Cookie was dropped by mobile browsers.
-      const sessionId = randomBytes(32).toString('hex');
-      const sessionNow = Date.now();
-      const sessionExpiry = sessionNow + SESSION_LIFETIME_MS;
-
-      db.prepare(`
-        INSERT INTO sessions (id, verus_id, identity_name, created_at, expires_at)
-        VALUES (?, ?, ?, ?, ?)
-      `).run(sessionId, row.verus_id, row.identity_name || row.verus_id, sessionNow, sessionExpiry);
-
-      reply.setCookie(SESSION_COOKIE, sessionId, cookieOpts());
-
-      fastify.log.info({ verusId: row.verus_id }, 'QR login completed via redirect');
-
-      // Return HTML page instead of 302 — some mobile browsers don't store
-      // Set-Cookie on redirect responses. The HTML page ensures the browser
-      // processes the cookie header before navigating away.
-      reply.type('text/html');
-      return `<!DOCTYPE html><html><head>
-        <meta http-equiv="refresh" content="1;url=${dashboardUrl}/dashboard">
-        </head><body style="background:#0f1117;color:#fff;font-family:sans-serif;display:flex;align-items:center;justify-content:center;height:100vh">
-        <div style="text-align:center">
-          <p style="font-size:1.2em">✅ Signed in!</p>
-          <p style="color:#888">Redirecting...</p>
-        </div>
-        <script>setTimeout(function(){window.location.href="${dashboardUrl}/dashboard"},500)</script>
-        </body></html>`;
-    } catch (error) {
-      fastify.log.error({ error }, 'QR complete redirect failed');
-      return reply.redirect(`${dashboardUrl}?login=error`);
-    }
-  });
-
 }
 
 /**
