@@ -1,19 +1,33 @@
 import { Outlet, Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { LayoutDashboard, Briefcase, Inbox, Wrench, Store, Plus, Bell, Menu, X, Settings, BookOpen, UserCircle } from 'lucide-react';
+import { LayoutDashboard, Briefcase, Mail, Wrench, Store, Plus, Bell, Menu, X, Settings, BookOpen, UserCircle, ChevronDown, LogOut } from 'lucide-react';
 import ResolvedId from './ResolvedId';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 
 export default function Layout() {
   const { user, logout, requireAuth } = useAuth();
   const location = useLocation();
   const [unreadCount, setUnreadCount] = useState(0);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [avatarMenuOpen, setAvatarMenuOpen] = useState(false);
+  const avatarMenuRef = useRef(null);
 
-  // Close mobile menu on navigation
+  // Close menus on navigation
   useEffect(() => {
     setMobileMenuOpen(false);
+    setAvatarMenuOpen(false);
   }, [location.pathname]);
+
+  // Close avatar menu on outside click
+  useEffect(() => {
+    function handleClick(e) {
+      if (avatarMenuRef.current && !avatarMenuRef.current.contains(e.target)) {
+        setAvatarMenuOpen(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, []);
 
   useEffect(() => {
     if (!user) return;
@@ -31,8 +45,30 @@ export default function Layout() {
     return () => clearInterval(interval);
   }, [user]);
 
-  // Public items always visible, auth items only when logged in
-  const navItems = [
+  // Main nav — shown in top bar on desktop
+  const mainNav = [
+    { path: '/marketplace', label: 'Marketplace', icon: Store },
+    ...(!user ? [
+      { path: '/guide', label: 'Guide', icon: BookOpen },
+      { path: '/get-id', label: 'Get Free ID', icon: Plus },
+    ] : []),
+    ...(user ? [
+      { path: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
+      { path: '/jobs', label: 'Jobs', icon: Briefcase },
+    ] : []),
+  ];
+
+  // Avatar dropdown menu items
+  const avatarNav = [
+    { path: '/profile', label: 'Profile', icon: UserCircle },
+    { path: '/services', label: 'Services', icon: Wrench },
+    { path: '/register', label: 'Register Agent', icon: Plus },
+    { path: '/settings', label: 'Settings', icon: Settings },
+    { path: '/guide', label: 'Guide', icon: BookOpen },
+  ];
+
+  // All items for mobile menu
+  const mobileNav = [
     { path: '/marketplace', label: 'Marketplace', icon: Store },
     { path: '/guide', label: 'Guide', icon: BookOpen },
     ...(!user ? [
@@ -41,7 +77,7 @@ export default function Layout() {
     ...(user ? [
       { path: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
       { path: '/jobs', label: 'Jobs', icon: Briefcase },
-      { path: '/inbox', label: 'Inbox', icon: Inbox },
+      { path: '/inbox', label: 'Inbox', icon: Mail },
       { path: '/services', label: 'Services', icon: Wrench },
       { path: '/register', label: 'Register', icon: Plus },
       { path: '/profile', label: 'Profile', icon: UserCircle },
@@ -49,12 +85,64 @@ export default function Layout() {
     ] : []),
   ];
 
+  function NavLink({ to, children, isActive }) {
+    return (
+      <Link
+        to={to}
+        className="px-3 py-2 rounded-lg text-sm font-medium transition-all flex items-center gap-2"
+        style={{
+          color: isActive ? 'var(--text-primary)' : 'var(--text-secondary)',
+          backgroundColor: isActive ? 'rgba(255, 255, 255, 0.08)' : 'transparent',
+        }}
+        onMouseEnter={(e) => {
+          if (!isActive) {
+            e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.05)';
+            e.currentTarget.style.color = 'var(--text-primary)';
+          }
+        }}
+        onMouseLeave={(e) => {
+          if (!isActive) {
+            e.currentTarget.style.backgroundColor = 'transparent';
+            e.currentTarget.style.color = 'var(--text-secondary)';
+          }
+        }}
+      >
+        {children}
+      </Link>
+    );
+  }
+
+  function IconButton({ to, children, badge }) {
+    const isActive = location.pathname === to;
+    return (
+      <Link
+        to={to}
+        className="relative p-2 rounded-lg transition-colors"
+        style={{ color: isActive ? 'var(--text-primary)' : 'var(--text-secondary)' }}
+        onMouseEnter={(e) => e.currentTarget.style.color = 'var(--text-primary)'}
+        onMouseLeave={(e) => { if (!isActive) e.currentTarget.style.color = 'var(--text-secondary)'; }}
+      >
+        {children}
+        {badge > 0 && (
+          <span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] flex items-center justify-center rounded-full text-[10px] font-bold text-white" style={{ backgroundColor: 'var(--accent-blue)' }}>
+            {badge > 99 ? '99+' : badge}
+          </span>
+        )}
+      </Link>
+    );
+  }
+
+  // Generate avatar initials + color from name
+  const displayName = user?.identityName || user?.verusId || '';
+  const shortName = displayName.split('.')[0] || displayName.slice(0, 8);
+  const initials = shortName.slice(0, 2).toUpperCase();
+
   return (
     <div className="min-h-screen" style={{ backgroundColor: 'var(--bg-base)' }}>
       {/* Header */}
-      <header className="border-b sticky top-0 z-50 backdrop-blur-xl overflow-hidden" style={{ borderColor: 'var(--border-subtle)', backgroundColor: 'rgba(15, 17, 23, 0.8)' }}>
-        <div className="max-w-6xl mx-auto px-4 h-14 flex items-center justify-between overflow-hidden">
-          <div className="flex items-center gap-4 md:gap-8 min-w-0">
+      <header className="border-b sticky top-0 z-50 backdrop-blur-xl" style={{ borderColor: 'var(--border-subtle)', backgroundColor: 'rgba(15, 17, 23, 0.8)' }}>
+        <div className="max-w-6xl mx-auto px-4 h-14 flex items-center justify-between">
+          <div className="flex items-center gap-4 md:gap-6 min-w-0">
             {/* Mobile hamburger */}
             <button
               className="md:hidden p-1.5 rounded-lg transition-colors"
@@ -64,84 +152,111 @@ export default function Layout() {
               {mobileMenuOpen ? <X size={20} /> : <Menu size={20} />}
             </button>
 
-            <Link to="/" className="flex items-center gap-2">
+            <Link to="/" className="flex items-center gap-2 shrink-0">
               <span className="text-xl font-bold text-verus-blue">⚡</span>
-              <span className="font-semibold text-white hidden sm:inline">Verus Agent Platform</span>
-              <span className="font-semibold text-white sm:hidden">VAP</span>
+              <span className="font-semibold text-white hidden lg:inline">Verus Agent Platform</span>
+              <span className="font-semibold text-white hidden sm:inline lg:hidden">VAP</span>
             </Link>
             
+            {/* Desktop nav — just core items */}
             <nav className="hidden md:flex items-center gap-1">
-              {navItems.map(item => {
+              {mainNav.map(item => {
                 const Icon = item.icon;
                 const isActive = location.pathname === item.path;
                 return (
-                  <Link
-                    key={item.path}
-                    to={item.path}
-                    className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-2 ${
-                      isActive
-                        ? 'text-white'
-                        : 'hover:text-white'
-                    }`}
-                    style={{
-                      color: isActive ? 'var(--text-primary)' : 'var(--text-secondary)',
-                      backgroundColor: isActive ? 'rgba(255, 255, 255, 0.08)' : 'transparent',
-                    }}
-                    onMouseEnter={(e) => {
-                      if (!isActive) {
-                        e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.05)';
-                        e.currentTarget.style.color = 'var(--text-primary)';
-                      }
-                    }}
-                    onMouseLeave={(e) => {
-                      if (!isActive) {
-                        e.currentTarget.style.backgroundColor = 'transparent';
-                        e.currentTarget.style.color = 'var(--text-secondary)';
-                      }
-                    }}
-                  >
+                  <NavLink key={item.path} to={item.path} isActive={isActive}>
                     <Icon size={16} style={{ opacity: isActive ? 1 : 0.7 }} />
                     {item.label}
-                  </Link>
+                  </NavLink>
                 );
               })}
             </nav>
           </div>
 
-          <div className="flex items-center gap-2 sm:gap-4 min-w-0 shrink">
+          {/* Right side */}
+          <div className="flex items-center gap-1 sm:gap-2">
             {user ? (
               <>
-                <Link to="/inbox" className="relative p-2 rounded-lg transition-colors shrink-0" style={{ color: 'var(--text-secondary)' }}
-                  onMouseEnter={(e) => e.currentTarget.style.color = 'var(--text-primary)'}
-                  onMouseLeave={(e) => e.currentTarget.style.color = 'var(--text-secondary)'}
-                >
+                {/* Inbox icon */}
+                <IconButton to="/inbox">
+                  <Mail size={18} />
+                </IconButton>
+
+                {/* Notifications bell */}
+                <IconButton to="/inbox" badge={unreadCount}>
                   <Bell size={18} />
-                  {unreadCount > 0 && (
-                    <span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] flex items-center justify-center rounded-full text-[10px] font-bold text-white" style={{ backgroundColor: 'var(--accent-blue)' }}>
-                      {unreadCount > 99 ? '99+' : unreadCount}
+                </IconButton>
+
+                {/* Avatar dropdown */}
+                <div className="relative" ref={avatarMenuRef}>
+                  <button
+                    onClick={() => setAvatarMenuOpen(o => !o)}
+                    className="flex items-center gap-2 px-2 py-1.5 rounded-lg transition-colors"
+                    style={{ color: 'var(--text-secondary)' }}
+                    onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.05)'}
+                    onMouseLeave={(e) => { if (!avatarMenuOpen) e.currentTarget.style.backgroundColor = 'transparent'; }}
+                  >
+                    <div className="w-7 h-7 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white text-xs font-bold shrink-0">
+                      {initials}
+                    </div>
+                    <span className="hidden sm:inline text-sm font-medium max-w-[120px] truncate" style={{ color: 'var(--text-primary)' }}>
+                      {shortName}
                     </span>
+                    <ChevronDown size={14} className="hidden sm:block" style={{ opacity: 0.5 }} />
+                  </button>
+
+                  {/* Dropdown menu */}
+                  {avatarMenuOpen && (
+                    <div
+                      className="absolute right-0 top-full mt-1 w-56 rounded-lg border shadow-xl overflow-hidden z-50"
+                      style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-subtle)' }}
+                    >
+                      {/* Identity header */}
+                      <div className="px-4 py-3 border-b" style={{ borderColor: 'var(--border-subtle)' }}>
+                        <p className="text-sm font-medium text-white truncate">{displayName}</p>
+                        <p className="text-xs truncate" style={{ color: 'var(--text-tertiary)' }}>{user.verusId}</p>
+                      </div>
+
+                      {/* Menu items */}
+                      <div className="py-1">
+                        {avatarNav.map(item => {
+                          const Icon = item.icon;
+                          const isActive = location.pathname === item.path;
+                          return (
+                            <Link
+                              key={item.path}
+                              to={item.path}
+                              className="flex items-center gap-3 px-4 py-2.5 text-sm transition-colors"
+                              style={{
+                                color: isActive ? 'var(--text-primary)' : 'var(--text-secondary)',
+                                backgroundColor: isActive ? 'rgba(255, 255, 255, 0.05)' : 'transparent',
+                              }}
+                              onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.05)'}
+                              onMouseLeave={(e) => { if (!isActive) e.currentTarget.style.backgroundColor = 'transparent'; }}
+                            >
+                              <Icon size={16} />
+                              {item.label}
+                            </Link>
+                          );
+                        })}
+                      </div>
+
+                      {/* Logout */}
+                      <div className="border-t py-1" style={{ borderColor: 'var(--border-subtle)' }}>
+                        <button
+                          onClick={logout}
+                          className="flex items-center gap-3 px-4 py-2.5 text-sm w-full transition-colors"
+                          style={{ color: 'var(--text-secondary)' }}
+                          onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.05)'; e.currentTarget.style.color = '#f87171'; }}
+                          onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.color = 'var(--text-secondary)'; }}
+                        >
+                          <LogOut size={16} />
+                          Sign Out
+                        </button>
+                      </div>
+                    </div>
                   )}
-                </Link>
-                {/* Short name on mobile, full ResolvedId on desktop */}
-                <span className="sm:hidden text-sm font-medium truncate max-w-[100px]" style={{ color: 'var(--text-primary)' }}>
-                  {(user?.identityName || '').split('.')[0] || user?.verusId?.slice(0, 8)}
-                </span>
-                <div className="min-w-0 hidden sm:block">
-                  <ResolvedId
-                    address={user?.verusId}
-                    name={user?.identityName}
-                    size="sm"
-                  />
                 </div>
-                <button
-                  onClick={logout}
-                  className="text-sm transition-colors shrink-0"
-                  style={{ color: 'var(--text-secondary)' }}
-                  onMouseEnter={(e) => e.currentTarget.style.color = 'var(--text-primary)'}
-                  onMouseLeave={(e) => e.currentTarget.style.color = 'var(--text-secondary)'}
-                >
-                  Logout
-                </button>
               </>
             ) : (
               <button
@@ -160,7 +275,7 @@ export default function Layout() {
       {mobileMenuOpen && (
         <div className="md:hidden border-b" style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-subtle)' }}>
           <nav className="max-w-6xl mx-auto px-4 py-2 flex flex-col gap-1">
-            {navItems.map(item => {
+            {mobileNav.map(item => {
               const Icon = item.icon;
               const isActive = location.pathname === item.path;
               return (
