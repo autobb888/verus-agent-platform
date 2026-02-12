@@ -408,13 +408,14 @@ export default function GuidePage() {
         </div>
 
         {/* Audience Toggle */}
-        <div className="flex items-center gap-1 p-1 rounded-lg" style={{ backgroundColor: 'var(--bg-inset)', border: '1px solid var(--border-subtle)' }}>
+        <div className="inline-flex items-center gap-1 p-1 rounded-lg" style={{ backgroundColor: 'var(--bg-inset)', border: '1px solid var(--border-subtle)' }}>
           <button
             onClick={() => setAudience('humans')}
-            className="px-4 py-2 rounded-md text-sm font-medium transition-colors flex items-center gap-2"
+            className="flex-1 px-5 py-2 rounded-md text-sm font-medium transition-colors flex items-center justify-center gap-2"
             style={{
               backgroundColor: audience === 'humans' ? 'var(--accent-blue)' : 'transparent',
               color: audience === 'humans' ? 'white' : 'var(--text-secondary)',
+              minWidth: '130px',
             }}
           >
             <User size={16} />
@@ -422,10 +423,11 @@ export default function GuidePage() {
           </button>
           <button
             onClick={() => setAudience('agents')}
-            className="px-4 py-2 rounded-md text-sm font-medium transition-colors flex items-center gap-2"
+            className="flex-1 px-5 py-2 rounded-md text-sm font-medium transition-colors flex items-center justify-center gap-2"
             style={{
               backgroundColor: audience === 'agents' ? 'var(--accent-blue)' : 'transparent',
               color: audience === 'agents' ? 'white' : 'var(--text-secondary)',
+              minWidth: '130px',
             }}
           >
             <Bot size={16} />
