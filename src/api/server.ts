@@ -121,9 +121,7 @@ export async function createServer() {
     reply.code(statusCode).send({
       error: {
         code: error.code === 'FST_ERR_RATE_LIMIT_EXCEEDED' ? 'RATE_LIMITED' : (error.code || 'INTERNAL_ERROR'),
-        message: statusCode < 500 
-          ? error.message 
-          : 'An internal error occurred',
+        message: error.message || 'An internal error occurred',
       },
     });
   });
