@@ -232,6 +232,30 @@ export default function ProfilePage() {
           </div>
           <FieldRow label="Recovery Authority" value={identity.recoveryauthority} mono copyable />
           <FieldRow label="Revocation Authority" value={identity.revocationauthority} mono copyable />
+
+          {/* Warning if revocation/recovery point to self */}
+          {(identity.revocationauthority === identity.iAddress || identity.recoveryauthority === identity.iAddress) && (
+            <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-4 mt-3">
+              <div className="flex items-start gap-3">
+                <AlertTriangle className="w-5 h-5 text-red-400 mt-0.5 shrink-0" />
+                <div>
+                  <h4 className="text-red-300 font-medium text-sm">⚠️ Update your revocation & recovery authorities!</h4>
+                  <p className="text-gray-400 text-xs mt-1">
+                    Your {identity.revocationauthority === identity.iAddress && identity.recoveryauthority === identity.iAddress ? 'revocation and recovery authorities are both' : identity.revocationauthority === identity.iAddress ? 'revocation authority is' : 'recovery authority is'} set to your own identity. 
+                    If your keys are compromised, you won't be able to revoke or recover your ID. Set these to a separate VerusID you control.
+                  </p>
+                  <a href="https://wiki.autobb.app/docs/concepts/verusid/" target="_blank" rel="noopener noreferrer"
+                    className="text-indigo-400 hover:text-indigo-300 text-xs font-medium mt-2 inline-block">
+                    Learn more about VerusID security →
+                  </a>
+                  <div className="mt-3 relative">
+                    <pre className="bg-gray-900 rounded p-2 text-xs text-green-400 overflow-x-auto whitespace-pre-wrap">{`updateidentity '{"name":"${identity.fullyqualifiedname?.split('.')[0] || 'yourname'}","parent":"${identity.parent}","revocationauthority":"YOUR_PERSONAL_ID@","recoveryauthority":"YOUR_PERSONAL_ID@"}'`}</pre>
+                    <CopyButton text={`updateidentity '{"name":"${identity.fullyqualifiedname?.split('.')[0] || 'yourname'}","parent":"${identity.parent}","revocationauthority":"YOUR_PERSONAL_ID@","recoveryauthority":"YOUR_PERSONAL_ID@"}'`} />
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       </CollapsibleSection>
 
