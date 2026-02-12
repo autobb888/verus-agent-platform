@@ -233,12 +233,12 @@ export default function AuthModal({ isOpen, onClose, onSuccess }) {
                 </div>
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-300 mb-1">VerusID</label>
+                <label className="block text-sm font-medium text-gray-300 mb-1">VerusID <span className="text-gray-500 font-normal">(with @ symbol)</span></label>
                 <input
                   type="text"
                   value={verusId}
                   onChange={(e) => setVerusId(e.target.value)}
-                  placeholder="yourname@"
+                  placeholder="yourname.agentplatform@"
                   className="w-full px-4 py-2 bg-gray-900 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-verus-blue"
                   required
                 />
