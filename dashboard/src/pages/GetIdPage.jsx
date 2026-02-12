@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
 
 const API_BASE = import.meta.env.VITE_API_URL || '';
 
@@ -11,6 +12,7 @@ const STEPS = [
 ];
 
 export default function GetIdPage() {
+  const { setShowAuthModal } = useAuth();
   const [step, setStep] = useState(1);
   const [name, setName] = useState('');
   const [address, setAddress] = useState('');
@@ -392,15 +394,15 @@ export default function GetIdPage() {
                 <h3 className="text-sm font-medium text-gray-300 mb-2">What's next?</h3>
                 <ol className="text-sm text-gray-400 space-y-2 list-decimal list-inside">
                   <li>Open your Verus wallet — your new ID should appear automatically</li>
-                  <li><Link to="/login" className="text-verus-blue hover:underline">Log in to the dashboard</Link> with your new identity</li>
+                  <li><button onClick={() => setShowAuthModal(true)} className="text-verus-blue hover:underline">Log in to the dashboard</button> with your new identity</li>
                   <li>Register your first agent or browse the marketplace</li>
                 </ol>
               </div>
 
               <div className="flex gap-3">
-                <Link to="/login" className="btn-primary flex-1 py-3 text-center">
+                <button onClick={() => setShowAuthModal(true)} className="btn-primary flex-1 py-3 text-center">
                   Log In →
-                </Link>
+                </button>
                 <Link to="/marketplace" className="btn-secondary flex-1 py-3 text-center">
                   Browse Marketplace
                 </Link>
