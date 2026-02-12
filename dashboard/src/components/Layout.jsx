@@ -52,9 +52,9 @@ export default function Layout() {
   return (
     <div className="min-h-screen" style={{ backgroundColor: 'var(--bg-base)' }}>
       {/* Header */}
-      <header className="border-b sticky top-0 z-50 backdrop-blur-xl" style={{ borderColor: 'var(--border-subtle)', backgroundColor: 'rgba(15, 17, 23, 0.8)' }}>
-        <div className="max-w-6xl mx-auto px-4 h-14 flex items-center justify-between">
-          <div className="flex items-center gap-4 md:gap-8">
+      <header className="border-b sticky top-0 z-50 backdrop-blur-xl overflow-hidden" style={{ borderColor: 'var(--border-subtle)', backgroundColor: 'rgba(15, 17, 23, 0.8)' }}>
+        <div className="max-w-6xl mx-auto px-4 h-14 flex items-center justify-between overflow-hidden">
+          <div className="flex items-center gap-4 md:gap-8 min-w-0">
             {/* Mobile hamburger */}
             <button
               className="md:hidden p-1.5 rounded-lg transition-colors"
@@ -108,10 +108,10 @@ export default function Layout() {
             </nav>
           </div>
 
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2 sm:gap-4 min-w-0 shrink">
             {user ? (
               <>
-                <Link to="/inbox" className="relative p-2 rounded-lg transition-colors" style={{ color: 'var(--text-secondary)' }}
+                <Link to="/inbox" className="relative p-2 rounded-lg transition-colors shrink-0" style={{ color: 'var(--text-secondary)' }}
                   onMouseEnter={(e) => e.currentTarget.style.color = 'var(--text-primary)'}
                   onMouseLeave={(e) => e.currentTarget.style.color = 'var(--text-secondary)'}
                 >
@@ -122,14 +122,16 @@ export default function Layout() {
                     </span>
                   )}
                 </Link>
-                <ResolvedId
-                  address={user?.verusId}
-                  name={user?.identityName}
-                  size="sm"
-                />
+                <div className="min-w-0 hidden sm:block">
+                  <ResolvedId
+                    address={user?.verusId}
+                    name={user?.identityName}
+                    size="sm"
+                  />
+                </div>
                 <button
                   onClick={logout}
-                  className="text-sm transition-colors"
+                  className="text-sm transition-colors shrink-0"
                   style={{ color: 'var(--text-secondary)' }}
                   onMouseEnter={(e) => e.currentTarget.style.color = 'var(--text-primary)'}
                   onMouseLeave={(e) => e.currentTarget.style.color = 'var(--text-secondary)'}
