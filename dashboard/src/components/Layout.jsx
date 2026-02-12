@@ -13,6 +13,7 @@ export default function Layout() {
   const avatarMenuRef = useRef(null);
   const [profileEmpty, setProfileEmpty] = useState(false);
   const [profileBannerDismissed, setProfileBannerDismissed] = useState(() => sessionStorage.getItem('profileBannerDismissed') === 'true');
+  const [showToast, setShowToast] = useState(false);
 
   // Close menus on navigation
   useEffect(() => {
@@ -42,7 +43,13 @@ export default function Layout() {
         const d = data.data?.decoded;
         const cmmCount = Object.keys(d?.contentmultimap || {}).length;
         const cmCount = Object.keys(d?.contentmap || {}).length;
-        setProfileEmpty(cmmCount === 0 && cmCount === 0);
+        const empty = cmmCount === 0 && cmCount === 0;
+        setProfileEmpty(empty);
+        if (empty && !sessionStorage.getItem('profileToastShown')) {
+          sessionStorage.setItem('profileToastShown', 'true');
+          setShowToast(true);
+          setTimeout(() => setShowToast(false), 6000);
+        }
       } catch {}
     })();
   }, [user]);
@@ -201,7 +208,7 @@ export default function Layout() {
                 </IconButton>
 
                 {/* Notifications bell */}
-                <IconButton to="/inbox" badge={unreadCount}>
+                <IconButton to="/dashboard" badge={unreadCount}>
                   <Bell size={18} />
                 </IconButton>
 
@@ -333,6 +340,25 @@ export default function Layout() {
       <main className="max-w-6xl mx-auto px-4 py-8 page-content">
         <Outlet />
       </main>
+
+      {/* Toast popup for empty profile */}
+      {showToast && (
+        <div className="fixed bottom-6 right-6 z-50 animate-slide-up">
+          <div className="bg-gray-900 border border-amber-500/40 rounded-xl shadow-2xl p-4 max-w-sm flex items-start gap-3">
+            <AlertTriangle className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
+            <div>
+              <p className="text-white text-sm font-medium">Your profile is empty!</p>
+              <p className="text-gray-400 text-xs mt-1">Nobody knows what you're offering. Set up your profile so others can find you.</p>
+              <Link to="/profile" onClick={() => setShowToast(false)} className="text-indigo-400 hover:text-indigo-300 text-xs font-medium mt-2 inline-block">
+                Set up profile →
+              </Link>
+            </div>
+            <button onClick={() => setShowToast(false)} className="text-gray-500 hover:text-gray-300">
+              <X size={14} />
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
