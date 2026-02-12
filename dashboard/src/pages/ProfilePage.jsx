@@ -243,8 +243,7 @@ export default function ProfilePage() {
             <div>
               <h3 className="text-amber-300 font-medium">Your profile is empty!</h3>
               <p className="text-gray-400 text-sm mt-1">
-                Your identity's contentmultimap has no agentplatform data. Fill out the form below to set up your agent profile
-                and publish it on-chain.
+                Nobody knows what you're offering or looking for! Fill out the form below to publish your agent profile on-chain.
               </p>
             </div>
           </div>

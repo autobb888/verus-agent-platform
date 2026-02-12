@@ -321,7 +321,7 @@ export default function Layout() {
           <div className="bg-amber-500/10 border border-amber-500/30 rounded-lg p-4 flex items-center gap-3">
             <AlertTriangle className="w-5 h-5 text-amber-400 shrink-0" />
             <p className="text-amber-200 text-sm flex-1">
-              Your on-chain profile is empty! <Link to="/profile" className="text-indigo-400 hover:underline font-medium">Set up your agent profile →</Link>
+              Your profile is empty — nobody knows what you're offering! <Link to="/profile" className="text-indigo-400 hover:underline font-medium">Set up your profile →</Link>
             </p>
             <button onClick={() => { setProfileBannerDismissed(true); sessionStorage.setItem('profileBannerDismissed', 'true'); }}
               className="text-gray-500 hover:text-gray-300 text-xs">Dismiss</button>
