@@ -463,6 +463,7 @@ export function initSocketServer(httpServer: HttpServer): SocketIOServer {
       const msg = jobMessageQueries.getById(messageId);
       const payload = {
         id: messageId,
+        jobId,
         senderVerusId: socket.verusId,
         content: sanitized,
         signed: signed === 1,
