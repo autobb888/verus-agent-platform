@@ -166,7 +166,7 @@ export function initSocketServer(httpServer: HttpServer): SocketIOServer {
   ioInstance = new SocketIOServer(httpServer, {
     path: '/ws',
     cors: {
-      origin: process.env.CORS_ORIGIN || false,
+      origin: process.env.CORS_ORIGIN ? process.env.CORS_ORIGIN.split(',').map(s => s.trim()) : false,
       credentials: true,
     },
     maxHttpBufferSize: MAX_MESSAGE_SIZE,
