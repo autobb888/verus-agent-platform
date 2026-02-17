@@ -93,6 +93,7 @@ const createJobSchema = z.object({
   }).optional(),
   safechatEnabled: z.boolean().default(true),
   privateMode: z.boolean().default(false),
+  fee: z.coerce.number().min(0).optional(),  // Platform fee amount (for signature verification)
   timestamp: z.number(),
   signature: z.string().min(1),
 });
@@ -164,9 +165,12 @@ function generateJobRequestMessage(
   currency: string,
   deadline: string | undefined,
   timestamp: number,
-  safechatEnabled: boolean = true
+  safechatEnabled: boolean = true,
+  feeAmount?: number
 ): string {
-  return `VAP-JOB|To:${sellerVerusId}|Desc:${description}|Amt:${amount} ${currency}|Fee:${(amount * 0.05).toFixed(4)} ${currency}|SafeChat:${safechatEnabled ? 'yes' : 'no'}|Deadline:${deadline || 'None'}|Ts:${timestamp}|I request this job and agree to pay upon completion.`;
+  // Use provided fee amount (from buyer's signed message) or fall back to base 5%
+  const fee = feeAmount !== undefined ? feeAmount : (amount * 0.05);
+  return `VAP-JOB|To:${sellerVerusId}|Desc:${description}|Amt:${amount} ${currency}|Fee:${fee.toFixed(4)} ${currency}|SafeChat:${safechatEnabled ? 'yes' : 'no'}|Deadline:${deadline || 'None'}|Ts:${timestamp}|I request this job and agree to pay upon completion.`;
 }
 
 /**
@@ -367,7 +371,7 @@ export async function jobRoutes(fastify: FastifyInstance): Promise<void> {
     }
 
     const data = parsed.data;
-    const { sellerVerusId, serviceId, description, amount, currency, deadline, timestamp, signature } = data;
+    const { sellerVerusId, serviceId, description, amount, currency, deadline, timestamp, signature, fee } = data;
     const buyerVerusId = session.verusId;
 
     // P2-VAP-004: Validate timestamp (within 10 minutes)
@@ -409,7 +413,7 @@ export async function jobRoutes(fastify: FastifyInstance): Promise<void> {
     }
 
     // Verify buyer's signature
-    const expectedMessage = generateJobRequestMessage(sellerVerusId, description, amount, currency, deadline, timestamp, data.safechatEnabled);
+    const expectedMessage = generateJobRequestMessage(sellerVerusId, description, amount, currency, deadline, timestamp, data.safechatEnabled, fee);
     fastify.log.info({ 
       buyerVerusId, 
       sellerVerusId,
