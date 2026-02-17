@@ -252,19 +252,40 @@ export async function authRoutes(fastify: FastifyInstance): Promise<void> {
         signaturePreview: signature.slice(0, 30)
       }, 'Attempting signature verification');
       
-      let isValid: boolean;
+      let isValid = false;
+      
+      // Try RPC verifymessage first (works with Verus CLI / Mobile signatures)
       try {
         isValid = await rpc.verifyMessage(verusId, challengeRow.challenge, signature);
-        fastify.log.info({ isValid }, 'Signature verification result');
+        fastify.log.info({ isValid }, 'RPC signature verification result');
       } catch (rpcError) {
-        fastify.log.error({ rpcError, verusId }, 'RPC verification failed');
-        return reply.code(500).send({
-          error: { code: 'VERIFICATION_FAILED', message: 'Signature verification service unavailable' }
-        });
+        fastify.log.warn({ rpcError, verusId }, 'RPC verification failed, will try local fallback');
+      }
+      
+      // Fall back to local verification for SDK-generated signatures (IdentitySignature format)
+      if (!isValid) {
+        try {
+          const db = getDatabase();
+          // Look up pubkey from onboard_requests via the identity's primary address
+          const identity = await rpc.getIdentity(verusId);
+          const primaryAddr = identity?.identity?.primaryaddresses?.[0];
+          if (primaryAddr) {
+            const onboardRow = db.prepare(
+              'SELECT pubkey FROM onboard_requests WHERE address = ? AND status = ?'
+            ).get(primaryAddr, 'registered') as { pubkey: string } | undefined;
+            if (onboardRow?.pubkey) {
+              const { verifySignatureLocally } = await import('./onboard.js');
+              isValid = verifySignatureLocally(primaryAddr, challengeRow.challenge, signature, onboardRow.pubkey);
+              fastify.log.info({ isValid }, 'Local signature verification result');
+            }
+          }
+        } catch (localError) {
+          fastify.log.error({ localError, verusId }, 'Local verification fallback failed');
+        }
       }
       
       if (!isValid) {
-        fastify.log.warn({ verusId }, 'Invalid signature');
+        fastify.log.warn({ verusId }, 'Invalid signature (both RPC and local)');
         return reply.code(401).send({
           error: { code: 'INVALID_SIGNATURE', message: 'Signature verification failed' }
         });

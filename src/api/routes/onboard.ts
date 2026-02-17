@@ -22,6 +22,21 @@ import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { v4 as uuidv4 } from 'uuid';
 import { createHash, createHmac, timingSafeEqual } from 'node:crypto';
 import * as secp256k1 from '@noble/secp256k1';
+import { sha256 } from '@noble/hashes/sha2.js';
+import { hmac } from '@noble/hashes/hmac.js';
+import bs58check from 'bs58check';
+
+// Configure @noble/secp256k1 v3 with sync hash functions
+secp256k1.hashes.hmacSha256 = (key: Uint8Array, ...msgs: Uint8Array[]) => {
+  const h = hmac.create(sha256, key);
+  for (const msg of msgs) h.update(msg);
+  return h.digest();
+};
+secp256k1.hashes.sha256 = (...msgs: Uint8Array[]) => {
+  const h = sha256.create();
+  for (const msg of msgs) h.update(msg);
+  return h.digest();
+};
 import { getDatabase } from '../../db/index.js';
 import { getRpcClient } from '../../indexer/rpc-client.js';
 import { isReservedName } from '../../utils/reserved-names.js';
@@ -73,19 +88,101 @@ function verifyChallenge(name: string, address: string, challengeText: string, t
  * Works with both base64 (from signmessage RPC / Verus Mobile) and SDK signatures.
  * Falls back to local secp256k1 if RPC is unavailable.
  */
-async function verifyOnboardSignatureViaRPC(address: string, challenge: string, signature: string): Promise<boolean> {
+async function verifyOnboardSignatureViaRPC(address: string, challenge: string, signature: string, pubkey?: string): Promise<boolean> {
+  // Try RPC verifymessage first (works with Verus CLI / Mobile signatures)
   try {
     const rpc = getRpcClient();
     const result = await rpc.verifyMessage(address, challenge, signature);
-    return result === true;
+    if (result === true) return true;
   } catch {
+    // RPC unavailable or error — fall through to local verification
+  }
+
+  // Fall back to local verification for SDK-generated signatures
+  if (pubkey) {
+    try {
+      console.log('[Onboard] RPC verify failed, trying local verification...');
+      const localResult = verifySignatureLocally(address, challenge, signature, pubkey);
+      console.log('[Onboard] Local verify result:', localResult);
+      return localResult;
+    } catch (e) {
+      console.error('[Onboard] Local verify threw:', e);
+      return false;
+    }
+  }
+
+  return false;
+}
+
+/**
+ * Verify an SDK-generated signature locally.
+ * The SDK uses IdentitySignature from @bitgo/utxo-lib (VerusCoin fork)
+ * which hashes as: SHA256(prefix + chainIdHash + blockHeight(4) + identityHash + SHA256(varint(msgLen) + lowercase(msg)))
+ * We verify by recovering the pubkey from the compact signature and checking it matches.
+ */
+export function verifySignatureLocally(address: string, message: string, signature: string, pubkeyHex: string): boolean {
+  try {
+    const sigBuf = Buffer.from(signature, 'base64');
+    if (sigBuf.length !== 65) return false;
+
+    const expectedPubkey = Buffer.from(pubkeyHex, 'hex');
+
+    // Reconstruct the message hash the same way IdentitySignature.hashMessage does:
+    // 1. VERUS_DATA_SIGNATURE_PREFIX = writeVarSlice("Verus signed data:\n") = varint(19) + "Verus signed data:\n"
+    const prefixStr = 'Verus signed data:\n';
+    const prefix = Buffer.concat([Buffer.from([prefixStr.length]), Buffer.from(prefixStr)]);
+
+    // 2. chainId hash (20 bytes from base58check decode of chain i-address)
+    //    VRSCTEST = iJhCezBExJHvtyH3fGhNnt2NhU4Ztkf2yq
+    const chainIdDecoded = bs58check.decode('iJhCezBExJHvtyH3fGhNnt2NhU4Ztkf2yq');
+    const chainIdHash = chainIdDecoded.slice(1); // skip version byte
+
+    // 3. blockHeight = 0 (4 bytes LE)
+    const heightBuf = Buffer.alloc(4, 0);
+
+    // 4. identity hash — SDK uses chainId as iAddress too
+    const identityHash = chainIdHash;
+
+    // 5. SHA256(varint(msgLen) + lowercase(msg))
+    const lowerMsg = Buffer.from(message.toLowerCase(), 'utf8');
+    // P2-SV-1: Guard against messages >= 253 bytes (varint encoding changes)
+    if (lowerMsg.length >= 0xfd) throw new Error('Challenge too long for single-byte varint');
+    const msgSlice = Buffer.concat([Buffer.from([lowerMsg.length]), lowerMsg]);
+    const msgHash = createHash('sha256').update(msgSlice).digest();
+
+    // 6. Final hash = SHA256(prefix + chainIdHash + heightBuf + identityHash + msgHash)
+    const finalHash = createHash('sha256')
+      .update(prefix)
+      .update(chainIdHash)
+      .update(heightBuf)
+      .update(identityHash)
+      .update(msgHash)
+      .digest();
+
+    // 7. Recover pubkey from compact signature using @noble/secp256k1 (P1-SV-1 fix)
+    // Bitcoin compact sig format: byte 0 = recovery + 27 + (compressed ? 4 : 0)
+    const recoveryFlag = sigBuf[0];
+    const compressed = recoveryFlag >= 31;
+    const recoveryId = compressed ? recoveryFlag - 31 : recoveryFlag - 27;
+    if (recoveryId < 0 || recoveryId > 3) return false;
+
+    // Build noble-compatible 65-byte sig: [recoveryId(0-3), r(32), s(32)]
+    const nobleSig = Buffer.alloc(65);
+    nobleSig[0] = recoveryId;
+    sigBuf.copy(nobleSig, 1, 1, 65);
+
+    const recovered = secp256k1.recoverPublicKey(nobleSig, finalHash, { prehash: false });
+
+    return Buffer.from(recovered).equals(expectedPubkey);
+  } catch (e) {
+    console.error('[Onboard] Local signature verification error:', e);
     return false;
   }
 }
 
 // Rate limiting: 1 registration per IP per hour
 const ipRegistrations = new Map<string, { count: number; resetAt: number }>();
-const IP_LIMIT = parseInt(process.env.ONBOARD_IP_LIMIT || '1', 10); // 1/IP/hour default (P2-OB-1)
+const IP_LIMIT = parseInt(process.env.ONBOARD_IP_LIMIT || '5', 10); // 5/IP/hour default
 const IP_WINDOW = 60 * 60 * 1000; // 1 hour
 
 // Global daily limit
@@ -167,7 +264,7 @@ export async function onboardRoutes(fastify: FastifyInstance): Promise<void> {
   // ------------------------------------------
   fastify.post('/v1/onboard', {
     config: {
-      rateLimit: { max: 3, timeWindow: 3600_000 }, // 3/hour as outer limit
+      rateLimit: { max: 20, timeWindow: 3600_000 }, // 20/hour outer limit
     },
   }, async (request, reply) => {
     const { name, address, pubkey, signature, challenge } = request.body as {
@@ -236,7 +333,7 @@ export async function onboardRoutes(fastify: FastifyInstance): Promise<void> {
     }
 
     // Verify signature via Verus RPC verifymessage (works with both RPC and SDK signatures)
-    const sigValid = await verifyOnboardSignatureViaRPC(address, challenge, signature);
+    const sigValid = await verifyOnboardSignatureViaRPC(address, challenge, signature, pubkey);
     if (!sigValid) {
       return reply.code(400).send({
         error: { code: 'INVALID_SIGNATURE', message: 'Signature verification failed. Ensure you signed the exact challenge text with the correct private key.' },
@@ -250,7 +347,7 @@ export async function onboardRoutes(fastify: FastifyInstance): Promise<void> {
     const ipEntry = ipRegistrations.get(ip);
     if (ipEntry && ipEntry.resetAt > now && ipEntry.count >= IP_LIMIT) {
       return reply.code(429).send({
-        error: { code: 'RATE_LIMITED', message: 'Maximum 1 registration per IP per hour' },
+        error: { code: 'RATE_LIMITED', message: `Maximum ${IP_LIMIT} registrations per IP per hour` },
       });
     }
 
@@ -390,7 +487,7 @@ export async function onboardRoutes(fastify: FastifyInstance): Promise<void> {
   // Retry a failed registration that has a valid commitment TX
   // ------------------------------------------
   fastify.post('/v1/onboard/retry/:id', {
-    config: { rateLimit: { max: 3, timeWindow: 3600_000 } },
+    config: { rateLimit: { max: 20, timeWindow: 3600_000 } },
   }, async (request, reply) => {
     const { id } = request.params as { id: string };
     const row = getOnboard.get(id) as any;

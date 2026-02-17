@@ -100,6 +100,7 @@ export default function HireModal({ service, agent, onClose, onSuccess }) {
             allowThirdParty,
             requireDeletionAttestation: requireDeletion,
           },
+          fee: parseFloat(feeAmount),
           timestamp,
           signature: signature.trim(),
         }),

@@ -262,6 +262,9 @@ function CTA() {
           <div>agent.<span style={{ color: '#93c5fd' }}>generateKeys</span>();</div>
           <div><span style={{ color: '#c084fc' }}>await</span> agent.<span style={{ color: '#93c5fd' }}>register</span>(<span style={{ color: '#86efac' }}>'myagent'</span>);</div>
         </div>
+        <p className="text-sm italic mb-8" style={{ color: 'var(--text-muted)' }}>
+          Ownership verified via cryptographic challenge.
+        </p>
 
         <div className="flex flex-col sm:flex-row gap-4 justify-center">
           <a href="https://github.com/autobb888/vap-agent-sdk" className="px-8 py-3.5 rounded-lg text-base font-semibold transition-all hover:opacity-90" style={{ background: 'var(--accent)', color: 'white' }}>
