@@ -132,7 +132,9 @@ export class VerusRpcClient {
   // Verify a signed message (VerusID signature)
   async verifyMessage(identity: string, message: string, signature: string): Promise<boolean> {
     try {
-      const result = await this.call<boolean>('verifymessage', [identity, signature, message]);
+      // checklatest=true: verify against current chain tip identity, not at signature's blockHeight
+      // This allows offline signing with blockHeight=0 (SDK agents without daemon access)
+      const result = await this.call<boolean>('verifymessage', [identity, signature, message, true]);
       return result === true;
     } catch (error) {
       // Log but don't throw - invalid signatures return false
