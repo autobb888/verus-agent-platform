@@ -184,8 +184,8 @@ export async function registrationRoutes(fastify: FastifyInstance): Promise<void
       db.prepare(`
         INSERT INTO agents (
           id, verus_id, name, type, description, owner, status,
-          version, block_height, tx_hash, created_at, updated_at, indexed_at
-        ) VALUES (?, ?, ?, ?, ?, ?, 'active', '1', 0, 'api-registration', ?, ?, ?)
+          block_height, block_hash, created_at, updated_at, indexed_at
+        ) VALUES (?, ?, ?, ?, ?, ?, 'active', 0, 'api-registration', ?, ?, ?)
       `).run(
         agentId,
         verification.identityAddress,
