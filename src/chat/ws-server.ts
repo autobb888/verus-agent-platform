@@ -11,6 +11,7 @@ import { Server as HttpServer } from 'http';
 import { getDatabase } from '../db/index.js';
 import { jobQueries, jobMessageQueries, chatTokenQueries, readReceiptQueries } from '../db/index.js';
 import { parse as parseCookie } from 'cookie';
+import { unsign } from 'cookie-signature';
 
 // Types
 interface AuthenticatedSocket extends Socket {
@@ -113,7 +114,18 @@ export function setSafeChatEngine(engine: SafeChatScanFn): void {
 function getSessionFromCookie(cookieHeader: string | undefined): { verusId: string } | null {
   if (!cookieHeader) return null;
   const cookies = parseCookie(cookieHeader);
-  const sessionId = cookies['verus_session'];
+  const raw = cookies['verus_session'];
+  if (!raw) return null;
+
+  // Unsign cookie (fastify signs as "s:value.signature")
+  const cookieSecret = process.env.COOKIE_SECRET || '';
+  let sessionId: string | null = null;
+  if (raw.startsWith('s:')) {
+    const unsigned = unsign(raw.slice(2), cookieSecret);
+    sessionId = unsigned !== false ? unsigned : null;
+  } else {
+    sessionId = raw; // Unsigned cookie (dev mode)
+  }
   if (!sessionId) return null;
 
   try {

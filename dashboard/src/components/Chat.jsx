@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { io } from 'socket.io-client';
 import Markdown from 'react-markdown';
+import rehypeSanitize from 'rehype-sanitize';
 import ResolvedId from './ResolvedId';
 import { useDisplayName } from '../context/IdentityContext';
 import { useAuth } from '../context/AuthContext';
@@ -224,7 +225,7 @@ export default function Chat({ jobId, job }) {
                   )}
                 </div>
                 <div style={{ margin: 0, color: 'var(--text-primary)', fontSize: 14, wordBreak: 'break-word' }} className="chat-markdown">
-                  <Markdown>{msg.content}</Markdown>
+                  <Markdown rehypePlugins={[rehypeSanitize]}>{msg.content}</Markdown>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 4 }}>
                   <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>

@@ -32,6 +32,7 @@
     "bullmq": "^5.67.3",
     "confusables": "^1.1.1",
     "cookie": "^1.1.1",
+    "cookie-signature": "^1.2.2",
     "dotenv": "^16.4.7",
     "fastify": "^5.2.1",
     "ioredis": "^5.9.2",

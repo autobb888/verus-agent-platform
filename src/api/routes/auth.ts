@@ -718,7 +718,7 @@ export function getSessionFromRequest(request: FastifyRequest): { verusId: strin
   const raw = request.cookies?.[SESSION_COOKIE];
   if (!raw) return null;
   const unsigned = request.unsignCookie(raw);
-  const sessionId = unsigned.valid ? unsigned.value : raw; // fallback for legacy unsigned cookies
+  const sessionId = unsigned.valid ? unsigned.value : null;
   if (!sessionId) return null;
   
   try {
