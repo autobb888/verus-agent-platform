@@ -51,14 +51,35 @@ export default function Chat({ jobId, job }) {
     loadMessages();
   }, [jobId]);
 
-  // Socket.IO connection
+  // Socket.IO connection (get chat token first, then connect)
   useEffect(() => {
-    const socket = io(WS_URL, {
-      path: '/ws',
-      withCredentials: true,
-      transports: ['websocket', 'polling'],
-    });
-    socketRef.current = socket;
+    let socket;
+    let cancelled = false;
+
+    async function connectChat() {
+      // Get one-time chat token via REST API
+      try {
+        const tokenRes = await fetch(`${API_BASE}/v1/chat/token`, { credentials: 'include' });
+        if (!tokenRes.ok) {
+          console.warn('[Chat] Failed to get chat token:', tokenRes.status);
+          return;
+        }
+        const tokenData = await tokenRes.json();
+        const chatToken = tokenData.data?.token;
+        if (!chatToken || cancelled) return;
+
+        socket = io(WS_URL, {
+          path: '/ws',
+          auth: { token: chatToken },
+          withCredentials: true,
+          transports: ['websocket', 'polling'],
+        });
+      } catch (err) {
+        console.warn('[Chat] Error getting chat token:', err);
+        return;
+      }
+      if (cancelled) { socket?.disconnect(); return; }
+      socketRef.current = socket;
 
     socket.on('connect', () => {
       setConnected(true);
@@ -96,9 +117,16 @@ export default function Chat({ jobId, job }) {
       console.warn('[Chat] Socket error:', err.message);
     });
 
+    } // end connectChat
+
+    connectChat();
+
     return () => {
-      socket.emit('leave_job', { jobId });
-      socket.disconnect();
+      cancelled = true;
+      if (socketRef.current) {
+        socketRef.current.emit('leave_job', { jobId });
+        socketRef.current.disconnect();
+      }
       if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
     };
   }, [jobId, user?.verusId]);
