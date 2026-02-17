@@ -1558,6 +1558,15 @@ export async function jobRoutes(fastify: FastifyInstance): Promise<void> {
 /**
  * Format job for API response
  */
+/** Ensure a timestamp string is recognized as UTC by appending Z if needed */
+function ensureUtc(ts: string | null): string | null {
+  if (!ts) return null;
+  // Already has timezone info (Z or +/-)
+  if (ts.endsWith('Z') || /[+-]\d{2}:\d{2}$/.test(ts)) return ts;
+  // SQLite datetime('now') returns 'YYYY-MM-DD HH:MM:SS' in UTC but without Z
+  return ts + 'Z';
+}
+
 function formatJob(job: any) {
   return {
     id: job.id,
@@ -1603,12 +1612,12 @@ function formatJob(job: any) {
       message: job.delivery_message,
     } : null,
     timestamps: {
-      requested: job.requested_at,
-      accepted: job.accepted_at,
-      delivered: job.delivered_at,
-      completed: job.completed_at,
-      created: job.created_at,
-      updated: job.updated_at,
+      requested: ensureUtc(job.requested_at),
+      accepted: ensureUtc(job.accepted_at),
+      delivered: ensureUtc(job.delivered_at),
+      completed: ensureUtc(job.completed_at),
+      created: ensureUtc(job.created_at),
+      updated: ensureUtc(job.updated_at),
     },
   };
 }
