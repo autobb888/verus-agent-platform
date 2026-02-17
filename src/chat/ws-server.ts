@@ -216,7 +216,17 @@ export function initSocketServer(httpServer: HttpServer): SocketIOServer {
 
     // Session revalidation interval
     const revalidateInterval = setInterval(() => {
-      const session = getSessionFromCookie(socket.handshake.headers.cookie);
+      // Try cookie first, then fall back to checking if the session still exists in DB
+      const cookieHeader = socket.handshake.headers.cookie;
+      let session = getSessionFromCookie(cookieHeader);
+      if (!session && socket.verusId) {
+        // Token-authed connection (e.g. SDK agent) — verify session still exists by verusId
+        try {
+          const db = getDatabase();
+          const row = db.prepare(`SELECT id FROM sessions WHERE verus_id = ? AND expires_at > ? LIMIT 1`).get(socket.verusId, Date.now()) as any;
+          if (row) session = { verusId: socket.verusId };
+        } catch {}
+      }
       if (!session) {
         socket.emit('error', { message: 'Session expired' });
         socket.disconnect(true);
