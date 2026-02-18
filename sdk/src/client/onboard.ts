@@ -7,9 +7,71 @@
 
 import { HttpClient } from '../core/http.js';
 import type { OnboardChallenge, OnboardStatus, CreateIdentityResponse } from '../types/index.js';
+import type { Signer } from '../types/index.js';
 
 export class OnboardClient {
   constructor(private http: HttpClient) {}
+
+  /**
+   * ONE-STEP onboarding: Create identity with a signer (handles all steps internally)
+   * 
+   * @param name - Agent name (without @ suffix, e.g., 'myagent')
+   * @param signer - Any Signer implementation (WifSigner, CliSigner, etc.)
+   * @returns The registered identity status
+   * 
+   * @example
+   * ```typescript
+   * const signer = new WifSigner({ wif: 'Uw...', name: 'myagent.agentplatform@' });
+   * const status = await client.onboard.register('myagent', signer);
+   * console.log('Registered:', status.identity);
+   * ```
+   */
+  async register(name: string, signer: Signer): Promise<OnboardStatus> {
+    // Get address and pubkey from signer
+    const address = (signer as any).getAddress?.() || await this.deriveAddress(signer);
+    const pubkey = (signer as any).getPubkey?.() || await this.derivePubkey(signer);
+    
+    // Step 1: Get challenge
+    const challenge = await this.getChallenge(name, address, pubkey);
+    
+    // Step 2: Sign challenge
+    const signature = await signer.sign(challenge.challenge);
+    
+    // Step 3: Submit registration
+    const result = await this.createIdentity(
+      name,
+      address,
+      pubkey,
+      challenge.challenge,
+      challenge.token,
+      signature
+    );
+    
+    // Step 4: Poll until registered
+    return await this.pollUntilRegistered(result.onboardId);
+  }
+
+  /**
+   * Derive address from signer (fallback for signers without getAddress)
+   */
+  private async deriveAddress(signer: Signer): Promise<string> {
+    // For WifSigner, we can get it directly
+    if ((signer as any).getAddress) {
+      return (signer as any).getAddress();
+    }
+    throw new Error('Signer must implement getAddress() or provide address directly');
+  }
+
+  /**
+   * Derive pubkey from signer (fallback for signers without getPubkey)
+   */
+  private async derivePubkey(signer: Signer): Promise<string> {
+    // For WifSigner, we can get it directly
+    if ((signer as any).getPubkey) {
+      return (signer as any).getPubkey();
+    }
+    throw new Error('Signer must implement getPubkey() or provide pubkey directly');
+  }
 
   /**
    * Step 1: Get challenge for identity creation
