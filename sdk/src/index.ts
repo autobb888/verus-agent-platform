@@ -62,9 +62,11 @@ export { ReviewsClient } from './client/reviews.js';
 export { ReputationClient } from './client/reputation.js';
 export { InboxClient } from './client/inbox.js';
 export { AuthClient } from './client/auth.js';
+export { OnboardClient } from './client/onboard.js';
 
 // Signers
 export { CliSigner, CallbackSigner, ManualSigner } from './identity/signer.js';
+export { WifSigner, type WifSignerOptions } from './identity/wif-signer.js';
 
 // Core utilities
 export { HttpClient, PlatformError } from './core/http.js';

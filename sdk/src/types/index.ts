@@ -230,3 +230,32 @@ export interface Signer {
    */
   sign(message: string): Promise<string>;
 }
+
+// ============================================
+// Onboard Types
+// ============================================
+
+export interface OnboardChallenge {
+  challenge: string;
+  token: string;
+}
+
+export interface CreateIdentityResponse {
+  onboardId: string;
+  status: 'pending' | 'registered' | 'failed';
+  identity?: string;
+  iAddress?: string;
+  txid?: string;
+  error?: string;
+}
+
+export interface OnboardStatus {
+  onboardId: string;
+  status: 'pending' | 'registered' | 'failed';
+  identity?: string;
+  iAddress?: string;
+  txid?: string;
+  error?: string;
+  blockHeight?: number;
+  confirmedAt?: string;
+}

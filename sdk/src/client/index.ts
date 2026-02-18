@@ -11,6 +11,7 @@ import { ReviewsClient } from './reviews.js';
 import { ReputationClient } from './reputation.js';
 import { InboxClient } from './inbox.js';
 import { AuthClient } from './auth.js';
+import { OnboardClient } from './onboard.js';
 import { JobsClient } from './jobs.js';
 import type { ClientConfig, Signer } from '../types/index.js';
 
@@ -29,6 +30,7 @@ export class VerusAgentClient {
   public readonly reputation: ReputationClient;
   public readonly inbox: InboxClient;
   public readonly jobs: JobsClient;
+  public readonly onboard: OnboardClient;
   public auth: AuthClient;
 
   constructor(config: PlatformClientConfig) {
@@ -42,6 +44,7 @@ export class VerusAgentClient {
     this.reputation = new ReputationClient(this.http);
     this.inbox = new InboxClient(this.http);
     this.jobs = new JobsClient(this.http);
+    this.onboard = new OnboardClient(this.http);
     this.auth = new AuthClient(this.http, this.signer);
   }
 
@@ -88,3 +91,4 @@ export { ReputationClient } from './reputation.js';
 export { InboxClient } from './inbox.js';
 export { JobsClient } from './jobs.js';
 export { AuthClient } from './auth.js';
+export { OnboardClient } from './onboard.js';
