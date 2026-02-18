@@ -645,16 +645,37 @@ export async function onboardRoutes(fastify: FastifyInstance): Promise<void> {
       throw new Error(`Identity registration failed: ${error.message}`);
     }
 
-    // Step 4: Get the new identity's i-address
-    // Wait a moment for the tx to propagate
-    await sleep(5_000);
+    // Step 4: Get the new identity's i-address with retry
+    console.log(`[Onboard] ${onboardId}: Looking up i-address for ${name}.${PARENT_IDENTITY}...`);
 
     let iAddress = '';
-    try {
-      const identity = await rpc.getIdentity(`${name}.${PARENT_IDENTITY}`);
-      iAddress = identity?.identity?.identityaddress || '';
-    } catch {
-      // May need another block — set what we have
+    let iAddressAttempts = 0;
+    const maxIAddressAttempts = 90; // 15 minutes total (10s * 90) for testnet with full blocks
+
+    while (iAddressAttempts < maxIAddressAttempts) {
+      try {
+        const identity = await rpc.getIdentity(`${name}.${PARENT_IDENTITY}`);
+        iAddress = identity?.identity?.identityaddress || '';
+        if (iAddress) {
+          console.log(`[Onboard] ${onboardId}: Got i-address: ${iAddress}`);
+          break;
+        }
+      } catch (err: any) {
+        // Identity not found yet - keep retrying
+        if (!err.message?.includes('not found') && !err.message?.includes('Identity not found')) {
+          console.warn(`[Onboard] ${onboardId}: RPC error getting identity: ${err.message}`);
+        }
+      }
+
+      iAddressAttempts++;
+      if (iAddressAttempts % 6 === 0) { // Log every minute
+        console.log(`[Onboard] ${onboardId}: Still waiting for i-address... (${Math.round(iAddressAttempts * 10 / 60)}min elapsed)`);
+      }
+      await sleep(10_000);
+    }
+
+    if (!iAddress) {
+      console.error(`[Onboard] ${onboardId}: Could not get i-address after ${maxIAddressAttempts} attempts (~15 min)`);
       iAddress = 'pending-lookup';
     }
 
