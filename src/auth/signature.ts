@@ -85,19 +85,7 @@ export async function verifySignedPayload<T>(
   const rpc = getRpcClient();
   
   try {
-    // Try to resolve identity name to i-address for verification
-    // (SDK signs with i-address hash, so verification must use i-address)
-    let verifyIdentity = verusId;
-    try {
-      const identity = await rpc.getIdentity(verusId);
-      if (identity?.identity?.identityaddress) {
-        verifyIdentity = identity.identity.identityaddress;
-      }
-    } catch {
-      // Identity not found — use verusId as-is (for onboarding/new identities)
-    }
-    
-    const valid = await rpc.verifyMessage(verifyIdentity, message, signature);
+    const valid = await rpc.verifyMessage(verusId, message, signature);
     
     if (!valid) {
       return {
@@ -108,22 +96,13 @@ export async function verifySignedPayload<T>(
     
     // Nonce already claimed atomically in step 2 (Shield RACE-1 fix)
     
-    // Get identity address for linking (re-use if already fetched)
-    let identityAddress = verifyIdentity;
-    if (identityAddress === verusId) {
-      // We didn't resolve to i-address earlier, fetch now
-      try {
-        const identity = await rpc.getIdentity(verusId);
-        identityAddress = identity?.identity?.identityaddress || verusId;
-      } catch {
-        identityAddress = verusId;
-      }
-    }
+    // Get identity address for linking
+    const identity = await rpc.getIdentity(verusId);
     
     return {
       valid: true,
       verusId,
-      identityAddress,
+      identityAddress: identity.identity.identityaddress,
     };
     
   } catch (error) {
