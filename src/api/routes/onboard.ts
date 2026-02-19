@@ -166,12 +166,10 @@ export function verifySignatureLocally(address: string, message: string, signatu
     const recoveryId = compressed ? recoveryFlag - 31 : recoveryFlag - 27;
     if (recoveryId < 0 || recoveryId > 3) return false;
 
-    // Build noble-compatible 65-byte sig: [recoveryId(0-3), r(32), s(32)]
-    const nobleSig = Buffer.alloc(65);
-    nobleSig[0] = recoveryId;
-    sigBuf.copy(nobleSig, 1, 1, 65);
-
-    const recovered = secp256k1.recoverPublicKey(nobleSig, finalHash, { prehash: false });
+    // v3 API: recoverPublicKey(signature: 64-bytes [r,s], message: 32-bytes, opts: {recid})
+    const sig64 = sigBuf.slice(1); // Remove recovery byte, keep [r, s]
+    
+    const recovered = secp256k1.recoverPublicKey(sig64, finalHash, { recid: recoveryId });
 
     return Buffer.from(recovered).equals(expectedPubkey);
   } catch (e) {
