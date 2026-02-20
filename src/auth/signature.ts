@@ -85,33 +85,43 @@ export async function verifySignedPayload<T>(
   const rpc = getRpcClient();
   
   try {
-    // Resolve identity name to i-address for verification
-    // (SDK signs with i-address, so we need to verify with i-address)
-    let verifyIdentity = verusId;
+    // Primary verification should use the provided VerusID/name.
+    // Some flows sign as identity name, others as i-address, so we support both.
+    let valid = false;
+    let resolvedIAddress = verusId;
+
+    // 1) Try as provided (typically identity name like foo.agentplatform@)
     try {
-      const identity = await rpc.getIdentity(verusId);
-      if (identity?.identity?.identityaddress) {
-        verifyIdentity = identity.identity.identityaddress;
-      }
+      valid = await rpc.verifyMessage(verusId, message, signature);
     } catch {
-      // Identity not found — use verusId as-is (might be i-address already)
+      valid = false;
     }
-    
-    const valid = await rpc.verifyMessage(verifyIdentity, message, signature);
-    
+
+    // 2) Fallback: resolve to i-address and verify there
+    if (!valid) {
+      try {
+        const identity = await rpc.getIdentity(verusId);
+        if (identity?.identity?.identityaddress) {
+          resolvedIAddress = identity.identity.identityaddress;
+          valid = await rpc.verifyMessage(resolvedIAddress, message, signature);
+        }
+      } catch {
+        valid = false;
+      }
+    }
+
     if (!valid) {
       return {
         valid: false,
         error: 'Invalid signature',
       };
     }
-    
+
     // Nonce already claimed atomically in step 2 (Shield RACE-1 fix)
-    
-    // Get identity address for linking (re-use if already fetched)
-    let identityAddress = verifyIdentity;
+
+    // Resolve identity i-address for linking/storage
+    let identityAddress = resolvedIAddress;
     if (identityAddress === verusId) {
-      // We didn't resolve to i-address earlier, fetch now
       try {
         const identity = await rpc.getIdentity(verusId);
         identityAddress = identity?.identity?.identityaddress || verusId;
