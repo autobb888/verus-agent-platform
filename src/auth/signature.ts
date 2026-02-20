@@ -85,27 +85,37 @@ export async function verifySignedPayload<T>(
   const rpc = getRpcClient();
   
   try {
-    // Canonical contract: verify exactly against provided verusId.
+    // Canonical verification targets for signed payloads:
+    // 1) identity primary address (daemon truth for signmessage/verifymessage)
+    // 2) identity i-address
+    // 3) raw verusId fallback (legacy)
     let valid = false;
-    try {
-      valid = await rpc.verifyMessage(verusId, message, signature);
-    } catch {
-      valid = false;
-    }
+    let identityAddress = verusId;
 
-    // Optional temporary legacy fallback (disabled by default)
-    if (!valid && process.env.AUTH_LEGACY_IADDR_FALLBACK === '1') {
+    const candidates: string[] = [];
+    try {
+      const identity = await rpc.getIdentity(verusId);
+      const idObj = identity?.identity;
+      if (Array.isArray(idObj?.primaryaddresses) && idObj.primaryaddresses.length > 0) {
+        candidates.push(...idObj.primaryaddresses);
+      }
+      if (idObj?.identityaddress) {
+        identityAddress = idObj.identityaddress;
+        candidates.push(idObj.identityaddress);
+      }
+    } catch {
+      // ignore resolution errors, fallback to provided verusId
+    }
+    candidates.push(verusId);
+
+    for (const target of [...new Set(candidates)]) {
       try {
-        const identity = await rpc.getIdentity(verusId);
-        const iAddress = identity?.identity?.identityaddress;
-        if (iAddress) {
-          valid = await rpc.verifyMessage(iAddress, message, signature);
-          if (valid) {
-            console.warn('[Auth] Legacy i-address fallback path used', { verusId, iAddress });
-          }
+        if (await rpc.verifyMessage(target, message, signature)) {
+          valid = true;
+          break;
         }
       } catch {
-        valid = false;
+        // continue
       }
     }
 
@@ -118,13 +128,13 @@ export async function verifySignedPayload<T>(
 
     // Nonce already claimed atomically in step 2 (Shield RACE-1 fix)
 
-    // Resolve identity i-address for linking/storage
-    let identityAddress = verusId;
-    try {
-      const identity = await rpc.getIdentity(verusId);
-      identityAddress = identity?.identity?.identityaddress || verusId;
-    } catch {
-      identityAddress = verusId;
+    if (identityAddress === verusId) {
+      try {
+        const identity = await rpc.getIdentity(verusId);
+        identityAddress = identity?.identity?.identityaddress || verusId;
+      } catch {
+        identityAddress = verusId;
+      }
     }
     
     return {
