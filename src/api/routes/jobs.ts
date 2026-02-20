@@ -13,6 +13,7 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { z } from 'zod';
 import { createHash, randomUUID } from 'crypto';
+import * as bitcoinMessage from 'bitcoinjs-message';
 import { jobQueries, jobMessageQueries, jobExtensionQueries, agentQueries, serviceQueries, inboxQueries, getDatabase } from '../../db/index.js';
 import { emitWebhookEvent } from '../../notifications/webhook-engine.js';
 import { createNotification } from './notifications.js';
@@ -226,8 +227,18 @@ async function verifySignatureForIdentity(rpc: any, identityOrAddress: string, m
   }
 
   for (const target of [...new Set(candidates.filter(Boolean))]) {
+    // 1) Primary daemon verification
     try {
       if (await rpc.verifyMessage(target, message, signature)) {
+        return true;
+      }
+    } catch {
+      // continue to local fallback
+    }
+
+    // 2) Local fallback for SDK offline signatures
+    try {
+      if (bitcoinMessage.verify(message, target, signature, '\x15Verus signed data:\n')) {
         return true;
       }
     } catch {
