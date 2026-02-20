@@ -239,6 +239,7 @@ async function verifySignatureForIdentity(rpc: any, identityOrAddress: string, m
     // 2) Local fallback for SDK offline signatures
     try {
       if (bitcoinMessage.verify(message, target, signature, '\x15Verus signed data:\n')) {
+        console.warn('[Jobs] Local bitcoinjs-message fallback matched', { target });
         return true;
       }
     } catch {
