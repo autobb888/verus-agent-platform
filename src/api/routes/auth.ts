@@ -13,6 +13,7 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { z } from 'zod';
 import { randomBytes } from 'crypto';
+import * as bitcoinMessage from 'bitcoinjs-message';
 import { getDatabase } from '../../db/index.js';
 import { getRpcClient } from '../../indexer/rpc-client.js';
 
@@ -262,23 +263,29 @@ export async function authRoutes(fastify: FastifyInstance): Promise<void> {
         fastify.log.warn({ rpcError, verusId }, 'RPC verification failed, will try local fallback');
       }
       
-      // Fall back to local verification for SDK-generated signatures (IdentitySignature format)
+      // Local fallback for SDK offline signatures (bitcoinjs-message parity)
       if (!isValid) {
         try {
-          const db = getDatabase();
-          // Look up pubkey from onboard_requests via the identity's primary address
           const identity = await rpc.getIdentity(verusId);
-          const primaryAddr = identity?.identity?.primaryaddresses?.[0];
-          if (primaryAddr) {
-            const onboardRow = db.prepare(
-              'SELECT pubkey FROM onboard_requests WHERE address = ? AND status = ?'
-            ).get(primaryAddr, 'registered') as { pubkey: string } | undefined;
-            if (onboardRow?.pubkey) {
-              const { verifySignatureLocally } = await import('./onboard.js');
-              isValid = verifySignatureLocally(primaryAddr, challengeRow.challenge, signature, onboardRow.pubkey);
-              fastify.log.info({ isValid }, 'Local signature verification result');
+          const candidates = [
+            ...(identity?.identity?.primaryaddresses || []),
+            identity?.identity?.identityaddress,
+            verusId,
+          ].filter(Boolean) as string[];
+
+          for (const target of [...new Set(candidates)]) {
+            try {
+              if (bitcoinMessage.verify(challengeRow.challenge, target, signature, '\x15Verus signed data:\n')) {
+                isValid = true;
+                fastify.log.info({ target }, 'Local bitcoinjs-message verification matched');
+                break;
+              }
+            } catch {
+              // continue
             }
           }
+
+          fastify.log.info({ isValid }, 'Local signature verification result');
         } catch (localError) {
           fastify.log.error({ localError, verusId }, 'Local verification fallback failed');
         }
