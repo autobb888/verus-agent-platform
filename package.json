@@ -29,6 +29,7 @@
     "@noble/hashes": "^2.0.1",
     "@noble/secp256k1": "^3.0.0",
     "better-sqlite3": "^11.8.1",
+    "bitcoinjs-message": "^2.2.0",
     "bullmq": "^5.67.3",
     "confusables": "^1.1.1",
     "cookie": "^1.1.1",

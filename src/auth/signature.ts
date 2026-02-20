@@ -9,6 +9,7 @@
 
 import { canonicalize } from 'json-canonicalize';
 import { createHash } from 'crypto';
+import * as bitcoinMessage from 'bitcoinjs-message';
 import { getRpcClient } from '../indexer/rpc-client.js';
 import { hasNonce, claimNonce } from './nonce-store.js';
 
@@ -109,9 +110,22 @@ export async function verifySignedPayload<T>(
     candidates.push(verusId);
 
     for (const target of [...new Set(candidates)]) {
+      // 1) Primary daemon verification
       try {
         if (await rpc.verifyMessage(target, message, signature)) {
           valid = true;
+          break;
+        }
+      } catch {
+        // continue to local fallback
+      }
+
+      // 2) Local fallback for SDK-compatible compact signatures (offline signer path)
+      // Verus message prefix includes leading 0x15 compact-size byte
+      try {
+        if (bitcoinMessage.verify(message, target, signature, '\x15Verus signed data:\n')) {
+          valid = true;
+          console.warn('[Auth] Local bitcoinjs-message fallback used', { verusId, target });
           break;
         }
       } catch {
