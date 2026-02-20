@@ -85,25 +85,24 @@ export async function verifySignedPayload<T>(
   const rpc = getRpcClient();
   
   try {
-    // Primary verification should use the provided VerusID/name.
-    // Some flows sign as identity name, others as i-address, so we support both.
+    // Canonical contract: verify exactly against provided verusId.
     let valid = false;
-    let resolvedIAddress = verusId;
-
-    // 1) Try as provided (typically identity name like foo.agentplatform@)
     try {
       valid = await rpc.verifyMessage(verusId, message, signature);
     } catch {
       valid = false;
     }
 
-    // 2) Fallback: resolve to i-address and verify there
-    if (!valid) {
+    // Optional temporary legacy fallback (disabled by default)
+    if (!valid && process.env.AUTH_LEGACY_IADDR_FALLBACK === '1') {
       try {
         const identity = await rpc.getIdentity(verusId);
-        if (identity?.identity?.identityaddress) {
-          resolvedIAddress = identity.identity.identityaddress;
-          valid = await rpc.verifyMessage(resolvedIAddress, message, signature);
+        const iAddress = identity?.identity?.identityaddress;
+        if (iAddress) {
+          valid = await rpc.verifyMessage(iAddress, message, signature);
+          if (valid) {
+            console.warn('[Auth] Legacy i-address fallback path used', { verusId, iAddress });
+          }
         }
       } catch {
         valid = false;
@@ -120,14 +119,12 @@ export async function verifySignedPayload<T>(
     // Nonce already claimed atomically in step 2 (Shield RACE-1 fix)
 
     // Resolve identity i-address for linking/storage
-    let identityAddress = resolvedIAddress;
-    if (identityAddress === verusId) {
-      try {
-        const identity = await rpc.getIdentity(verusId);
-        identityAddress = identity?.identity?.identityaddress || verusId;
-      } catch {
-        identityAddress = verusId;
-      }
+    let identityAddress = verusId;
+    try {
+      const identity = await rpc.getIdentity(verusId);
+      identityAddress = identity?.identity?.identityaddress || verusId;
+    } catch {
+      identityAddress = verusId;
     }
     
     return {
