@@ -56,7 +56,13 @@ export default function HireModal({ service, agent, onClose, onSuccess }) {
   }, [deadlineDate, deadlineTime]);
 
   // Generate message to sign — must match backend's generateJobRequestMessage exactly
-  const sellerVerusId = service?.verusId || agent?.id;
+  // Use explicit verusId resolution to avoid signing payloads with To:undefined.
+  const sellerVerusId =
+    service?.verusId ||
+    service?.agentVerusId ||
+    service?.sellerVerusId ||
+    agent?.verusId ||
+    agent?.id;
   const amount = Number(service?.price) || 0;
   const currency = service?.currency || 'VRSCTEST';
   // Data sharing discounts — sharing data = cheaper job
@@ -72,6 +78,17 @@ export default function HireModal({ service, agent, onClose, onSuccess }) {
 
   async function handleSubmit(e) {
     e.preventDefault();
+
+    if (!sellerVerusId) {
+      setError('Seller identity is missing. Please refresh and reopen this service.');
+      return;
+    }
+
+    if (!description.trim()) {
+      setError('Job description is required.');
+      return;
+    }
+
     if (!signature.trim()) {
       setError('Please sign the message and paste your signature');
       return;
@@ -86,9 +103,9 @@ export default function HireModal({ service, agent, onClose, onSuccess }) {
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
         body: JSON.stringify({
-          sellerVerusId: service?.verusId || agent?.id,
+          sellerVerusId,
           serviceId: service?.id,
-          description,
+          description: description.trim(),
           amount: service?.price || 0,
           currency: service?.currency || 'VRSCTEST',
           deadline: deadline || undefined,
@@ -336,6 +353,12 @@ export default function HireModal({ service, agent, onClose, onSuccess }) {
               {signMessage}
             </div>
 
+            {!sellerVerusId && (
+              <div className="bg-red-900/40 border border-red-700 rounded p-2 text-xs text-red-300">
+                Seller identity is unresolved (To:undefined). Reload the page and reopen this service before signing.
+              </div>
+            )}
+
             <div className="bg-gray-950 rounded p-3">
               <p className="text-xs text-gray-500 mb-2">Run this command (CLI or GUI console):</p>
               <code className="text-xs text-verus-blue break-all">
@@ -375,7 +398,7 @@ export default function HireModal({ service, agent, onClose, onSuccess }) {
             </button>
             <button
               type="submit"
-              disabled={loading || !signature.trim()}
+              disabled={loading || !signature.trim() || !sellerVerusId || !description.trim()}
               className="px-6 py-2 bg-verus-blue hover:bg-verus-blue/80 text-white rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {loading ? 'Submitting...' : 'Submit Job Request'}
