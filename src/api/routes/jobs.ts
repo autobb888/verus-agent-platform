@@ -207,6 +207,37 @@ function generateCompletionMessage(
   return `VAP-COMPLETE|Job:${jobHash}|Ts:${timestamp}|I confirm the work has been delivered satisfactorily.`;
 }
 
+async function verifySignatureForIdentity(rpc: any, identityOrAddress: string, message: string, signature: string): Promise<boolean> {
+  const candidates: string[] = [identityOrAddress];
+
+  // If input is an i-address, resolve identity details to include primary addresses
+  // If input is identity name, resolve both i-address and primaries.
+  try {
+    const identity = await rpc.getIdentity(identityOrAddress);
+    const idObj = identity?.identity;
+    if (Array.isArray(idObj?.primaryaddresses)) {
+      candidates.push(...idObj.primaryaddresses);
+    }
+    if (idObj?.identityaddress) {
+      candidates.push(idObj.identityaddress);
+    }
+  } catch {
+    // ignore resolution failures and use provided value only
+  }
+
+  for (const target of [...new Set(candidates.filter(Boolean))]) {
+    try {
+      if (await rpc.verifyMessage(target, message, signature)) {
+        return true;
+      }
+    } catch {
+      // continue
+    }
+  }
+
+  return false;
+}
+
 // Auth middleware
 async function requireAuth(request: FastifyRequest, reply: FastifyReply) {
   const session = getSessionFromRequest(request);
@@ -579,7 +610,7 @@ export async function jobRoutes(fastify: FastifyInstance): Promise<void> {
     const rpc = getRpcClient();
     let isValid: boolean;
     try {
-      isValid = await rpc.verifyMessage(session.verusId, expectedMessage, signature);
+      isValid = await verifySignatureForIdentity(rpc, session.verusId, expectedMessage, signature);
     } catch {
       return reply.code(400).send({
         error: { code: 'VERIFICATION_FAILED', message: 'Could not verify signature' },
@@ -669,7 +700,7 @@ export async function jobRoutes(fastify: FastifyInstance): Promise<void> {
     const rpc = getRpcClient();
     let isValid: boolean;
     try {
-      isValid = await rpc.verifyMessage(session.verusId, expectedMessage, signature);
+      isValid = await verifySignatureForIdentity(rpc, session.verusId, expectedMessage, signature);
     } catch {
       return reply.code(400).send({
         error: { code: 'VERIFICATION_FAILED', message: 'Could not verify signature' },
@@ -754,7 +785,7 @@ export async function jobRoutes(fastify: FastifyInstance): Promise<void> {
     const rpc = getRpcClient();
     let isValid: boolean;
     try {
-      isValid = await rpc.verifyMessage(session.verusId, expectedMessage, signature);
+      isValid = await verifySignatureForIdentity(rpc, session.verusId, expectedMessage, signature);
     } catch {
       return reply.code(400).send({
         error: { code: 'VERIFICATION_FAILED', message: 'Could not verify signature' },
@@ -882,7 +913,7 @@ export async function jobRoutes(fastify: FastifyInstance): Promise<void> {
     const rpc = getRpcClient();
     let isValid: boolean;
     try {
-      isValid = await rpc.verifyMessage(session.verusId, disputeMessage, signature);
+      isValid = await verifySignatureForIdentity(rpc, session.verusId, disputeMessage, signature);
     } catch {
       return reply.code(400).send({
         error: { code: 'VERIFICATION_FAILED', message: 'Could not verify signature' },
@@ -1087,7 +1118,7 @@ export async function jobRoutes(fastify: FastifyInstance): Promise<void> {
     if (signature) {
       const rpc = getRpcClient();
       try {
-        const isValid = await rpc.verifyMessage(session.verusId, content, signature);
+        const isValid = await verifySignatureForIdentity(rpc, session.verusId, content, signature);
         signed = isValid ? 1 : 0;
       } catch {
         // Signature verification failed, treat as unsigned
