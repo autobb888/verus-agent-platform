@@ -210,6 +210,7 @@ function generateCompletionMessage(
 
 async function verifySignatureForIdentity(rpc: any, identityOrAddress: string, message: string, signature: string): Promise<boolean> {
   const candidates: string[] = [identityOrAddress];
+  const debugAttempts: Array<{ target: string; rpc: boolean; local: boolean }> = [];
 
   // If input is an i-address, resolve identity details to include primary addresses
   // If input is identity name, resolve both i-address and primaries.
@@ -227,26 +228,37 @@ async function verifySignatureForIdentity(rpc: any, identityOrAddress: string, m
   }
 
   for (const target of [...new Set(candidates.filter(Boolean))]) {
+    let rpcOk = false;
+    let localOk = false;
+
     // 1) Primary daemon verification
     try {
-      if (await rpc.verifyMessage(target, message, signature)) {
-        return true;
-      }
+      rpcOk = await rpc.verifyMessage(target, message, signature);
+      if (rpcOk) return true;
     } catch {
-      // continue to local fallback
+      rpcOk = false;
     }
 
     // 2) Local fallback for SDK offline signatures
     try {
-      if (bitcoinMessage.verify(message, target, signature, '\x15Verus signed data:\n')) {
+      localOk = bitcoinMessage.verify(message, target, signature, '\x15Verus signed data:\n');
+      if (localOk) {
         console.warn('[Jobs] Local bitcoinjs-message fallback matched', { target });
         return true;
       }
     } catch {
-      // continue
+      localOk = false;
     }
+
+    debugAttempts.push({ target, rpc: rpcOk, local: localOk });
   }
 
+  console.warn('[Jobs] Signature verification failed for all candidates', {
+    identityOrAddress,
+    signaturePreview: signature.slice(0, 24),
+    messagePreview: message.slice(0, 120),
+    attempts: debugAttempts,
+  });
   return false;
 }
 
