@@ -24,7 +24,6 @@ import { createHash, createHmac, timingSafeEqual } from 'node:crypto';
 import * as secp256k1 from '@noble/secp256k1';
 import { sha256 } from '@noble/hashes/sha2.js';
 import { hmac } from '@noble/hashes/hmac.js';
-import bs58check from 'bs58check';
 
 // Configure @noble/secp256k1 v3 with sync hash functions
 secp256k1.hashes.hmacSha256 = (key: Uint8Array, ...msgs: Uint8Array[]) => {
@@ -44,7 +43,10 @@ import { hasHomoglyphAttack } from '../../utils/homoglyph.js';
 import { config } from '../../config/index.js';
 
 // HMAC secret for challenge tokens (P2-SDK-12)
-const CHALLENGE_SECRET = process.env.ONBOARD_CHALLENGE_SECRET || createHash('sha256').update(process.env.COOKIE_SECRET || 'dev-onboard-secret').digest('hex');
+const CHALLENGE_SECRET = process.env.ONBOARD_CHALLENGE_SECRET || (process.env.COOKIE_SECRET ? createHash('sha256').update(process.env.COOKIE_SECRET).digest('hex') : '');
+if (process.env.NODE_ENV === 'production' && !CHALLENGE_SECRET) {
+  throw new Error('ONBOARD_CHALLENGE_SECRET (or COOKIE_SECRET) must be set in production');
+}
 const CHALLENGE_TTL = 5 * 60 * 1000; // 5 minutes
 
 /**
@@ -101,10 +103,7 @@ async function verifyOnboardSignatureViaRPC(address: string, challenge: string, 
   // Fall back to local verification for SDK-generated signatures
   if (pubkey) {
     try {
-      console.log('[Onboard] RPC verify failed, trying local verification...');
-      const localResult = verifySignatureLocally(address, challenge, signature, pubkey);
-      console.log('[Onboard] Local verify result:', localResult);
-      return localResult;
+      return verifySignatureLocally(address, challenge, signature, pubkey);
     } catch (e) {
       console.error('[Onboard] Local verify threw:', e);
       return false;
@@ -120,58 +119,29 @@ async function verifyOnboardSignatureViaRPC(address: string, challenge: string, 
  * which hashes as: SHA256(prefix + chainIdHash + blockHeight(4) + identityHash + SHA256(varint(msgLen) + lowercase(msg)))
  * We verify by recovering the pubkey from the compact signature and checking it matches.
  */
-export function verifySignatureLocally(address: string, message: string, signature: string, pubkeyHex: string): boolean {
+export function verifySignatureLocally(_address: string, message: string, signature: string, pubkeyHex: string): boolean {
   try {
     const sigBuf = Buffer.from(signature, 'base64');
     if (sigBuf.length !== 65) return false;
 
     const expectedPubkey = Buffer.from(pubkeyHex, 'hex');
-
-    // Reconstruct the message hash the same way IdentitySignature.hashMessage does:
-    // 1. VERUS_DATA_SIGNATURE_PREFIX = writeVarSlice("Verus signed data:\n") = varint(19) + "Verus signed data:\n"
     const prefixStr = 'Verus signed data:\n';
-    const prefix = Buffer.concat([Buffer.from([prefixStr.length]), Buffer.from(prefixStr)]);
+    const msgBuf = Buffer.from(message, 'utf8');
 
-    // 2. chainId hash (20 bytes from base58check decode of chain i-address)
-    //    VRSCTEST = iJhCezBExJHvtyH3fGhNnt2NhU4Ztkf2yq
-    const chainIdDecoded = bs58check.decode('iJhCezBExJHvtyH3fGhNnt2NhU4Ztkf2yq');
-    const chainIdHash = chainIdDecoded.slice(1); // skip version byte
+    // Canonical Verus/Bitcoin signed-message hash:
+    // SHA256(SHA256(varint(prefixLen)+prefix+varint(msgLen)+message))
+    if (prefixStr.length >= 0xfd || msgBuf.length >= 0xfd) return false;
+    const full = Buffer.concat([
+      Buffer.from([prefixStr.length]),
+      Buffer.from(prefixStr, 'utf8'),
+      Buffer.from([msgBuf.length]),
+      msgBuf,
+    ]);
+    const h1 = createHash('sha256').update(full).digest();
+    const messageHash = createHash('sha256').update(h1).digest();
 
-    // 3. blockHeight = 0 (4 bytes LE)
-    const heightBuf = Buffer.alloc(4, 0);
-
-    // 4. identity hash — SDK uses chainId as iAddress too
-    const identityHash = chainIdHash;
-
-    // 5. SHA256(varint(msgLen) + lowercase(msg))
-    const lowerMsg = Buffer.from(message.toLowerCase(), 'utf8');
-    // P2-SV-1: Guard against messages >= 253 bytes (varint encoding changes)
-    if (lowerMsg.length >= 0xfd) throw new Error('Challenge too long for single-byte varint');
-    const msgSlice = Buffer.concat([Buffer.from([lowerMsg.length]), lowerMsg]);
-    const msgHash = createHash('sha256').update(msgSlice).digest();
-
-    // 6. Final hash = SHA256(prefix + chainIdHash + heightBuf + identityHash + msgHash)
-    const finalHash = createHash('sha256')
-      .update(prefix)
-      .update(chainIdHash)
-      .update(heightBuf)
-      .update(identityHash)
-      .update(msgHash)
-      .digest();
-
-    // 7. Recover pubkey from compact signature using @noble/secp256k1 (P1-SV-1 fix)
-    // Bitcoin compact sig format: byte 0 = recovery + 27 + (compressed ? 4 : 0)
-    const recoveryFlag = sigBuf[0];
-    const compressed = recoveryFlag >= 31;
-    const recoveryId = compressed ? recoveryFlag - 31 : recoveryFlag - 27;
-    if (recoveryId < 0 || recoveryId > 3) return false;
-
-    // v3 API: recoverPublicKey(signature: 64-bytes [r,s], message: 32-bytes, opts: {recid})
-    const sig64 = sigBuf.slice(1); // Remove recovery byte, keep [r, s]
-    
-    const recovered = secp256k1.recoverPublicKey(sig64, finalHash, { recid: recoveryId });
-
-    return Buffer.from(recovered).equals(expectedPubkey);
+    // compact sig format: [header, r(32), s(32)]
+    return secp256k1.verify(sigBuf.slice(1), messageHash, expectedPubkey, { prehash: false });
   } catch (e) {
     console.error('[Onboard] Local signature verification error:', e);
     return false;

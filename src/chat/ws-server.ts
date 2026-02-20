@@ -17,6 +17,9 @@ import { unsign } from 'cookie-signature';
 interface AuthenticatedSocket extends Socket {
   verusId: string;
   sessionValidatedAt: number;
+  authMode: 'cookie' | 'token';
+  sessionId?: string;
+  tokenId?: string;
 }
 
 interface SafeChatScanFn {
@@ -111,7 +114,7 @@ export function setSafeChatEngine(engine: SafeChatScanFn): void {
   safechatEngine = engine;
 }
 
-function getSessionFromCookie(cookieHeader: string | undefined): { verusId: string } | null {
+function getSessionFromCookie(cookieHeader: string | undefined): { verusId: string; sessionId: string } | null {
   if (!cookieHeader) return null;
   const cookies = parseCookie(cookieHeader);
   const raw = cookies['verus_session'];
@@ -135,17 +138,17 @@ function getSessionFromCookie(cookieHeader: string | undefined): { verusId: stri
     `).get(sessionId) as { verus_id: string; expires_at: number } | undefined;
 
     if (!session || session.expires_at < Date.now()) return null;
-    return { verusId: session.verus_id };
+    return { verusId: session.verus_id, sessionId };
   } catch {
     return null;
   }
 }
 
-function getSessionFromToken(token: string | undefined): { verusId: string } | null {
+function getSessionFromToken(token: string | undefined): { verusId: string; tokenId: string } | null {
   if (!token) return null;
   const consumed = chatTokenQueries.consume(token);
   if (!consumed) return null;
-  return { verusId: consumed.verus_id };
+  return { verusId: consumed.verus_id, tokenId: consumed.id };
 }
 
 function checkCircuitBreaker(room: string, sender: string): { allowed: boolean; paused: boolean } {
@@ -197,11 +200,10 @@ export function initSocketServer(httpServer: HttpServer): SocketIOServer {
     }
 
     // Try cookie auth first, then token
-    let session = getSessionFromCookie(socket.handshake.headers.cookie);
-    if (!session) {
-      const token = socket.handshake.auth?.token || socket.handshake.query?.token;
-      session = getSessionFromToken(token as string);
-    }
+    const cookieSession = getSessionFromCookie(socket.handshake.headers.cookie);
+    const token = socket.handshake.auth?.token || socket.handshake.query?.token;
+    const tokenSession = cookieSession ? null : getSessionFromToken(token as string);
+    const session = cookieSession || tokenSession;
 
     if (!session) {
       return next(new Error('Authentication required'));
@@ -213,8 +215,12 @@ export function initSocketServer(httpServer: HttpServer): SocketIOServer {
       return next(new Error('Too many connections for this user'));
     }
 
-    (socket as AuthenticatedSocket).verusId = session.verusId;
-    (socket as AuthenticatedSocket).sessionValidatedAt = Date.now();
+    const authSocket = socket as AuthenticatedSocket;
+    authSocket.verusId = session.verusId;
+    authSocket.sessionValidatedAt = Date.now();
+    authSocket.authMode = cookieSession ? 'cookie' : 'token';
+    if (cookieSession && 'sessionId' in cookieSession) authSocket.sessionId = cookieSession.sessionId;
+    if (tokenSession && 'tokenId' in tokenSession) authSocket.tokenId = tokenSession.tokenId;
     next();
   });
 
@@ -226,20 +232,23 @@ export function initSocketServer(httpServer: HttpServer): SocketIOServer {
     ipConnections.set(ip, (ipConnections.get(ip) || 0) + 1);
     userConnections.set(socket.verusId, (userConnections.get(socket.verusId) || 0) + 1);
 
-    // Session revalidation interval
+    // Session revalidation interval: validate exact auth binding (session/token), not any user session
     const revalidateInterval = setInterval(() => {
-      // Try cookie first, then fall back to checking if the session still exists in DB
-      const cookieHeader = socket.handshake.headers.cookie;
-      let session = getSessionFromCookie(cookieHeader);
-      if (!session && socket.verusId) {
-        // Token-authed connection (e.g. SDK agent) — verify session still exists by verusId
-        try {
-          const db = getDatabase();
-          const row = db.prepare(`SELECT id FROM sessions WHERE verus_id = ? AND expires_at > ? LIMIT 1`).get(socket.verusId, Date.now()) as any;
-          if (row) session = { verusId: socket.verusId };
-        } catch {}
+      let valid = false;
+      try {
+        const db = getDatabase();
+        if (socket.authMode === 'cookie' && socket.sessionId) {
+          const row = db.prepare(`SELECT id FROM sessions WHERE id = ? AND verus_id = ? AND expires_at > ? LIMIT 1`).get(socket.sessionId, socket.verusId, Date.now()) as any;
+          valid = !!row;
+        } else if (socket.authMode === 'token' && socket.tokenId) {
+          const row = db.prepare(`SELECT id FROM chat_tokens WHERE id = ? AND verus_id = ? AND expires_at > ? LIMIT 1`).get(socket.tokenId, socket.verusId, new Date().toISOString()) as any;
+          valid = !!row;
+        }
+      } catch {
+        valid = false;
       }
-      if (!session) {
+
+      if (!valid) {
         socket.emit('error', { message: 'Session expired' });
         socket.disconnect(true);
       } else {
