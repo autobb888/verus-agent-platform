@@ -634,7 +634,15 @@ export async function jobRoutes(fastify: FastifyInstance): Promise<void> {
     const rpc = getRpcClient();
     let isValid: boolean;
     try {
-      isValid = await verifySignatureForIdentity(rpc, session.verusId, expectedMessage, signature);
+      // Deterministic signer target for accept: the job seller identity/address
+      isValid = await verifySignatureForIdentity(rpc, job.seller_verus_id, expectedMessage, signature);
+      fastify.log.info({
+        jobId,
+        verifyTarget: job.seller_verus_id,
+        expectedHash: createHash('sha256').update(expectedMessage).digest('hex').slice(0, 24),
+        sigPreview: signature.slice(0, 24),
+        isValid,
+      }, 'Accept signature verification result');
     } catch {
       return reply.code(400).send({
         error: { code: 'VERIFICATION_FAILED', message: 'Could not verify signature' },
