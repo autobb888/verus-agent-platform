@@ -1,19 +1,33 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useCallback } from 'react';
 import { useAuth } from '../context/AuthContext';
 import TimePicker from './TimePicker';
+import CopyButton from './CopyButton';
 
 const API_BASE = import.meta.env.VITE_API_URL || '';
 
+// Compute default deadline: today's date and current time + 1 hour (rounded to nearest 5 min)
+function getDefaultDeadline() {
+  const now = new Date();
+  now.setHours(now.getHours() + 1);
+  // Round minutes to nearest 5
+  const mins = Math.ceil(now.getMinutes() / 5) * 5;
+  now.setMinutes(mins, 0, 0);
+  const date = now.toISOString().split('T')[0];
+  const time = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
+  return { date, time };
+}
+
 export default function HireModal({ service, agent, onClose, onSuccess }) {
   const { user } = useAuth();
+  const defaultDeadline = useMemo(() => getDefaultDeadline(), []);
   const [description, setDescription] = useState(service?.description || '');
-  const [deadlineDate, setDeadlineDate] = useState('');
-  const [deadlineTime, setDeadlineTime] = useState('');
+  const [deadlineDate, setDeadlineDate] = useState(defaultDeadline.date);
+  const [deadlineTime, setDeadlineTime] = useState(defaultDeadline.time);
   const [message, setMessage] = useState('');
   const [signature, setSignature] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
-  const [timestamp] = useState(Math.floor(Date.now() / 1000));
+  const [timestamp, setTimestamp] = useState(Math.floor(Date.now() / 1000));
   const [dataRetention, setDataRetention] = useState('none');
   const [allowTraining, setAllowTraining] = useState(false);
   const [allowThirdParty, setAllowThirdParty] = useState(false);
@@ -106,6 +120,7 @@ export default function HireModal({ service, agent, onClose, onSuccess }) {
           sellerVerusId,
           serviceId: service?.id,
           description: description.trim(),
+          message: message.trim() || undefined,
           amount: service?.price || 0,
           currency: service?.currency || 'VRSCTEST',
           deadline: deadline || undefined,
@@ -206,7 +221,7 @@ export default function HireModal({ service, agent, onClose, onSuccess }) {
                     type="date"
                     value={deadlineDate}
                     onChange={(e) => setDeadlineDate(e.target.value)}
-                    min={new Date(Date.now() + 86400000).toISOString().split('T')[0]}
+                    min={new Date().toISOString().split('T')[0]}
                     className="w-full bg-gray-900 border border-gray-700 rounded-lg px-4 py-2 text-white focus:border-verus-blue focus:outline-none"
                   />
                 </div>
@@ -349,8 +364,28 @@ export default function HireModal({ service, agent, onClose, onSuccess }) {
               Copy the message below and sign it with your VerusID to create a binding job request.
             </p>
 
-            <div className="bg-gray-950 rounded p-3 font-mono text-xs text-gray-300 whitespace-pre-wrap">
-              {signMessage}
+            {/* Timestamp freshness indicator */}
+            <div className="flex items-center justify-between">
+              <span className="text-xs text-gray-500">
+                Timestamp: {new Date(timestamp * 1000).toLocaleTimeString()}
+              </span>
+              <button
+                type="button"
+                onClick={() => setTimestamp(Math.floor(Date.now() / 1000))}
+                className="text-xs text-verus-blue hover:text-blue-400"
+              >
+                Refresh
+              </button>
+            </div>
+
+            <div className="bg-gray-950 rounded p-3">
+              <div className="flex justify-between items-center mb-2">
+                <span className="text-xs text-gray-500">Message to sign:</span>
+                <CopyButton text={signMessage} label="Copy" />
+              </div>
+              <div className="font-mono text-xs text-gray-300 whitespace-pre-wrap">
+                {signMessage}
+              </div>
             </div>
 
             {!sellerVerusId && (
@@ -360,7 +395,10 @@ export default function HireModal({ service, agent, onClose, onSuccess }) {
             )}
 
             <div className="bg-gray-950 rounded p-3">
-              <p className="text-xs text-gray-500 mb-2">Run this command (CLI or GUI console):</p>
+              <div className="flex justify-between items-center mb-2">
+                <span className="text-xs text-gray-500">Run this command (CLI or GUI console):</span>
+                <CopyButton text={`signmessage "${user?.identityName ? `${user.identityName}@` : 'yourID@'}" "${signMessage.replace(/"/g, '\\"')}"`} label="Copy" />
+              </div>
               <code className="text-xs text-verus-blue break-all">
                 signmessage "{user?.identityName ? `${user.identityName}@` : 'yourID@'}" "{signMessage.replace(/"/g, '\\"')}"
               </code>

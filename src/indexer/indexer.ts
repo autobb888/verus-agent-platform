@@ -2,7 +2,7 @@ import { config } from '../config/index.js';
 import { getRpcClient } from './rpc-client.js';
 import { agentQueries, capabilityQueries, endpointQueries, syncQueries, serviceQueries, reviewQueries, reputationQueries, getDatabase } from '../db/index.js';
 import { parseAgentData } from '../validation/vdxf-schema.js';
-import { hasAgentData, hasServiceData, hasReviewData, extractAgentData, extractServiceData, extractServicesArray, extractReviews } from '../validation/vdxf-keys.js';
+import { hasAgentData, hasServiceData, hasReviewData, extractAgentData, extractServiceData, extractServicesArray, extractReviews, extractSessionData } from '../validation/vdxf-keys.js';
 
 interface IndexerState {
   running: boolean;
@@ -230,12 +230,17 @@ async function indexAgentIdentity(
   
   const data = parsed.data;
   const db = getDatabase();
-  
+
+  // Persist agent-level protocols as JSON
+  const protocolsJson = Array.isArray(data.protocols) && data.protocols.length > 0
+    ? JSON.stringify(data.protocols)
+    : null;
+
   // Use transaction for atomic insert
   const transaction = db.transaction(() => {
     // Check if agent already exists
     const existing = agentQueries.getById(identity.identityaddress);
-    
+
     if (existing) {
       // Update existing agent
       agentQueries.update(identity.identityaddress, {
@@ -247,7 +252,8 @@ async function indexAgentIdentity(
         updated_at: data.updated || new Date().toISOString(),
         block_height: block.height,
         block_hash: block.hash,
-      });
+        protocols: protocolsJson,
+      } as any);
       
       // Update capabilities
       capabilityQueries.deleteByAgentId(existing.id);
@@ -291,6 +297,7 @@ async function indexAgentIdentity(
         block_height: block.height,
         block_hash: block.hash,
         confirmation_count: 0,
+        protocols: protocolsJson,
       });
       
       // Insert capabilities
@@ -338,6 +345,12 @@ async function indexServiceData(
   },
   block: { hash: string; height: number; time: number }
 ): Promise<void> {
+  // Extract session params from agent-level VDXF keys (applies to all services)
+  const sessionData = extractSessionData(identity.contentmap, identity.contentmultimap);
+  const sessionParamsJson = Object.keys(sessionData).length > 0
+    ? JSON.stringify(sessionData)
+    : null;
+
   // Extract all services (handles both individual keys and JSON array format)
   const services = extractServicesArray(identity.contentmap, identity.contentmultimap);
   
@@ -387,9 +400,10 @@ async function indexServiceData(
           category: (serviceData.category as string) || null,
           turnaround: (serviceData.turnaround as string) || null,
           status: (serviceData.status as 'active' | 'inactive' | 'deprecated') || 'active',
+          session_params: sessionParamsJson,
           updated_at: now,
           block_height: block.height,
-        });
+        } as any);
         console.log(`[Indexer] Updated service: ${name} (${identity.identityaddress})`);
       } else {
         // Insert new service
@@ -403,6 +417,7 @@ async function indexServiceData(
           category: (serviceData.category as string) || null,
           turnaround: (serviceData.turnaround as string) || null,
           status: (serviceData.status as 'active' | 'inactive' | 'deprecated') || 'active',
+          session_params: sessionParamsJson,
           created_at: now,
           updated_at: now,
           block_height: block.height,

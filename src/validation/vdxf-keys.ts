@@ -44,6 +44,16 @@ const PLATFORM_KEYS: Record<string, string> = {
   'disputeresolution': 'iJjCHbDoE6r4PqWe2i7SXGuPCn4Fw48Krw',
 };
 
+// Session parameter keys (agentplatform::session.v1.{field})
+const SESSION_KEYS: Record<string, string> = {
+  'duration':        'iEfV7FSNNorTcoukVXpUadneaCB44GJXRt',  // seconds (e.g. 900, 3600)
+  'tokenLimit':      'iK7AVbtFj9hKxy7XaCyzc4iPo8jfpeENQG',  // max LLM tokens per session
+  'imageLimit':      'i733ccahSD96tjGLvypVFozZ5i15xPSzZu',  // max images per session
+  'messageLimit':    'iLrDehY12RhJJ5XGi49QTfZsasY1L7RKWz',  // max messages per session
+  'maxFileSize':     'i6iGYRcbtaPHyagDsv77Sja66HNFcA73Fw',  // max file size in bytes
+  'allowedFileTypes':'i4WmLAEe78myVEPKdWSfRBTEb5sRoWhwjR',  // comma-separated MIME types
+};
+
 // Backward compatibility aliases
 const ARI_AGENT_KEYS = AGENT_KEYS;
 const ARI_SERVICE_KEYS = SERVICE_KEYS;
@@ -63,6 +73,9 @@ const REVIEW_I_ADDRESS_TO_FIELD: Record<string, string> = Object.fromEntries(
 const PLATFORM_I_ADDRESS_TO_FIELD: Record<string, string> = Object.fromEntries(
   Object.entries(PLATFORM_KEYS).map(([k, v]) => [v, k])
 );
+const SESSION_I_ADDRESS_TO_FIELD: Record<string, string> = Object.fromEntries(
+  Object.entries(SESSION_KEYS).map(([k, v]) => [v, k])
+);
 
 // Backward compat
 const I_ADDRESS_TO_FIELD = AGENT_I_ADDRESS_TO_FIELD;
@@ -72,6 +85,7 @@ export const AGENT_VDXF_ADDRESSES = new Set(Object.values(AGENT_KEYS));
 export const SERVICE_VDXF_ADDRESSES = new Set(Object.values(SERVICE_KEYS));
 export const REVIEW_VDXF_ADDRESSES = new Set(Object.values(REVIEW_KEYS));
 export const PLATFORM_VDXF_ADDRESSES = new Set(Object.values(PLATFORM_KEYS));
+export const SESSION_VDXF_ADDRESSES = new Set(Object.values(SESSION_KEYS));
 
 // Export key maps for indexer use
 export const VDXF_KEYS = {
@@ -79,6 +93,7 @@ export const VDXF_KEYS = {
   service: SERVICE_KEYS,
   review: REVIEW_KEYS,
   platform: PLATFORM_KEYS,
+  session: SESSION_KEYS,
 };
 
 /**
@@ -110,6 +125,13 @@ export function isPlatformVdxfKey(iAddress: string): boolean {
 }
 
 /**
+ * Check if an i-address is a known session VDXF key
+ */
+export function isSessionVdxfKey(iAddress: string): boolean {
+  return SESSION_VDXF_ADDRESSES.has(iAddress);
+}
+
+/**
  * Get the field name for a VDXF i-address
  */
 export function getFieldName(iAddress: string): string | undefined {
@@ -119,12 +141,13 @@ export function getFieldName(iAddress: string): string | undefined {
 /**
  * Get field name for any VDXF schema type
  */
-export function getFieldNameByType(iAddress: string, type: 'agent' | 'service' | 'review' | 'platform'): string | undefined {
+export function getFieldNameByType(iAddress: string, type: 'agent' | 'service' | 'review' | 'platform' | 'session'): string | undefined {
   switch (type) {
     case 'agent': return AGENT_I_ADDRESS_TO_FIELD[iAddress];
     case 'service': return SERVICE_I_ADDRESS_TO_FIELD[iAddress];
     case 'review': return REVIEW_I_ADDRESS_TO_FIELD[iAddress];
     case 'platform': return PLATFORM_I_ADDRESS_TO_FIELD[iAddress];
+    case 'session': return SESSION_I_ADDRESS_TO_FIELD[iAddress];
   }
 }
 
@@ -156,6 +179,13 @@ export function hasServiceData(contentmap: Record<string, unknown> | undefined, 
  */
 export function hasReviewData(contentmap: Record<string, unknown> | undefined, contentmultimap: Record<string, unknown[]> | undefined): boolean {
   return hasDataOfType(contentmap, contentmultimap, isReviewVdxfKey);
+}
+
+/**
+ * Check if an identity has session parameter data
+ */
+export function hasSessionData(contentmap: Record<string, unknown> | undefined, contentmultimap: Record<string, unknown[]> | undefined): boolean {
+  return hasDataOfType(contentmap, contentmultimap, isSessionVdxfKey);
 }
 
 function hasDataOfType(
@@ -276,10 +306,20 @@ export function extractReviews(
   return reviews;
 }
 
+/**
+ * Extract session parameter data from identity contentmap/contentmultimap
+ */
+export function extractSessionData(
+  contentmap: Record<string, string> | undefined,
+  contentmultimap: Record<string, string[]> | undefined
+): Record<string, unknown> {
+  return extractDataOfType(contentmap, contentmultimap, 'session');
+}
+
 function extractDataOfType(
   contentmap: Record<string, string> | undefined,
   contentmultimap: Record<string, string[]> | undefined,
-  type: 'agent' | 'service' | 'review' | 'platform'
+  type: 'agent' | 'service' | 'review' | 'platform' | 'session'
 ): Record<string, unknown> {
   const data: Record<string, unknown> = {};
 

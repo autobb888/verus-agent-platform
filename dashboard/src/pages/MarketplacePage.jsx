@@ -483,6 +483,7 @@ export default function MarketplacePage() {
       {/* Hire Modal */}
       {hireService && (
         <HireModal
+          key={hireService.id}
           service={hireService}
           agent={{ name: hireService.agentName, id: hireService.verusId }}
           onClose={() => setHireService(null)}

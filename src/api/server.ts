@@ -33,6 +33,7 @@ import { canaryRoutes } from './routes/canary.js';
 import { pricingRoutes } from './routes/pricing.js';
 import { attestationRoutes } from './routes/attestations.js';
 import multipart from '@fastify/multipart';
+import fastifyStatic from '@fastify/static';
 import helmet from '@fastify/helmet';
 import { initNonceStore } from '../auth/nonce-store.js';
 import { initSocketServer, setSafeChatEngine, setOutputScanEngine } from '../chat/ws-server.js';
@@ -126,15 +127,17 @@ export async function createServer() {
     });
   });
 
-  // 404 handler
-  fastify.setNotFoundHandler((request, reply) => {
-    reply.code(404).send({
-      error: {
-        code: 'NOT_FOUND',
-        message: `Route ${request.method} ${request.url} not found`,
-      },
+  // 404 handler — overridden by SPA catch-all in production (see below)
+  if (!isProduction) {
+    fastify.setNotFoundHandler((request, reply) => {
+      reply.code(404).send({
+        error: {
+          code: 'NOT_FOUND',
+          message: `Route ${request.method} ${request.url} not found`,
+        },
+      });
     });
-  });
+  }
 
   // Initialize nonce store for replay protection
   initNonceStore();
@@ -169,6 +172,41 @@ export async function createServer() {
   await fastify.register(pricingRoutes);
   await fastify.register(attestationRoutes);
   await fastify.register(profileRoutes);
+
+  // SPA catch-all: serve dashboard/dist in production
+  if (isProduction) {
+    const { fileURLToPath } = await import('url');
+    const { dirname, join } = await import('path');
+    const { existsSync } = await import('fs');
+
+    const __filename = fileURLToPath(import.meta.url);
+    const __dirname = dirname(__filename);
+    const dashboardDist = join(__dirname, '..', '..', 'dashboard', 'dist');
+
+    if (existsSync(dashboardDist)) {
+      await fastify.register(fastifyStatic, {
+        root: dashboardDist,
+        prefix: '/',
+        decorateReply: false,
+        wildcard: false,
+      });
+
+      // Catch-all: serve index.html for any non-API path
+      fastify.setNotFoundHandler((request, reply) => {
+        // If the request is for an API route, return JSON 404
+        if (request.url.startsWith('/v1/') || request.url.startsWith('/ws')) {
+          return reply.code(404).send({
+            error: {
+              code: 'NOT_FOUND',
+              message: `Route ${request.method} ${request.url} not found`,
+            },
+          });
+        }
+        // Otherwise serve the SPA
+        return reply.sendFile('index.html');
+      });
+    }
+  }
 
   return fastify;
 }

@@ -23,6 +23,7 @@ function transformService(service: Service & { agent_name?: string }) {
     updatedAt: service.updated_at,
     indexedAt: service.indexed_at,
     blockHeight: service.block_height,
+    sessionParams: service.session_params ? JSON.parse(service.session_params) : null,
   };
 }
 

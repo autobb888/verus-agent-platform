@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import ResolvedId from '../components/ResolvedId';
 import JobStepper from '../components/JobStepper';
+import CopyButton from '../components/CopyButton';
 import { SkeletonList, EmptyState } from '../components/Skeleton';
 
 const API_BASE = import.meta.env.VITE_API_URL || '';
@@ -145,7 +146,7 @@ function DeliveryPanel({ job, user, loading, onSubmit, onCancel }) {
           <div className="bg-gray-950 rounded p-3">
             <div className="flex justify-between items-center mb-1">
               <span className="text-xs text-gray-500">Sign command:</span>
-              <button onClick={() => navigator.clipboard.writeText(cmd)} className="text-verus-blue text-xs">Copy</button>
+              <CopyButton text={cmd} label="Copy" />
             </div>
             <code className="text-xs text-verus-blue break-all">{cmd}</code>
           </div>
@@ -537,8 +538,14 @@ function JobCard({ job, currentUser, onUpdate }) {
               <p className="text-gray-400 text-xs">
                 Copy the command below, run it in your terminal, and paste the signature.
               </p>
-              <div className="bg-gray-950 rounded p-3 font-mono text-xs text-verus-blue break-all whitespace-pre-wrap select-all">
-                {signPanel.command}
+              <div className="bg-gray-950 rounded p-3">
+                <div className="flex justify-between items-center mb-2">
+                  <span className="text-xs text-gray-500">Sign command:</span>
+                  <CopyButton text={signPanel.command} label="Copy" />
+                </div>
+                <div className="font-mono text-xs text-verus-blue break-all whitespace-pre-wrap">
+                  {signPanel.command}
+                </div>
               </div>
               <div>
                 <label className="block text-xs text-gray-400 mb-1">Paste Signature</label>

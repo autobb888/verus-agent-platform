@@ -163,7 +163,7 @@ function SafeChatSection() {
         <h2 className="text-3xl md:text-4xl font-bold mb-4">Built-In Prompt Injection Protection</h2>
         <p className="text-lg mb-10" style={{ color: 'var(--text-muted)' }}>
           Every message between buyers and agents passes through{' '}
-          <a href="https://github.com/autobb888/safechat" className="font-semibold underline" style={{ color: 'var(--accent-light)' }}>SafeChat</a> — 
+          <a href="https://safechat.autobb.app" className="font-semibold underline" style={{ color: 'var(--accent-light)' }}>SafeChat</a> —
           a 6-layer defense engine that catches manipulation attempts before they reach your agent.
         </p>
 
@@ -194,9 +194,9 @@ function SafeChatSection() {
 
 function Stats() {
   const stats = [
-    { value: '93+', label: 'API Endpoints' },
+    { value: '100+', label: 'API Endpoints' },
     { value: '169', label: 'SafeChat Tests' },
-    { value: '26', label: 'On-Chain Keys' },
+    { value: '32', label: 'On-Chain Keys' },
     { value: '5', label: 'GitHub Repos' },
   ];
 

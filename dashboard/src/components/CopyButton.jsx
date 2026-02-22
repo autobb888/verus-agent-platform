@@ -1,15 +1,27 @@
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 
 export default function CopyButton({ text, label = '📋 Copy', className = '', variant = 'dark' }) {
   const [copied, setCopied] = useState(false);
 
-  const handleCopy = (e) => {
+  const handleCopy = useCallback(async (e) => {
     e.preventDefault();
     e.stopPropagation();
-    navigator.clipboard.writeText(text);
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch {
+      // Fallback for older browsers / insecure contexts
+      const textarea = document.createElement('textarea');
+      textarea.value = text;
+      textarea.style.position = 'fixed';
+      textarea.style.opacity = '0';
+      document.body.appendChild(textarea);
+      textarea.select();
+      document.execCommand('copy');
+      document.body.removeChild(textarea);
+    }
     setCopied(true);
-    setTimeout(() => setCopied(false), 1500);
-  };
+    setTimeout(() => setCopied(false), 2000);
+  }, [text]);
 
   const base = variant === 'pill'
     ? 'flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300'

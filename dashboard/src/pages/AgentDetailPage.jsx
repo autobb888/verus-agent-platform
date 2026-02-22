@@ -10,6 +10,19 @@ import DataPolicyBadge from '../components/DataPolicyBadge';
 // In dev, use empty string to go through Vite proxy (avoids CORS)
 const API_BASE = import.meta.env.VITE_API_URL || '';
 
+function formatDuration(seconds) {
+  if (seconds >= 3600) return `${Math.round(seconds / 3600)} hour${seconds >= 7200 ? 's' : ''}`;
+  if (seconds >= 60) return `${Math.round(seconds / 60)} min`;
+  return `${seconds}s`;
+}
+
+function formatBytes(bytes) {
+  if (bytes >= 1073741824) return `${(bytes / 1073741824).toFixed(1)} GB`;
+  if (bytes >= 1048576) return `${Math.round(bytes / 1048576)} MB`;
+  if (bytes >= 1024) return `${Math.round(bytes / 1024)} KB`;
+  return `${bytes} B`;
+}
+
 export default function AgentDetailPage() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -114,13 +127,18 @@ export default function AgentDetailPage() {
               <ResolvedId address={agent.verusId} name={agent.name} size="md" />
             </div>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 flex-wrap">
             <span className={`badge badge-${agent.status}`}>
               {agent.status}
             </span>
             <span className="px-3 py-1 bg-gray-700 text-gray-300 rounded-full text-sm capitalize">
               {agent.type}
             </span>
+            {agent.protocols?.length > 0 && agent.protocols.map((proto) => (
+              <span key={proto} className="px-2 py-0.5 bg-gray-700 text-gray-300 rounded-full text-xs">
+                {proto}
+              </span>
+            ))}
           </div>
         </div>
         
@@ -247,6 +265,28 @@ export default function AgentDetailPage() {
                       {service.category && <span>📁 {service.category}</span>}
                       {service.turnaround && <span>⏱ {service.turnaround}</span>}
                     </div>
+                    {service.sessionParams && Object.keys(service.sessionParams).length > 0 && (
+                      <div className="flex flex-wrap items-center gap-3 mt-2 text-xs text-gray-500">
+                        {service.sessionParams.duration != null && (
+                          <span>⏳ {formatDuration(service.sessionParams.duration)}</span>
+                        )}
+                        {service.sessionParams.tokenLimit != null && (
+                          <span>🔤 {service.sessionParams.tokenLimit.toLocaleString()} tokens</span>
+                        )}
+                        {service.sessionParams.imageLimit != null && (
+                          <span>🖼 {service.sessionParams.imageLimit.toLocaleString()} images</span>
+                        )}
+                        {service.sessionParams.messageLimit != null && (
+                          <span>💬 {service.sessionParams.messageLimit.toLocaleString()} messages</span>
+                        )}
+                        {service.sessionParams.maxFileSize != null && (
+                          <span>📎 {formatBytes(service.sessionParams.maxFileSize)}</span>
+                        )}
+                        {service.sessionParams.allowedFileTypes && (
+                          <span>📄 {service.sessionParams.allowedFileTypes}</span>
+                        )}
+                      </div>
+                    )}
                   </div>
                   <div className="text-right flex flex-col items-end gap-2">
                     <div className="text-lg font-bold text-verus-blue">
@@ -292,6 +332,17 @@ export default function AgentDetailPage() {
                 )}
                 {cap.endpoint && (
                   <p className="text-xs text-gray-500 mt-2 font-mono">{cap.endpoint}</p>
+                )}
+                {cap.pricing && (
+                  <div className="mt-2">
+                    {cap.pricing.model === 'free' ? (
+                      <span className="px-2 py-0.5 bg-green-500/20 text-green-400 rounded text-xs font-medium">Free</span>
+                    ) : (
+                      <span className="text-xs text-gray-400">
+                        {cap.pricing.amount} {cap.pricing.currency}{cap.pricing.model !== 'per_call' ? ` / ${cap.pricing.model}` : ' / call'}
+                      </span>
+                    )}
+                  </div>
                 )}
               </div>
             ))}
@@ -347,6 +398,7 @@ export default function AgentDetailPage() {
       {/* Hire Modal */}
       {hireService && (
         <HireModal
+          key={hireService.id}
           service={hireService}
           agent={{ name: agent.name, id: agent.verusId }}
           onClose={() => setHireService(null)}

@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import ResolvedId from '../components/ResolvedId';
+import CopyButton from '../components/CopyButton';
 
 const API_BASE = import.meta.env.VITE_API_URL || '';
 
@@ -53,12 +55,7 @@ function JobAcceptPanel({ job, onAccepted }) {
       <div className="bg-gray-950 rounded-lg p-3">
         <div className="flex justify-between items-center mb-2">
           <span className="text-xs text-gray-500">Run this command:</span>
-          <button
-            onClick={() => navigator.clipboard.writeText(command)}
-            className="text-verus-blue hover:text-blue-400 text-xs"
-          >
-            Copy
-          </button>
+          <CopyButton text={command} label="Copy" />
         </div>
         <code className="text-xs text-verus-blue break-all">{command}</code>
       </div>
@@ -290,10 +287,6 @@ export default function InboxPage() {
     } catch (err) {
       setError(err.message);
     }
-  }
-
-  function copyToClipboard(text) {
-    navigator.clipboard.writeText(text);
   }
 
   if (loading) {
@@ -537,13 +530,13 @@ export default function InboxPage() {
 
                 {selectedItem.jobDetails && (selectedItem.type !== 'job_request' || selectedItem.jobDetails.status !== 'requested') && (
                   <div style={{ marginTop: 20 }}>
-                    <a
-                      href={`/jobs/${selectedItem.jobDetails.id}`}
+                    <Link
+                      to={`/jobs/${selectedItem.jobDetails.id}`}
                       className="btn-primary"
-                      style={{ display: 'inline-block', textAlign: 'center', textDecoration: 'none' }}
+                      style={{ display: 'inline-block', textAlign: 'center' }}
                     >
                       View Job →
-                    </a>
+                    </Link>
                   </div>
                 )}
 
@@ -552,12 +545,7 @@ export default function InboxPage() {
                   <div style={{ marginTop: 20 }}>
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
                       <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>Update Command</span>
-                      <button
-                        onClick={() => copyToClipboard(selectedItem.updateCommand)}
-                        className="text-verus-blue hover:text-blue-400 text-sm"
-                      >
-                        Copy
-                      </button>
+                      <CopyButton text={selectedItem.updateCommand} label="Copy" className="text-verus-blue hover:text-blue-400 text-sm" />
                     </div>
                     <pre style={{
                       background: 'rgba(255,255,255,0.03)',
@@ -607,22 +595,22 @@ export default function InboxPage() {
                 }}
               >
                 {selectedItem.type === 'review' && (
-                  <button
-                    onClick={() => copyToClipboard(selectedItem.updateCommand)}
+                  <CopyButton
+                    text={selectedItem.updateCommand}
+                    label="Copy Command"
                     className="btn-primary"
+                    variant="pill"
                     style={{ flex: 1 }}
-                  >
-                    Copy Command
-                  </button>
+                  />
                 )}
                 {selectedItem.jobDetails && (
-                  <a
-                    href={`/jobs/${selectedItem.jobDetails.id}`}
+                  <Link
+                    to={`/jobs/${selectedItem.jobDetails.id}`}
                     className="btn-primary"
-                    style={{ flex: 1, textAlign: 'center', textDecoration: 'none' }}
+                    style={{ flex: 1, textAlign: 'center' }}
                   >
                     Go to Job
-                  </a>
+                  </Link>
                 )}
                 <button
                   onClick={() => rejectItem(selectedItem.id)}

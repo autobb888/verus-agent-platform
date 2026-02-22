@@ -633,6 +633,16 @@ export function runMigrations(db: Database.Database): void {
     db.exec(`ALTER TABLE agents ADD COLUMN startup_recouped INTEGER DEFAULT 0`);
   } catch { /* Column exists */ }
 
+  // Agent-level protocols (JSON array)
+  try {
+    db.exec(`ALTER TABLE agents ADD COLUMN protocols TEXT DEFAULT NULL`);
+  } catch { /* Column exists */ }
+
+  // Session parameters on services (JSON)
+  try {
+    db.exec(`ALTER TABLE services ADD COLUMN session_params TEXT DEFAULT NULL`);
+  } catch { /* Column exists */ }
+
   // QR challenges: identity_name for session creation (LB-3)
   try {
     db.exec(`ALTER TABLE qr_challenges ADD COLUMN identity_name TEXT`);

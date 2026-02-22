@@ -133,8 +133,8 @@ export const agentQueries = {
     const db = getDatabase();
     const id = randomUUID();
     db.prepare(`
-      INSERT INTO agents (id, verus_id, name, type, description, owner, status, revoked, created_at, updated_at, block_height, block_hash, confirmation_count)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO agents (id, verus_id, name, type, description, owner, status, revoked, created_at, updated_at, block_height, block_hash, confirmation_count, protocols)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       id,
       agent.verus_id,
@@ -148,7 +148,8 @@ export const agentQueries = {
       agent.updated_at,
       agent.block_height,
       agent.block_hash,
-      agent.confirmation_count
+      agent.confirmation_count,
+      agent.protocols || null
     );
     return id;
   },
@@ -158,7 +159,7 @@ export const agentQueries = {
     const setClauses: string[] = [];
     const params: any[] = [];
     // P1-VAP-002: Whitelist allowed columns to prevent SQL injection via key names
-    const ALLOWED_COLS = new Set(['name', 'type', 'description', 'owner', 'status', 'revoked', 'public', 'updated_at', 'indexed_at', 'block_height', 'block_hash', 'tx_hash']);
+    const ALLOWED_COLS = new Set(['name', 'type', 'description', 'owner', 'status', 'revoked', 'public', 'updated_at', 'indexed_at', 'block_height', 'block_hash', 'tx_hash', 'protocols']);
 
     for (const [key, value] of Object.entries(updates)) {
       if (ALLOWED_COLS.has(key)) {
@@ -371,8 +372,8 @@ export const serviceQueries = {
     const db = getDatabase();
     const id = randomUUID();
     db.prepare(`
-      INSERT INTO services (id, agent_id, verus_id, name, description, price, currency, category, turnaround, status, created_at, updated_at, block_height)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO services (id, agent_id, verus_id, name, description, price, currency, category, turnaround, status, created_at, updated_at, block_height, session_params)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       id,
       service.agent_id,
@@ -386,7 +387,8 @@ export const serviceQueries = {
       service.status,
       service.created_at,
       service.updated_at,
-      service.block_height
+      service.block_height,
+      service.session_params || null
     );
     return id;
   },
@@ -396,7 +398,7 @@ export const serviceQueries = {
     const setClauses: string[] = [];
     const params: any[] = [];
     // P1-VAP-002: Whitelist allowed columns
-    const ALLOWED_COLS = new Set(['name', 'description', 'price', 'currency', 'category', 'turnaround', 'status', 'verus_id', 'updated_at']);
+    const ALLOWED_COLS = new Set(['name', 'description', 'price', 'currency', 'category', 'turnaround', 'status', 'verus_id', 'updated_at', 'session_params']);
 
     for (const [key, value] of Object.entries(updates)) {
       if (ALLOWED_COLS.has(key)) {

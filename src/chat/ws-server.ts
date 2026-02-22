@@ -9,7 +9,7 @@
 import { Server as SocketIOServer, Socket } from 'socket.io';
 import { Server as HttpServer } from 'http';
 import { getDatabase } from '../db/index.js';
-import { jobQueries, jobMessageQueries, chatTokenQueries, readReceiptQueries } from '../db/index.js';
+import { jobQueries, jobMessageQueries, chatTokenQueries, readReceiptQueries, serviceQueries } from '../db/index.js';
 import { parse as parseCookie } from 'cookie';
 import { unsign } from 'cookie-signature';
 
@@ -20,6 +20,9 @@ interface AuthenticatedSocket extends Socket {
   authMode: 'cookie' | 'token';
   sessionId?: string;
   tokenId?: string;
+  sessionTimeout?: ReturnType<typeof setTimeout>;
+  sessionWarningTimeout?: ReturnType<typeof setTimeout>;
+  sessionExpiresAt?: number;
 }
 
 interface SafeChatScanFn {
@@ -240,9 +243,9 @@ export function initSocketServer(httpServer: HttpServer): SocketIOServer {
         if (socket.authMode === 'cookie' && socket.sessionId) {
           const row = db.prepare(`SELECT id FROM sessions WHERE id = ? AND verus_id = ? AND expires_at > ? LIMIT 1`).get(socket.sessionId, socket.verusId, Date.now()) as any;
           valid = !!row;
-        } else if (socket.authMode === 'token' && socket.tokenId) {
-          const row = db.prepare(`SELECT id FROM chat_tokens WHERE id = ? AND verus_id = ? AND expires_at > ? LIMIT 1`).get(socket.tokenId, socket.verusId, new Date().toISOString()) as any;
-          valid = !!row;
+        } else if (socket.authMode === 'token') {
+          // Token was consumed on connect; session lifetime managed by join_job timeout
+          valid = true;
         }
       } catch {
         valid = false;
@@ -275,13 +278,69 @@ export function initSocketServer(httpServer: HttpServer): SocketIOServer {
 
       const room = `job:${jobId}`;
       socket.join(room);
-      socket.emit('joined', { jobId, room });
+
+      // Session duration enforcement from service's session_params
+      let sessionDuration = 30 * 60; // Default: 30 minutes
+      try {
+        if (job.service_id) {
+          const service = serviceQueries.getById(job.service_id);
+          if (service?.session_params) {
+            const params = JSON.parse(service.session_params);
+            if (typeof params.duration === 'number') {
+              sessionDuration = Math.max(60, Math.min(86400, params.duration));
+            }
+          }
+        }
+      } catch {
+        // Use default duration if parsing fails
+      }
+
+      const sessionDurationMs = sessionDuration * 1000;
+      const expiresAt = Date.now() + sessionDurationMs;
+
+      // Clear any existing session timeout
+      if (socket.sessionTimeout) clearTimeout(socket.sessionTimeout);
+      if (socket.sessionWarningTimeout) clearTimeout(socket.sessionWarningTimeout);
+
+      socket.sessionExpiresAt = expiresAt;
+
+      // Emit warning 2 minutes before expiry (if session > 3 min)
+      if (sessionDuration > 180) {
+        socket.sessionWarningTimeout = setTimeout(() => {
+          socket.emit('session_expiring', {
+            jobId,
+            expiresAt: new Date(expiresAt).toISOString(),
+            remainingSeconds: 120,
+          });
+        }, sessionDurationMs - 120_000);
+      }
+
+      // Disconnect after session duration
+      socket.sessionTimeout = setTimeout(() => {
+        socket.emit('error', { message: 'Session expired' });
+        socket.disconnect(true);
+      }, sessionDurationMs);
+
+      // Presence: broadcast join to room
+      socket.to(room).emit('user_joined', {
+        verusId: socket.verusId, jobId, timestamp: new Date().toISOString(),
+      });
+
+      socket.emit('joined', {
+        jobId, room,
+        sessionDuration,
+        expiresAt: new Date(expiresAt).toISOString(),
+      });
     });
 
     // Leave a job room
     socket.on('leave_job', (data: { jobId: string }) => {
       if (data?.jobId) {
-        socket.leave(`job:${data.jobId}`);
+        const leaveRoom = `job:${data.jobId}`;
+        socket.to(leaveRoom).emit('user_left', {
+          verusId: socket.verusId, jobId: data.jobId, timestamp: new Date().toISOString(),
+        });
+        socket.leave(leaveRoom);
       }
     });
 
@@ -342,10 +401,14 @@ export function initSocketServer(httpServer: HttpServer): SocketIOServer {
         return;
       }
 
-      // SafeChat scan
+      // Look up job once for SafeChat flag check + outbound scanning
+      const chatJob = jobQueries.getById(jobId);
+      const safechatEnabled = chatJob?.safechat_enabled === 1;
+
+      // SafeChat scan — only if enabled for this job
       let safetyScore: number | null = null;
       let safetyWarning = false;
-      if (safechatEngine) {
+      if (safechatEngine && safechatEnabled) {
         try {
           const result = await safechatEngine.scan(sanitized);
           safetyScore = result.score;
@@ -375,15 +438,14 @@ export function initSocketServer(httpServer: HttpServer): SocketIOServer {
       // Shield: Don't tell agents which scanner flagged them (oracle prevention)
       let outputBlocked = false;
       let outputWarning = false;
-      if (outputScanEngine) {
-        const job = jobQueries.getById(jobId);
+      if (outputScanEngine && safechatEnabled) {
         // Only scan messages FROM seller (agent) TO buyer
-        if (job && socket.verusId === job.seller_verus_id) {
+        if (chatJob && socket.verusId === chatJob.seller_verus_id) {
           try {
             // P2-OUT-3: Whitelist job's own payment address
             const whitelistedAddresses = new Set<string>();
-            if (job.payment_address) whitelistedAddresses.add(job.payment_address);
-            if (job.seller_verus_id) whitelistedAddresses.add(job.seller_verus_id);
+            if (chatJob.payment_address) whitelistedAddresses.add(chatJob.payment_address);
+            if (chatJob.seller_verus_id) whitelistedAddresses.add(chatJob.seller_verus_id);
 
             const outResult = await outputScanEngine.scanOutput(sanitized, {
               jobId,
@@ -438,7 +500,7 @@ export function initSocketServer(httpServer: HttpServer): SocketIOServer {
               if (blockFlag) {
                 createAlert({
                   jobId,
-                  buyerVerusId: job.buyer_verus_id,
+                  buyerVerusId: chatJob.buyer_verus_id,
                   agentVerusId: socket.verusId,
                   type: blockFlag.type as any,
                   severity: outResult.score >= 0.8 ? 'critical' : 'warning',
@@ -501,9 +563,8 @@ export function initSocketServer(httpServer: HttpServer): SocketIOServer {
       try {
         const { emitWebhookEvent } = await import('../notifications/webhook-engine.js');
         const { createNotification } = await import('../api/routes/notifications.js');
-        const job = jobQueries.getById(jobId);
-        if (job) {
-          const recipient = socket.verusId === job.buyer_verus_id ? job.seller_verus_id : job.buyer_verus_id;
+        if (chatJob) {
+          const recipient = socket.verusId === chatJob.buyer_verus_id ? chatJob.seller_verus_id : chatJob.buyer_verus_id;
           emitWebhookEvent({ type: 'message.new', agentVerusId: recipient, jobId, data: { senderVerusId: socket.verusId, preview: sanitized.slice(0, 100) } });
           createNotification({ recipientVerusId: recipient, type: 'message.new', title: 'New Message', body: sanitized.slice(0, 100), jobId });
         }
@@ -536,6 +597,20 @@ export function initSocketServer(httpServer: HttpServer): SocketIOServer {
     // Disconnect
     socket.on('disconnect', () => {
       clearInterval(revalidateInterval);
+      if (socket.sessionTimeout) clearTimeout(socket.sessionTimeout);
+      if (socket.sessionWarningTimeout) clearTimeout(socket.sessionWarningTimeout);
+
+      // Presence: broadcast user_left for all job rooms
+      for (const room of socket.rooms) {
+        if (room.startsWith('job:')) {
+          socket.to(room).emit('user_left', {
+            verusId: socket.verusId,
+            jobId: room.slice(4),
+            timestamp: new Date().toISOString(),
+          });
+        }
+      }
+
       const currentIp = ipConnections.get(ip);
       if (currentIp !== undefined) {
         if (currentIp <= 1) ipConnections.delete(ip);

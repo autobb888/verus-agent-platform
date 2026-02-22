@@ -25,6 +25,7 @@
     "@fastify/helmet": "^13.0.2",
     "@fastify/multipart": "^9.4.0",
     "@fastify/rate-limit": "^10.2.2",
+    "@fastify/static": "^9.0.0",
     "@fastify/websocket": "^11.2.0",
     "@noble/hashes": "^2.0.1",
     "@noble/secp256k1": "^3.0.0",

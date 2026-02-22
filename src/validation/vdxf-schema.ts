@@ -66,6 +66,17 @@ export const AgentName = z
     message: 'Name contains characters that could be used for impersonation',
   });
 
+// Session parameters (agent-defined per-service session limits)
+export const SessionParams = z.object({
+  duration:         z.number().int().min(60).max(86400).optional(),      // 1 min to 24 hours (seconds)
+  tokenLimit:       z.number().int().min(100).max(1000000).optional(),
+  imageLimit:       z.number().int().min(0).max(1000).optional(),
+  messageLimit:     z.number().int().min(1).max(10000).optional(),
+  maxFileSize:      z.number().int().min(0).max(104857600).optional(),   // up to 100MB
+  allowedFileTypes: z.string().max(500).optional(),                      // comma-separated MIME types
+}).optional();
+export type SessionParamsValue = z.infer<typeof SessionParams>;
+
 // Full agent identity schema
 export const AgentIdentity = z.object({
   version: z.literal('1').default('1'),

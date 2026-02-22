@@ -20,6 +20,7 @@ function transformAgent(agent: Agent) {
     updatedAt: agent.updated_at,
     indexedAt: agent.indexed_at,
     blockHeight: agent.block_height,
+    protocols: agent.protocols ? JSON.parse(agent.protocols) : [],
     // Name flagging for impersonation warnings (does not block, just warns)
     trustInfo: getNameFlagInfo(agent.name),
   };

@@ -17,6 +17,7 @@ export interface Agent {
   block_height: number;
   block_hash: string;
   confirmation_count: number;
+  protocols: string | null;  // JSON array: ["MCP", "A2A", "REST"]
 }
 
 export interface AgentCapability {
@@ -60,6 +61,7 @@ export interface Service {
   category: string | null;
   turnaround: string | null; // "24 hours", "1 week", etc.
   status: 'active' | 'inactive' | 'deprecated';
+  session_params: string | null;  // JSON: SessionParams
   created_at: string;
   updated_at: string;
   indexed_at: string;

@@ -134,6 +134,7 @@ export async function myServiceRoutes(fastify: FastifyInstance): Promise<void> {
       category: serviceData.category || null,
       turnaround: serviceData.turnaround || null,
       status: 'active',
+      session_params: null,
       created_at: now,
       updated_at: now,
       block_height: 0, // Not on-chain yet
