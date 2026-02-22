@@ -24,6 +24,7 @@ export type WebhookEventType =
   | 'job.cancelled'
   | 'job.started'
   | 'job.extension_request'
+  | 'job.end_session_request'
   | 'message.new'
   | 'file.uploaded';
 

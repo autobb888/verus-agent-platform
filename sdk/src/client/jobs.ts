@@ -58,6 +58,11 @@ export class JobsClient {
     return this.http.post(`/v1/jobs/${id}/dispute`, params);
   }
 
+  /** Request end of session — either party can call */
+  async requestEndSession(id: number, params: { reason?: string } = {}) {
+    return this.http.post(`/v1/jobs/${id}/end-session`, params);
+  }
+
   /** Cancel a job */
   async cancel(id: number, params: { reason?: string }) {
     return this.http.post(`/v1/jobs/${id}/cancel`, params);

@@ -19,6 +19,7 @@ import { emitWebhookEvent } from '../../notifications/webhook-engine.js';
 import { createNotification } from './notifications.js';
 import { getRpcClient } from '../../indexer/rpc-client.js';
 import { getSessionFromRequest } from './auth.js';
+import { getIO } from '../../chat/ws-server.js';
 
 // P4-RATE-1: Rate limiting for job creation
 const RATE_LIMIT_WINDOW_MS = 60 * 1000; // 1 minute
@@ -637,7 +638,7 @@ export async function jobRoutes(fastify: FastifyInstance): Promise<void> {
       // Deterministic signer target for accept: the job seller identity/address
       isValid = await verifySignatureForIdentity(rpc, job.seller_verus_id, expectedMessage, signature);
       fastify.log.info({
-        jobId,
+        jobId: id,
         verifyTarget: job.seller_verus_id,
         expectedHash: createHash('sha256').update(expectedMessage).digest('hex').slice(0, 24),
         sigPreview: signature.slice(0, 24),
@@ -772,8 +773,101 @@ export async function jobRoutes(fastify: FastifyInstance): Promise<void> {
     emitWebhookEvent({ type: 'job.delivered', agentVerusId: job.buyer_verus_id, jobId: id, data: { deliveryHash } });
     createNotification({ recipientVerusId: job.buyer_verus_id, type: 'job.delivered', title: 'Delivery Ready', body: 'Your job has been delivered — review and complete it', jobId: id });
 
+    // Emit real-time WS event so other party's chat updates
+    const ioDeliver = getIO();
+    if (ioDeliver) ioDeliver.to(`job:${id}`).emit('job_status_changed', { jobId: id, status: 'delivered' });
+
     const updated = jobQueries.getById(id);
     return { data: formatJob(updated!) };
+  });
+
+  /**
+   * POST /v1/jobs/:id/end-session
+   * Either party signals they want to end the session.
+   * Sends WS event + notification to other party who can extend or confirm end.
+   */
+  fastify.post('/v1/jobs/:id/end-session', { preHandler: requireAuth }, async (request, reply) => {
+    const session = (request as any).session as { verusId: string };
+    const { id } = request.params as { id: string };
+
+    const endSessionSchema = z.object({
+      reason: z.string().max(500).optional().default('Session complete'),
+    });
+
+    const parsed = endSessionSchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.code(400).send({
+        error: { code: 'VALIDATION_ERROR', message: 'Invalid end-session data', details: parsed.error.errors },
+      });
+    }
+
+    const { reason } = parsed.data;
+
+    const job = jobQueries.getById(id);
+    if (!job) {
+      return reply.code(404).send({
+        error: { code: 'NOT_FOUND', message: 'Job not found' },
+      });
+    }
+
+    // Either buyer or seller can request end
+    const isBuyer = job.buyer_verus_id === session.verusId;
+    const isSeller = job.seller_verus_id === session.verusId;
+    if (!isBuyer && !isSeller) {
+      return reply.code(403).send({
+        error: { code: 'FORBIDDEN', message: 'Only job participants can request end session' },
+      });
+    }
+
+    if (job.status !== 'in_progress') {
+      return reply.code(400).send({
+        error: { code: 'INVALID_STATUS', message: `Cannot end session for job in status: ${job.status}` },
+      });
+    }
+
+    const requestedBy = session.verusId;
+    const otherParty = isBuyer ? job.seller_verus_id : job.buyer_verus_id;
+    const timestamp = new Date().toISOString();
+
+    // Emit WS event so the other party's chat shows the ending banner
+    const io = getIO();
+    if (io) {
+      io.to(`job:${id}`).emit('session_ending', {
+        jobId: id,
+        requestedBy,
+        reason,
+        timestamp,
+      });
+    }
+
+    // Create notification for offline users
+    createNotification({
+      recipientVerusId: otherParty,
+      type: 'job.end_session_request',
+      title: 'Session Ending',
+      body: reason || 'The other party has requested to end the session',
+      jobId: id,
+    });
+
+    // Webhook
+    emitWebhookEvent({
+      type: 'job.end_session_request',
+      agentVerusId: otherParty,
+      jobId: id,
+      data: { requestedBy, reason },
+    });
+
+    fastify.log.info({ jobId: id, requestedBy, reason }, 'End session requested');
+
+    return {
+      data: {
+        jobId: id,
+        status: 'end_session_requested',
+        requestedBy,
+        reason,
+        timestamp,
+      },
+    };
   });
 
   /**
@@ -856,6 +950,10 @@ export async function jobRoutes(fastify: FastifyInstance): Promise<void> {
     fastify.log.info({ jobId: id, buyer: session.verusId }, 'Job completed');
     emitWebhookEvent({ type: 'job.completed', agentVerusId: job.seller_verus_id, jobId: id, data: { buyerVerusId: session.verusId } });
     createNotification({ recipientVerusId: job.seller_verus_id, type: 'job.completed', title: 'Job Completed', body: 'The buyer has confirmed job completion', jobId: id });
+
+    // Emit real-time WS event so other party's chat updates
+    const ioComplete = getIO();
+    if (ioComplete) ioComplete.to(`job:${id}`).emit('job_status_changed', { jobId: id, status: 'completed' });
 
     // If data terms require deletion attestation, notify seller
     const dataTerms = getDatabase().prepare(`SELECT * FROM job_data_terms WHERE job_id = ? AND require_deletion_attestation = 1`).get(id) as any;

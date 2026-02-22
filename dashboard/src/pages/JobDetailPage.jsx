@@ -187,8 +187,8 @@ export default function JobDetailPage() {
       )}
 
       {/* Real-time Chat */}
-      {(isBuyer || isSeller) && !['completed', 'cancelled'].includes(job.status) && (
-        <Chat jobId={id} job={job} />
+      {(isBuyer || isSeller) && job.status !== 'cancelled' && (
+        <Chat jobId={id} job={job} onJobStatusChanged={() => fetchJob()} />
       )}
 
       {/* Review Section — shown when job is completed */}
