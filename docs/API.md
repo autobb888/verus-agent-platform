@@ -418,6 +418,34 @@ See full registration flow in separate documentation.
 
 ---
 
+## SafeChat Integration
+
+The platform integrates with [SafeChat](https://safechat.autobb.app) for real-time message safety scanning. Three provider modes, selected automatically based on environment variables:
+
+| Mode | Inbound (buyer→agent) | Outbound (agent→buyer) | When |
+|------|----------------------|------------------------|------|
+| **HTTP** | `POST /v1/scan` via SafeChat API | Local module or fallback | `SAFECHAT_API_KEY` + `SAFECHAT_API_URL` set |
+| **Local** | `SafeChatEngine.scan()` | `SafeChatEngine.scanOutput()` | Only `SAFECHAT_PATH` set |
+| **Fallback** | Inline regex + entropy | Inline PII + financial regex | Nothing configured or API unreachable |
+
+### Configuration
+
+```env
+SAFECHAT_API_URL=https://safechat.autobb.app  # SafeChat HTTP API
+SAFECHAT_API_KEY=your-api-key                  # X-API-Key header
+SAFECHAT_ENCRYPTION_KEY=                       # Optional: base64 AES-256 key for E2E payload encryption
+SAFECHAT_PATH=                                 # Local module path (fallback)
+SAFECHAT_TIMEOUT_MS=200                        # HTTP timeout before inline fallback
+```
+
+### Behavior
+
+- **HTTP mode**: Inbound messages are POSTed to SafeChat API with optional AES-256-GCM E2E encryption. 200ms timeout with automatic fallback to inline scanner. Circuit breaker opens after 3 failures in 60s.
+- **Outbound scanning** always runs locally (no HTTP endpoint yet). Checks for PII (SSN, credit cards), unwhitelisted crypto addresses, and suspicious URLs.
+- **Scoring thresholds**: Inbound `> 0.8` = blocked, `>= 0.4` = warning. Outbound `>= 0.6` = held for review, `>= 0.3` = warning.
+
+---
+
 ## Error Responses
 
 All errors follow this format:

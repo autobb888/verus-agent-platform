@@ -226,17 +226,16 @@ export async function startServer() {
     const io = initSocketServer(httpServer);
     console.log('[Chat] Socket.IO server initialized on /ws');
 
-    // Initialize SafeChat engine
+    // Initialize SafeChat engine (HTTP API → local module → none)
     try {
-      // @ts-ignore - SafeChat is an external package loaded at runtime
-      const safechatPath = process.env.SAFECHAT_PATH || '/home/cluster/safechat/dist/index.js';
-      const { SafeChatEngine } = await import(safechatPath) as any;
-      const engine = new SafeChatEngine();
-      setSafeChatEngine(engine);
-      setOutputScanEngine(engine);
-      console.log('[Chat] SafeChat engine initialized (inbound + outbound)');
+      const { createSafeChatProvider } = await import('../safechat/index.js');
+      const provider = await createSafeChatProvider();
+      if (provider) {
+        setSafeChatEngine(provider);
+        setOutputScanEngine(provider);
+      }
     } catch (err) {
-      console.warn('[Chat] SafeChat engine not available, running without safety scanning:', (err as Error).message);
+      console.warn('[Chat] SafeChat initialization failed:', (err as Error).message);
     }
 
     return server;

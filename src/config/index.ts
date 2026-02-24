@@ -27,6 +27,16 @@ export const config = {
     cookieSecret: process.env.COOKIE_SECRET || '',
     corsOrigin: process.env.CORS_ORIGIN || '',
   },
+  platform: {
+    feeAddress: process.env.PLATFORM_FEE_ADDRESS || process.env.SAFECHAT_FEE_ADDRESS || 'RAWwNeTLRg9urgnDPQtPyZ6NRycsmSY2J2',
+  },
+  safechat: {
+    apiUrl: process.env.SAFECHAT_API_URL || '',
+    apiKey: process.env.SAFECHAT_API_KEY || '',
+    encryptionKey: process.env.SAFECHAT_ENCRYPTION_KEY || '',
+    path: process.env.SAFECHAT_PATH || '',
+    timeoutMs: parseInt(process.env.SAFECHAT_TIMEOUT_MS || '200'),
+  },
   indexer: {
     minConfirmations: parseInt(process.env.MIN_CONFIRMATIONS || '6'),
     pollIntervalMs: parseInt(process.env.POLL_INTERVAL_MS || '10000'),
