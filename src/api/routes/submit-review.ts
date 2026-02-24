@@ -19,50 +19,11 @@ import { inboxQueries, agentQueries } from '../../db/index.js';
 import { getRpcClient } from '../../indexer/rpc-client.js';
 import { VDXF_KEYS, encodeVdxfValue } from '../../validation/vdxf-keys.js';
 
+import { RateLimiter } from '../../utils/rate-limiter.js';
+
 // P3-RATE-1: Rate limiting for review submissions
-const RATE_LIMIT_WINDOW_MS = 60 * 1000; // 1 minute
-const MAX_REVIEWS_PER_IP = 10;
-const MAX_REVIEWS_PER_BUYER = 5;
-
-interface RateLimitEntry {
-  count: number;
-  resetAt: number;
-}
-
-const ipRateLimits = new Map<string, RateLimitEntry>();
-const buyerRateLimits = new Map<string, RateLimitEntry>();
-
-// Cleanup stale entries every 5 minutes
-setInterval(() => {
-  const now = Date.now();
-  for (const [key, entry] of ipRateLimits) {
-    if (entry.resetAt < now) ipRateLimits.delete(key);
-  }
-  for (const [key, entry] of buyerRateLimits) {
-    if (entry.resetAt < now) buyerRateLimits.delete(key);
-  }
-}, 5 * 60 * 1000);
-
-function checkRateLimit(
-  map: Map<string, RateLimitEntry>,
-  key: string,
-  maxRequests: number
-): boolean {
-  const now = Date.now();
-  const entry = map.get(key);
-
-  if (!entry || entry.resetAt < now) {
-    map.set(key, { count: 1, resetAt: now + RATE_LIMIT_WINDOW_MS });
-    return true;
-  }
-
-  if (entry.count >= maxRequests) {
-    return false;
-  }
-
-  entry.count++;
-  return true;
-}
+const ipReviewLimiter = new RateLimiter(60 * 1000, 10);    // 10 reviews/min per IP
+const buyerReviewLimiter = new RateLimiter(60 * 1000, 5);  // 5 reviews/min per buyer
 
 // Review submission schema
 const submitReviewSchema = z.object({
@@ -130,7 +91,7 @@ export async function submitReviewRoutes(fastify: FastifyInstance): Promise<void
   fastify.post('/v1/reviews', async (request: FastifyRequest, reply: FastifyReply) => {
     // P3-RATE-1: Check IP rate limit first
     const clientIp = request.ip;
-    if (!checkRateLimit(ipRateLimits, clientIp, MAX_REVIEWS_PER_IP)) {
+    if (!ipReviewLimiter.check(clientIp)) {
       return reply.code(429).send({
         error: {
           code: 'RATE_LIMITED',
@@ -212,7 +173,7 @@ export async function submitReviewRoutes(fastify: FastifyInstance): Promise<void
     }
 
     // P3-RATE-1: Check buyer-specific rate limit
-    if (!checkRateLimit(buyerRateLimits, buyerIAddress, MAX_REVIEWS_PER_BUYER)) {
+    if (!buyerReviewLimiter.check(buyerIAddress)) {
       return reply.code(429).send({
         error: {
           code: 'RATE_LIMITED',

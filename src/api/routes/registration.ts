@@ -23,56 +23,11 @@ import { isReservedName } from '../../utils/reserved-names.js';
 import { hasHomoglyphAttack } from '../../utils/homoglyph.js';
 import { createVerification } from '../../worker/verification.js';
 
+import { RateLimiter } from '../../utils/rate-limiter.js';
+
 // Rate limiting state (per-IP and per-identity)
-// In production, use Redis for distributed rate limiting
-const ipRequests = new Map<string, { count: number; resetAt: number }>();
-const identityRequests = new Map<string, { count: number; resetAt: number }>();
-
-const RATE_LIMIT_WINDOW = 60 * 1000; // 1 minute
-const IP_LIMIT = 10;
-const IDENTITY_LIMIT = 5;
-
-// Shield RATE-1 fix: Periodic cleanup of expired rate limit entries
-setInterval(() => {
-  const now = Date.now();
-  let ipCleaned = 0;
-  let idCleaned = 0;
-  
-  for (const [key, entry] of ipRequests.entries()) {
-    if (entry.resetAt < now) {
-      ipRequests.delete(key);
-      ipCleaned++;
-    }
-  }
-  
-  for (const [key, entry] of identityRequests.entries()) {
-    if (entry.resetAt < now) {
-      identityRequests.delete(key);
-      idCleaned++;
-    }
-  }
-  
-  if (ipCleaned > 0 || idCleaned > 0) {
-    console.log(`[RateLimit] Cleaned ${ipCleaned} IP, ${idCleaned} identity entries`);
-  }
-}, 5 * 60 * 1000); // Every 5 minutes
-
-function checkRateLimit(key: string, store: Map<string, { count: number; resetAt: number }>, limit: number): boolean {
-  const now = Date.now();
-  const entry = store.get(key);
-  
-  if (!entry || entry.resetAt < now) {
-    store.set(key, { count: 1, resetAt: now + RATE_LIMIT_WINDOW });
-    return true;
-  }
-  
-  if (entry.count >= limit) {
-    return false;
-  }
-  
-  entry.count++;
-  return true;
-}
+const ipLimiter = new RateLimiter(60 * 1000, 10);      // 10 req/min
+const identityLimiter = new RateLimiter(60 * 1000, 5);  // 5 req/min
 
 export async function registrationRoutes(fastify: FastifyInstance): Promise<void> {
   
@@ -81,7 +36,7 @@ export async function registrationRoutes(fastify: FastifyInstance): Promise<void
     const ip = request.ip;
     
     // Rate limiting (Shield AUTH-6)
-    if (!checkRateLimit(ip, ipRequests, IP_LIMIT)) {
+    if (!ipLimiter.check(ip)) {
       return reply.code(429).send({
         error: {
           code: 'RATE_LIMITED',
@@ -117,7 +72,7 @@ export async function registrationRoutes(fastify: FastifyInstance): Promise<void
     };
     
     // Per-identity rate limiting
-    if (!checkRateLimit(payload.verusId, identityRequests, IDENTITY_LIMIT)) {
+    if (!identityLimiter.check(payload.verusId)) {
       return reply.code(429).send({
         error: {
           code: 'RATE_LIMITED',
@@ -279,7 +234,7 @@ export async function registrationRoutes(fastify: FastifyInstance): Promise<void
     const { id } = request.params as { id: string };
     
     // Rate limiting
-    if (!checkRateLimit(ip, ipRequests, IP_LIMIT)) {
+    if (!ipLimiter.check(ip)) {
       return reply.code(429).send({
         error: { code: 'RATE_LIMITED', message: 'Too many requests.' },
       });
@@ -388,7 +343,7 @@ export async function registrationRoutes(fastify: FastifyInstance): Promise<void
     const { id } = request.params as { id: string };
     
     // Stricter rate limiting for deactivation
-    if (!checkRateLimit(ip, ipRequests, 5)) {
+    if (!ipLimiter.check(ip)) {
       return reply.code(429).send({
         error: { code: 'RATE_LIMITED', message: 'Too many requests.' },
       });

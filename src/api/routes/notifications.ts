@@ -1,3 +1,4 @@
+import { safeJsonParse } from '../../utils/safe-json.js';
 /**
  * Unified Notifications API (Phase 6d)
  * 
@@ -64,7 +65,7 @@ export async function notificationRoutes(fastify: FastifyInstance): Promise<void
         title: r.title,
         body: r.body,
         jobId: r.job_id,
-        data: JSON.parse(r.data || '{}'),
+        data: safeJsonParse(r.data, {}),
         read: r.read === 1,
         createdAt: r.created_at,
       })),

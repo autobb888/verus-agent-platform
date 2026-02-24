@@ -69,7 +69,7 @@ async function main() {
 
   // 2. Seller accepts
   console.log('2. Seller accepts job...');
-  jobQueries.setAccepted(jobId, 'AVTestAcceptanceSignature456');
+  jobQueries.setAccepted(jobId, 'AVTestAcceptanceSignature456', sellerVerusId);
   
   let job = jobQueries.getById(jobId)!;
   console.log(`   ✅ Status: ${job.status}`);
@@ -78,7 +78,7 @@ async function main() {
   // 3. Seller delivers
   console.log('3. Seller delivers work...');
   const deliveryHash = 'ipfs://QmTestDeliveryHash123456789';
-  jobQueries.setDelivered(jobId, 'AVTestDeliverySignature789', deliveryHash, 'Here is the completed contract!');
+  jobQueries.setDelivered(jobId, 'AVTestDeliverySignature789', deliveryHash, 'Here is the completed contract!', sellerVerusId);
   
   job = jobQueries.getById(jobId)!;
   console.log(`   ✅ Status: ${job.status}`);
@@ -87,7 +87,7 @@ async function main() {
 
   // 4. Buyer confirms completion
   console.log('4. Buyer confirms completion...');
-  jobQueries.setCompleted(jobId, 'AVTestCompletionSignature101');
+  jobQueries.setCompleted(jobId, 'AVTestCompletionSignature101', buyerVerusId);
   
   job = jobQueries.getById(jobId)!;
   console.log(`   ✅ Status: ${job.status}`);

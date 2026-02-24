@@ -43,24 +43,13 @@ function cookieOpts(signed = true) {
   };
 }
 
+import { RateLimiter, stopAllCleanup } from '../../utils/rate-limiter.js';
+
 // Rate limiting state (per-IP)
-const rateLimitMap = new Map<string, { count: number; resetAt: number }>();
-const RATE_LIMIT_WINDOW = 60 * 1000; // 1 minute
-const RATE_LIMIT_MAX = 10; // 10 requests per minute
+const ipLimiter = new RateLimiter(60 * 1000, 10); // 10 req/min
 
-// Store interval IDs for cleanup on shutdown
-let rateLimitCleanupInterval: ReturnType<typeof setInterval> | null = null;
+// Store interval ID for cleanup on shutdown
 let sessionCleanupInterval: ReturnType<typeof setInterval> | null = null;
-
-// Cleanup rate limit map every 5 minutes
-rateLimitCleanupInterval = setInterval(() => {
-  const now = Date.now();
-  for (const [key, value] of rateLimitMap.entries()) {
-    if (value.resetAt < now) {
-      rateLimitMap.delete(key);
-    }
-  }
-}, 5 * 60 * 1000);
 
 // Shield AUTH-CLEANUP-1: Cleanup expired sessions and challenges every 10 minutes
 sessionCleanupInterval = setInterval(() => {
@@ -86,10 +75,7 @@ sessionCleanupInterval = setInterval(() => {
 
 // Stop auth cleanup intervals (call on shutdown)
 export function stopAuthCleanup(): void {
-  if (rateLimitCleanupInterval) {
-    clearInterval(rateLimitCleanupInterval);
-    rateLimitCleanupInterval = null;
-  }
+  stopAllCleanup();
   if (sessionCleanupInterval) {
     clearInterval(sessionCleanupInterval);
     sessionCleanupInterval = null;
@@ -98,20 +84,7 @@ export function stopAuthCleanup(): void {
 }
 
 function checkRateLimit(ip: string): boolean {
-  const now = Date.now();
-  const entry = rateLimitMap.get(ip);
-  
-  if (!entry || entry.resetAt < now) {
-    rateLimitMap.set(ip, { count: 1, resetAt: now + RATE_LIMIT_WINDOW });
-    return true;
-  }
-  
-  if (entry.count >= RATE_LIMIT_MAX) {
-    return false;
-  }
-  
-  entry.count++;
-  return true;
+  return ipLimiter.check(ip);
 }
 
 // Login request schema
@@ -218,29 +191,22 @@ export async function authRoutes(fastify: FastifyInstance): Promise<void> {
       const db = getDatabase();
       const now = Date.now();
       
-      // Shield AUTH-RACE-1 fix: Atomically claim the challenge
-      // This prevents two concurrent requests from both passing
-      const claimResult = db.prepare(`
-        UPDATE auth_challenges 
-        SET used = 1 
-        WHERE id = ? AND used = 0 AND expires_at > ?
-      `).run(challengeId, now);
-      
-      if (claimResult.changes === 0) {
+      // Atomically claim the challenge and read it in one transaction
+      const challengeRow = db.transaction(() => {
+        const claim = db.prepare(`
+          UPDATE auth_challenges
+          SET used = 1
+          WHERE id = ? AND used = 0 AND expires_at > ?
+        `).run(challengeId, now);
+        if (claim.changes === 0) return null;
+        return db.prepare(`
+          SELECT challenge FROM auth_challenges WHERE id = ?
+        `).get(challengeId) as { challenge: string } | undefined;
+      })();
+
+      if (!challengeRow) {
         return reply.code(400).send({
           error: { code: 'INVALID_CHALLENGE', message: 'Invalid or expired challenge' }
-        });
-      }
-      
-      // We own the challenge, now get its content for verification
-      const challengeRow = db.prepare(`
-        SELECT challenge FROM auth_challenges WHERE id = ?
-      `).get(challengeId) as { challenge: string } | undefined;
-      
-      if (!challengeRow) {
-        // Should never happen since we just claimed it, but defensive
-        return reply.code(400).send({
-          error: { code: 'INVALID_CHALLENGE', message: 'Challenge not found' }
         });
       }
       

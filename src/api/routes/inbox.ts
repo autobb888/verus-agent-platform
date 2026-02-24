@@ -16,6 +16,8 @@ import { getSessionFromRequest } from './auth.js';
 import { inboxQueries, agentQueries, jobQueries } from '../../db/index.js';
 import { VDXF_KEYS, encodeVdxfValue } from '../../validation/vdxf-keys.js';
 
+import { safeJsonParse } from '../../utils/safe-json.js';
+
 // Auth middleware
 async function requireAuth(request: FastifyRequest, reply: FastifyReply) {
   const session = getSessionFromRequest(request);
@@ -70,7 +72,7 @@ export async function inboxRoutes(fastify: FastifyInstance): Promise<void> {
           status: item.status,
           createdAt: item.created_at,
           expiresAt: item.expires_at,
-          vdxfData: item.vdxf_data ? JSON.parse(item.vdxf_data) : null,
+          vdxfData: safeJsonParse(item.vdxf_data),
         };
       }),
       meta: {
@@ -161,7 +163,7 @@ export async function inboxRoutes(fastify: FastifyInstance): Promise<void> {
         status: item.status,
         createdAt: item.created_at,
         expiresAt: item.expires_at,
-        vdxfData: item.vdxf_data ? JSON.parse(item.vdxf_data) : null,
+        vdxfData: safeJsonParse(item.vdxf_data),
         updateCommand,
         jobDetails,
       },

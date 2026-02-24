@@ -21,61 +21,13 @@ import { getRpcClient } from '../../indexer/rpc-client.js';
 import { getSessionFromRequest } from './auth.js';
 import { getIO } from '../../chat/ws-server.js';
 
-// P4-RATE-1: Rate limiting for job creation
-const RATE_LIMIT_WINDOW_MS = 60 * 1000; // 1 minute
-const MAX_JOBS_PER_IP = 10;
-const MAX_JOBS_PER_BUYER = 5;
+import { RateLimiter } from '../../utils/rate-limiter.js';
 
-interface RateLimitEntry {
-  count: number;
-  resetAt: number;
-}
-
-const ipRateLimits = new Map<string, RateLimitEntry>();
-const buyerRateLimits = new Map<string, RateLimitEntry>();
-const messageUserRateLimits = new Map<string, RateLimitEntry>();
-const messageJobRateLimits = new Map<string, RateLimitEntry>();
-
-const MAX_MESSAGES_PER_USER = 30; // per minute
-const MAX_MESSAGES_PER_JOB = 60;  // per minute
-
-// Cleanup stale entries every 5 minutes
-setInterval(() => {
-  const now = Date.now();
-  for (const [key, entry] of ipRateLimits) {
-    if (entry.resetAt < now) ipRateLimits.delete(key);
-  }
-  for (const [key, entry] of buyerRateLimits) {
-    if (entry.resetAt < now) buyerRateLimits.delete(key);
-  }
-  for (const [key, entry] of messageUserRateLimits) {
-    if (entry.resetAt < now) messageUserRateLimits.delete(key);
-  }
-  for (const [key, entry] of messageJobRateLimits) {
-    if (entry.resetAt < now) messageJobRateLimits.delete(key);
-  }
-}, 5 * 60 * 1000);
-
-function checkRateLimit(
-  map: Map<string, RateLimitEntry>,
-  key: string,
-  maxRequests: number
-): boolean {
-  const now = Date.now();
-  const entry = map.get(key);
-
-  if (!entry || entry.resetAt < now) {
-    map.set(key, { count: 1, resetAt: now + RATE_LIMIT_WINDOW_MS });
-    return true;
-  }
-
-  if (entry.count >= maxRequests) {
-    return false;
-  }
-
-  entry.count++;
-  return true;
-}
+// P4-RATE-1: Rate limiting for job creation and messaging
+const ipJobLimiter = new RateLimiter(60 * 1000, 10);       // 10 jobs/min per IP
+const buyerJobLimiter = new RateLimiter(60 * 1000, 5);     // 5 jobs/min per buyer
+const messageUserLimiter = new RateLimiter(60 * 1000, 30);  // 30 msg/min per user
+const messageJobLimiter = new RateLimiter(60 * 1000, 60);   // 60 msg/min per job
 
 // Schema for creating a job request
 const createJobSchema = z.object({
@@ -101,7 +53,8 @@ const createJobSchema = z.object({
 });
 
 // SafeChat fee address (dedicated VerusID for collecting fees)
-const SAFECHAT_FEE_ADDRESS = process.env.SAFECHAT_FEE_ADDRESS || 'RAWwNeTLRg9urgnDPQtPyZ6NRycsmSY2J2';
+import { config } from '../../config/index.js';
+const PLATFORM_FEE_ADDRESS = config.platform.feeAddress;
 
 // Platform fee base rate: 5%
 const BASE_FEE_RATE = 0.05;
@@ -405,14 +358,14 @@ export async function jobRoutes(fastify: FastifyInstance): Promise<void> {
     
     // P4-RATE-1: Check IP rate limit
     const clientIp = request.ip;
-    if (!checkRateLimit(ipRateLimits, clientIp, MAX_JOBS_PER_IP)) {
+    if (!ipJobLimiter.check(clientIp)) {
       return reply.code(429).send({
         error: { code: 'RATE_LIMITED', message: 'Too many job requests. Please wait before trying again.' },
       });
     }
 
     // P4-RATE-1: Check buyer rate limit
-    if (!checkRateLimit(buyerRateLimits, session.verusId, MAX_JOBS_PER_BUYER)) {
+    if (!buyerJobLimiter.check(session.verusId)) {
       return reply.code(429).send({
         error: { code: 'RATE_LIMITED', message: 'Too many job requests from this identity. Please wait.' },
       });
@@ -657,7 +610,7 @@ export async function jobRoutes(fastify: FastifyInstance): Promise<void> {
     }
 
     // Update job (P4-RACE-1: atomic update)
-    const success = jobQueries.setAccepted(id, signature);
+    const success = jobQueries.setAccepted(id, signature, job.seller_verus_id);
     if (!success) {
       return reply.code(409).send({
         error: { code: 'STATE_CONFLICT', message: 'Job was modified by another request' },
@@ -747,7 +700,7 @@ export async function jobRoutes(fastify: FastifyInstance): Promise<void> {
     }
 
     // Update job (P4-RACE-1: atomic update)
-    const success = jobQueries.setDelivered(id, signature, deliveryHash, deliveryMessage);
+    const success = jobQueries.setDelivered(id, signature, deliveryHash, deliveryMessage, session.verusId);
     if (!success) {
       return reply.code(409).send({
         error: { code: 'STATE_CONFLICT', message: 'Job was modified by another request' },
@@ -925,7 +878,7 @@ export async function jobRoutes(fastify: FastifyInstance): Promise<void> {
     }
 
     // Update job (P4-RACE-1: atomic update)
-    const success = jobQueries.setCompleted(id, signature);
+    const success = jobQueries.setCompleted(id, signature, session.verusId);
     if (!success) {
       return reply.code(409).send({
         error: { code: 'STATE_CONFLICT', message: 'Job was modified by another request' },
@@ -1057,7 +1010,7 @@ export async function jobRoutes(fastify: FastifyInstance): Promise<void> {
     }
 
     // P4-RACE-1: atomic update
-    const success = jobQueries.setDisputed(id);
+    const success = jobQueries.setDisputed(id, session.verusId);
     if (!success) {
       return reply.code(409).send({
         error: { code: 'STATE_CONFLICT', message: 'Job was modified by another request' },
@@ -1112,7 +1065,7 @@ export async function jobRoutes(fastify: FastifyInstance): Promise<void> {
     }
 
     // P4-RACE-1: atomic update
-    const success = jobQueries.setCancelled(id);
+    const success = jobQueries.setCancelled(id, session.verusId);
     if (!success) {
       return reply.code(409).send({
         error: { code: 'STATE_CONFLICT', message: 'Job was modified by another request' },
@@ -1203,12 +1156,12 @@ export async function jobRoutes(fastify: FastifyInstance): Promise<void> {
     }
 
     // P1-MSG-1: Rate limit messages
-    if (!checkRateLimit(messageUserRateLimits, session.verusId, MAX_MESSAGES_PER_USER)) {
+    if (!messageUserLimiter.check(session.verusId)) {
       return reply.code(429).send({
         error: { code: 'RATE_LIMITED', message: 'Too many messages. Please wait before sending more.' },
       });
     }
-    if (!checkRateLimit(messageJobRateLimits, id, MAX_MESSAGES_PER_JOB)) {
+    if (!messageJobLimiter.check(id)) {
       return reply.code(429).send({
         error: { code: 'RATE_LIMITED', message: 'Too many messages on this job. Please wait.' },
       });
@@ -1457,7 +1410,7 @@ export async function jobRoutes(fastify: FastifyInstance): Promise<void> {
       if (rawTx.vout) {
         for (const vout of rawTx.vout) {
           const addresses = vout.scriptPubKey?.addresses || [];
-          if (addresses.includes(SAFECHAT_FEE_ADDRESS)) {
+          if (addresses.includes(PLATFORM_FEE_ADDRESS)) {
             feeAmount += vout.value || 0;
             foundRecipient = true;
           }
@@ -1757,7 +1710,7 @@ function formatJob(job: any) {
         verified: job.payment_verified === 1,
         platformFeeTxid: job.platform_fee_txid,
         platformFeeVerified: job.platform_fee_verified === 1,
-        platformFeeAddress: SAFECHAT_FEE_ADDRESS,
+        platformFeeAddress: PLATFORM_FEE_ADDRESS,
         feeRate,
         feeAmount: job.amount * feeRate,
       };

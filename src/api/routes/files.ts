@@ -29,29 +29,10 @@ import {
 const MAX_FILES_PER_JOB = 50;
 const MAX_STORAGE_PER_JOB = 100 * 1024 * 1024; // 100MB total per job
 
+import { RateLimiter } from '../../utils/rate-limiter.js';
+
 // Rate limiting for uploads
-const uploadRateLimits = new Map<string, { count: number; resetAt: number }>();
-const MAX_UPLOADS_PER_MINUTE = 10;
-
-function checkUploadRateLimit(key: string): boolean {
-  const now = Date.now();
-  const entry = uploadRateLimits.get(key);
-  if (!entry || entry.resetAt < now) {
-    uploadRateLimits.set(key, { count: 1, resetAt: now + 60_000 });
-    return true;
-  }
-  if (entry.count >= MAX_UPLOADS_PER_MINUTE) return false;
-  entry.count++;
-  return true;
-}
-
-// Cleanup stale rate limit entries
-setInterval(() => {
-  const now = Date.now();
-  for (const [key, entry] of uploadRateLimits) {
-    if (entry.resetAt < now) uploadRateLimits.delete(key);
-  }
-}, 5 * 60 * 1000);
+const uploadLimiter = new RateLimiter(60 * 1000, 10); // 10 uploads/min
 
 async function requireAuth(request: FastifyRequest, reply: FastifyReply) {
   const session = getSessionFromRequest(request);
@@ -78,7 +59,7 @@ export async function fileRoutes(fastify: FastifyInstance): Promise<void> {
     const { id: jobId } = request.params as { id: string };
 
     // Rate limit
-    if (!checkUploadRateLimit(session.verusId)) {
+    if (!uploadLimiter.check(session.verusId)) {
       return reply.code(429).send({
         error: { code: 'RATE_LIMITED', message: 'Too many uploads. Please wait.' },
       });

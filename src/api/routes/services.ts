@@ -3,6 +3,7 @@
 
 import { FastifyInstance } from 'fastify';
 import { serviceQueries, agentQueries } from '../../db/index.js';
+import { safeJsonParse } from '../../utils/safe-json.js';
 import { Service } from '../../db/schema.js';
 
 // Transform DB service to API response
@@ -23,7 +24,7 @@ function transformService(service: Service & { agent_name?: string }) {
     updatedAt: service.updated_at,
     indexedAt: service.indexed_at,
     blockHeight: service.block_height,
-    sessionParams: service.session_params ? JSON.parse(service.session_params) : null,
+    sessionParams: safeJsonParse(service.session_params),
   };
 }
 

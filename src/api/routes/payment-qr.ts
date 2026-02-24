@@ -42,7 +42,8 @@ async function loadDeps() {
 const VRSCTEST_SYSTEM = 'iJhCezBExJHvtyH3fGhNnt2NhU4Ztkf2yq';
 const VRSC_SYSTEM = 'i5w5MuNik5NtLcYmNzcvaoixooEebB6MGV';
 
-const SAFECHAT_FEE_ADDRESS = process.env.SAFECHAT_FEE_ADDRESS || 'RAWwNeTLRg9urgnDPQtPyZ6NRycsmSY2J2';
+import { config } from '../../config/index.js';
+const PLATFORM_FEE_ADDRESS = config.platform.feeAddress;
 const IS_TESTNET = (process.env.CHAIN || 'VRSCTEST') === 'VRSCTEST';
 
 function addressToPubkeyHash(address: string): Buffer {
@@ -145,11 +146,11 @@ export async function paymentQrRoutes(fastify: FastifyInstance): Promise<void> {
         feeRate = 0.05 * (1 - discount);
       }
       const feeAmount = job.amount * feeRate;
-      const invoice = generateInvoice(SAFECHAT_FEE_ADDRESS, feeAmount, systemId, IS_TESTNET);
+      const invoice = generateInvoice(PLATFORM_FEE_ADDRESS, feeAmount, systemId, IS_TESTNET);
       return {
         data: {
           type: 'fee',
-          address: SAFECHAT_FEE_ADDRESS,
+          address: PLATFORM_FEE_ADDRESS,
           amount: feeAmount,
           currency: job.currency,
           qrString: invoice.qrString,

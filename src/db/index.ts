@@ -759,17 +759,17 @@ export const jobQueries = {
     db.prepare(`UPDATE jobs SET status = ?, updated_at = datetime('now') WHERE id = ?`).run(status, id);
   },
 
-  // P4-RACE-1: Atomic state update with status check
-  setAccepted: (id: string, signature: string) => {
+  // P4-RACE-1: Atomic state update with status + ownership check
+  setAccepted: (id: string, signature: string, sellerVerusId: string) => {
     const db = getDatabase();
     const result = db.prepare(`
-      UPDATE jobs SET 
+      UPDATE jobs SET
         status = 'accepted',
         acceptance_signature = ?,
         accepted_at = datetime('now'),
         updated_at = datetime('now')
-      WHERE id = ? AND status = 'requested'
-    `).run(signature, id);
+      WHERE id = ? AND status = 'requested' AND seller_verus_id = ?
+    `).run(signature, id, sellerVerusId);
     return result.changes > 0;
   },
 
@@ -782,53 +782,54 @@ export const jobQueries = {
     return result.changes > 0;
   },
 
-  // P4-RACE-1: Atomic state update
-  setDelivered: (id: string, signature: string, deliveryHash: string, deliveryMessage?: string) => {
+  // P4-RACE-1: Atomic state update with ownership check
+  setDelivered: (id: string, signature: string, deliveryHash: string, deliveryMessage: string | undefined, sellerVerusId: string) => {
     const db = getDatabase();
     const result = db.prepare(`
-      UPDATE jobs SET 
+      UPDATE jobs SET
         status = 'delivered',
         delivery_signature = ?,
         delivery_hash = ?,
         delivery_message = ?,
         delivered_at = datetime('now'),
         updated_at = datetime('now')
-      WHERE id = ? AND status IN ('accepted', 'in_progress')
-    `).run(signature, deliveryHash, deliveryMessage || null, id);
+      WHERE id = ? AND status IN ('accepted', 'in_progress') AND seller_verus_id = ?
+    `).run(signature, deliveryHash, deliveryMessage || null, id, sellerVerusId);
     return result.changes > 0;
   },
 
-  // P4-RACE-1: Atomic state update
-  setCompleted: (id: string, signature: string) => {
+  // P4-RACE-1: Atomic state update with ownership check
+  setCompleted: (id: string, signature: string, buyerVerusId: string) => {
     const db = getDatabase();
     const result = db.prepare(`
-      UPDATE jobs SET 
+      UPDATE jobs SET
         status = 'completed',
         completion_signature = ?,
         completed_at = datetime('now'),
         updated_at = datetime('now')
-      WHERE id = ? AND status = 'delivered'
-    `).run(signature, id);
+      WHERE id = ? AND status = 'delivered' AND buyer_verus_id = ?
+    `).run(signature, id, buyerVerusId);
     return result.changes > 0;
   },
 
-  // P4-RACE-1: Atomic state update
-  setDisputed: (id: string) => {
+  // P4-RACE-1: Atomic state update with participant check
+  setDisputed: (id: string, requesterVerusId: string) => {
     const db = getDatabase();
     const result = db.prepare(`
-      UPDATE jobs SET status = 'disputed', updated_at = datetime('now') 
+      UPDATE jobs SET status = 'disputed', updated_at = datetime('now')
       WHERE id = ? AND status NOT IN ('completed', 'cancelled', 'disputed')
-    `).run(id);
+        AND (buyer_verus_id = ? OR seller_verus_id = ?)
+    `).run(id, requesterVerusId, requesterVerusId);
     return result.changes > 0;
   },
 
-  // P4-RACE-1: Atomic state update
-  setCancelled: (id: string) => {
+  // P4-RACE-1: Atomic state update with buyer ownership check
+  setCancelled: (id: string, buyerVerusId: string) => {
     const db = getDatabase();
     const result = db.prepare(`
-      UPDATE jobs SET status = 'cancelled', updated_at = datetime('now') 
-      WHERE id = ? AND status = 'requested'
-    `).run(id);
+      UPDATE jobs SET status = 'cancelled', updated_at = datetime('now')
+      WHERE id = ? AND status = 'requested' AND buyer_verus_id = ?
+    `).run(id, buyerVerusId);
     return result.changes > 0;
   },
 

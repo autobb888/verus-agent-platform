@@ -1,3 +1,4 @@
+import { safeJsonParse } from '../../utils/safe-json.js';
 /**
  * Attestation Routes
  * 
@@ -190,7 +191,7 @@ export async function attestationRoutes(fastify: FastifyInstance): Promise<void>
       containerId: row.container_id,
       createdAt: row.created_at,
       destroyedAt: row.destroyed_at,
-      dataVolumes: row.data_volumes ? JSON.parse(row.data_volumes) : [],
+      dataVolumes: safeJsonParse(row.data_volumes, []),
       deletionMethod: row.deletion_method,
       attestedBy: row.attested_by,
       signature: row.signature,

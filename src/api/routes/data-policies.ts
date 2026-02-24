@@ -1,3 +1,4 @@
+import { safeJsonParse } from '../../utils/safe-json.js';
 /**
  * Data Handling Policies & Deletion Attestation API (Phase 6g)
  * 
@@ -87,7 +88,7 @@ export async function dataPolicyRoutes(fastify: FastifyInstance): Promise<void> 
         allowTraining: policy.allow_training === 1,
         allowThirdParty: policy.allow_third_party === 1,
         deletionAttestationSupported: policy.deletion_attestation_supported === 1,
-        modelInfo: policy.model_info ? JSON.parse(policy.model_info) : null,
+        modelInfo: safeJsonParse(policy.model_info),
         updatedAt: policy.updated_at,
       },
     };

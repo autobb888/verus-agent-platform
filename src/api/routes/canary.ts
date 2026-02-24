@@ -1,3 +1,4 @@
+import { safeJsonParse } from '../../utils/safe-json.js';
 /**
  * Canary Token Routes
  * 
@@ -173,7 +174,7 @@ export async function canaryRoutes(fastify: FastifyInstance): Promise<void> {
 
     return reply.send({
       policy: agent.communication_policy || 'safechat_only',
-      externalChannels: agent.external_channels ? JSON.parse(agent.external_channels) : null,
+      externalChannels: safeJsonParse(agent.external_channels),
     });
   });
 }
