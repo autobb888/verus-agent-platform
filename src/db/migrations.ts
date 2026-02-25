@@ -361,6 +361,7 @@ export function runMigrations(db: Database.Database): void {
     CREATE INDEX IF NOT EXISTS idx_hold_queue_job ON message_hold_queue(job_id);
     CREATE INDEX IF NOT EXISTS idx_hold_queue_status ON message_hold_queue(status);
     CREATE INDEX IF NOT EXISTS idx_hold_queue_sender ON message_hold_queue(sender_verus_id);
+    CREATE INDEX IF NOT EXISTS idx_hold_queue_created ON message_hold_queue(created_at);
   `);
 
   // Phase 6b: Job files table
@@ -522,6 +523,7 @@ export function runMigrations(db: Database.Database): void {
     )
   `);
   db.exec(`CREATE INDEX IF NOT EXISTS idx_notifications_recipient ON notifications(recipient_verus_id, read)`);
+  db.exec(`CREATE INDEX IF NOT EXISTS idx_notifications_created ON notifications(created_at)`);
 
   // Phase 6g: Data handling policies & deletion attestation
   db.exec(`

@@ -193,14 +193,14 @@ export async function submitReviewRoutes(fastify: FastifyInstance): Promise<void
       });
     }
 
-    // Verify the buyer's signature
+    // Verify the buyer's signature against the resolved identity address
     const expectedMessage = generateReviewMessage(agentVerusId, jobHash, message, rating, timestamp);
-    
+
     let isValid: boolean;
     try {
-      isValid = await rpc.verifyMessage(buyerVerusId, expectedMessage, signature);
+      isValid = await rpc.verifyMessage(buyerIAddress, expectedMessage, signature);
     } catch (error) {
-      fastify.log.error({ error, buyerVerusId }, 'Signature verification failed');
+      fastify.log.error({ error, buyerIAddress }, 'Signature verification failed');
       return reply.code(400).send({
         error: {
           code: 'VERIFICATION_FAILED',

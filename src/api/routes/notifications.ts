@@ -30,6 +30,15 @@ const ackSchema = z.object({
 
 export async function notificationRoutes(fastify: FastifyInstance): Promise<void> {
 
+  // Periodic cleanup of old notifications (every 6 hours)
+  const notifCleanupInterval = setInterval(() => {
+    try {
+      const deleted = cleanupOldNotifications();
+      if (deleted > 0) console.log(`[Notifications] Cleaned up ${deleted} old notifications`);
+    } catch {}
+  }, 6 * 60 * 60 * 1000);
+  notifCleanupInterval.unref();
+
   /**
    * GET /v1/me/notifications — All pending notifications
    */
@@ -37,8 +46,8 @@ export async function notificationRoutes(fastify: FastifyInstance): Promise<void
     const session = (request as any).session as { verusId: string };
     const query = request.query as Record<string, string>;
     const includeRead = query.includeRead === 'true';
-    const limit = Math.min(parseInt(query.limit || '50', 10), 100);
-    const since = query.since; // ISO timestamp
+    const limit = Math.min(Math.max(1, parseInt(query.limit || '50', 10) || 50), 100);
+    const since = query.since && /^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}/.test(query.since) ? query.since : undefined;
 
     const db = getDatabase();
 
@@ -69,14 +78,17 @@ export async function notificationRoutes(fastify: FastifyInstance): Promise<void
         read: r.read === 1,
         createdAt: r.created_at,
       })),
-      meta: { unreadCount: db.prepare(`SELECT COUNT(*) as c FROM notifications WHERE recipient_verus_id = ? AND read = 0`).get(session.verusId) as any },
+      meta: { unreadCount: (db.prepare(`SELECT COUNT(*) as c FROM notifications WHERE recipient_verus_id = ? AND read = 0`).get(session.verusId) as { c: number }).c },
     };
   });
 
   /**
    * POST /v1/me/notifications/ack — Mark notifications as read
    */
-  fastify.post('/v1/me/notifications/ack', { preHandler: requireAuth }, async (request, reply) => {
+  fastify.post('/v1/me/notifications/ack', {
+    preHandler: requireAuth,
+    config: { rateLimit: { max: 30, timeWindow: 60_000 } },
+  }, async (request, reply) => {
     const session = (request as any).session as { verusId: string };
 
     const parsed = ackSchema.safeParse(request.body);
@@ -114,4 +126,17 @@ export function createNotification(data: {
     INSERT INTO notifications (id, recipient_verus_id, type, title, body, job_id, data) VALUES (?, ?, ?, ?, ?, ?, ?)
   `).run(id, data.recipientVerusId, data.type, data.title, data.body || null, data.jobId || null, JSON.stringify(data.extra || {}));
   return id;
+}
+
+/**
+ * Clean up old notifications to prevent unbounded table growth.
+ * Deletes read notifications older than 7 days and all notifications older than 90 days.
+ */
+export function cleanupOldNotifications(): number {
+  const db = getDatabase();
+  return db.prepare(`
+    DELETE FROM notifications
+    WHERE (read = 1 AND created_at < datetime('now', '-7 days'))
+       OR created_at < datetime('now', '-90 days')
+  `).run().changes;
 }

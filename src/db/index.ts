@@ -75,11 +75,16 @@ export const agentQueries = {
       query += ' WHERE ' + conditions.join(' AND ');
     }
 
-    // Sorting - whitelist allowed columns
-    const allowedSorts = ['created_at', 'updated_at', 'name', 'block_height'];
-    const sortCol = allowedSorts.includes(filters.sort || '') ? filters.sort : 'created_at';
+    // Sorting - use object lookup to avoid interpolation
+    const sortMap: Record<string, string> = {
+      'created_at': 'a.created_at',
+      'updated_at': 'a.updated_at',
+      'name': 'a.name',
+      'block_height': 'a.block_height',
+    };
+    const sortCol = sortMap[filters.sort || ''] || 'a.created_at';
     const sortOrder = filters.order === 'asc' ? 'ASC' : 'DESC';
-    query += ` ORDER BY a.${sortCol} ${sortOrder}`;
+    query += ` ORDER BY ${sortCol} ${sortOrder}`;
 
     // Pagination
     const limit = Math.min(Math.max(filters.limit || 20, 1), 100);
@@ -343,11 +348,16 @@ export const serviceQueries = {
       query += ' WHERE ' + conditions.join(' AND ');
     }
 
-    // Sorting
-    const allowedSorts = ['created_at', 'updated_at', 'name', 'price'];
-    const sortCol = allowedSorts.includes(filters.sort || '') ? filters.sort : 'created_at';
+    // Sorting - use object lookup to avoid interpolation
+    const sortMap: Record<string, string> = {
+      'created_at': 's.created_at',
+      'updated_at': 's.updated_at',
+      'name': 's.name',
+      'price': 's.price',
+    };
+    const sortCol = sortMap[filters.sort || ''] || 's.created_at';
     const sortOrder = filters.order === 'asc' ? 'ASC' : 'DESC';
-    query += ` ORDER BY s.${sortCol} ${sortOrder}`;
+    query += ` ORDER BY ${sortCol} ${sortOrder}`;
 
     // Pagination
     const limit = Math.min(Math.max(filters.limit || 20, 1), 100);
@@ -550,13 +560,23 @@ export const reputationQueries = {
   recalculate: (agentId: string) => {
     const db = getDatabase();
     const stats = db.prepare(`
-      SELECT 
+      SELECT
         COUNT(*) as total_reviews,
         SUM(CASE WHEN verified = 1 THEN 1 ELSE 0 END) as verified_reviews,
         AVG(rating) as average_rating
-      FROM reviews 
+      FROM reviews
       WHERE agent_id = ?
     `).get(agentId) as { total_reviews: number; verified_reviews: number; average_rating: number | null };
+
+    // Count actual completed jobs for this agent (as seller)
+    const agent = db.prepare('SELECT verus_id FROM agents WHERE id = ?').get(agentId) as { verus_id: string } | undefined;
+    let completedJobs = 0;
+    if (agent) {
+      const jobStats = db.prepare(`
+        SELECT COUNT(*) as count FROM jobs WHERE seller_verus_id = ? AND status = 'completed'
+      `).get(agent.verus_id) as { count: number };
+      completedJobs = jobStats.count;
+    }
 
     db.prepare(`
       INSERT INTO agent_reputation (agent_id, total_reviews, verified_reviews, average_rating, total_jobs_completed, updated_at)
@@ -565,9 +585,9 @@ export const reputationQueries = {
         total_reviews = excluded.total_reviews,
         verified_reviews = excluded.verified_reviews,
         average_rating = excluded.average_rating,
-        total_jobs_completed = excluded.total_reviews,
+        total_jobs_completed = excluded.total_jobs_completed,
         updated_at = datetime('now')
-    `).run(agentId, stats.total_reviews, stats.verified_reviews, stats.average_rating, stats.total_reviews);
+    `).run(agentId, stats.total_reviews, stats.verified_reviews, stats.average_rating, completedJobs);
 
     return stats;
   },
@@ -754,11 +774,6 @@ export const jobQueries = {
     return id;
   },
 
-  updateStatus: (id: string, status: Job['status']) => {
-    const db = getDatabase();
-    db.prepare(`UPDATE jobs SET status = ?, updated_at = datetime('now') WHERE id = ?`).run(status, id);
-  },
-
   // P4-RACE-1: Atomic state update with status + ownership check
   setAccepted: (id: string, signature: string, sellerVerusId: string) => {
     const db = getDatabase();
@@ -773,12 +788,12 @@ export const jobQueries = {
     return result.changes > 0;
   },
 
-  setInProgress: (id: string) => {
+  setInProgress: (id: string, sellerVerusId: string) => {
     const db = getDatabase();
     const result = db.prepare(`
-      UPDATE jobs SET status = 'in_progress', updated_at = datetime('now') 
-      WHERE id = ? AND status = 'accepted'
-    `).run(id);
+      UPDATE jobs SET status = 'in_progress', updated_at = datetime('now')
+      WHERE id = ? AND status = 'accepted' AND seller_verus_id = ?
+    `).run(id, sellerVerusId);
     return result.changes > 0;
   },
 
@@ -835,10 +850,14 @@ export const jobQueries = {
 
   countByStatus: (verusId: string, role: 'buyer' | 'seller') => {
     const db = getDatabase();
-    const column = role === 'buyer' ? 'buyer_verus_id' : 'seller_verus_id';
-    return db.prepare(`
-      SELECT status, COUNT(*) as count FROM jobs WHERE ${column} = ? GROUP BY status
-    `).all(verusId) as { status: string; count: number }[];
+    if (role === 'buyer') {
+      return db.prepare(
+        'SELECT status, COUNT(*) as count FROM jobs WHERE buyer_verus_id = ? GROUP BY status'
+      ).all(verusId) as { status: string; count: number }[];
+    }
+    return db.prepare(
+      'SELECT status, COUNT(*) as count FROM jobs WHERE seller_verus_id = ? GROUP BY status'
+    ).all(verusId) as { status: string; count: number }[];
   },
 
   setPayment: (id: string, txid: string, verified: number = 0) => {
@@ -849,25 +868,12 @@ export const jobQueries = {
     return result.changes > 0;
   },
 
-  verifyPayment: (id: string) => {
-    const db = getDatabase();
-    const result = db.prepare(`
-      UPDATE jobs SET payment_verified = 1, updated_at = datetime('now') WHERE id = ?
-    `).run(id);
-    return result.changes > 0;
-  },
-
   setPlatformFee: (id: string, txid: string, verified: number = 0) => {
     const db = getDatabase();
     const result = db.prepare(`
       UPDATE jobs SET platform_fee_txid = ?, platform_fee_verified = ?, updated_at = datetime('now') WHERE id = ?
     `).run(txid, verified, id);
     return result.changes > 0;
-  },
-
-  setSafechatEnabled: (id: string, enabled: number) => {
-    const db = getDatabase();
-    db.prepare(`UPDATE jobs SET safechat_enabled = ?, updated_at = datetime('now') WHERE id = ?`).run(enabled, id);
   },
 };
 
@@ -954,10 +960,6 @@ export const jobMessageQueries = {
     return id;
   },
 
-  delete: (id: string) => {
-    const db = getDatabase();
-    db.prepare('DELETE FROM job_messages WHERE id = ?').run(id);
-  },
 };
 
 // Phase 6b: Job File queries
@@ -1020,6 +1022,7 @@ export const jobFileQueries = {
       JOIN jobs j ON jf.job_id = j.id
       WHERE j.status = 'completed'
         AND j.completed_at < datetime('now', '-' || ? || ' days')
+      LIMIT 1000
     `).all(daysAfterCompletion) as JobFile[];
   },
 };
@@ -1055,6 +1058,7 @@ export const readReceiptQueries = {
         AND (r.last_read_at IS NULL OR m.created_at > r.last_read_at)
       GROUP BY j.id
       ORDER BY latest_message_at DESC
+      LIMIT 100
     `).all(verusId, verusId, verusId) as Array<{
       job_id: string;
       job_hash: string;
@@ -1120,12 +1124,16 @@ export const webhookQueries = {
       SELECT * FROM webhooks WHERE agent_verus_id = ? AND active = 1 AND failure_count < 10
     `).all(agentVerusId) as any[];
     return hooks.filter(h => {
-      const events = JSON.parse(h.events);
-      return events.includes('*') || events.includes(eventType);
+      try {
+        const events = JSON.parse(h.events);
+        return Array.isArray(events) && (events.includes('*') || events.includes(eventType));
+      } catch {
+        return false;
+      }
     });
   },
 
-  update: (id: string, data: { url?: string; events?: string[]; active?: boolean }) => {
+  update: (id: string, data: { url?: string; events?: string[]; active?: boolean }, agentVerusId?: string) => {
     const db = getDatabase();
     const sets: string[] = [];
     const vals: any[] = [];
@@ -1134,13 +1142,18 @@ export const webhookQueries = {
     if (data.active !== undefined) { sets.push('active = ?'); vals.push(data.active ? 1 : 0); }
     sets.push("updated_at = datetime('now')");
     vals.push(id);
-    return db.prepare(`UPDATE webhooks SET ${sets.join(', ')} WHERE id = ?`).run(...vals).changes > 0;
+    // Atomic ownership check: include agent_verus_id in WHERE to prevent TOCTOU race
+    let where = 'WHERE id = ?';
+    if (agentVerusId) { where += ' AND agent_verus_id = ?'; vals.push(agentVerusId); }
+    return db.prepare(`UPDATE webhooks SET ${sets.join(', ')} ${where}`).run(...vals).changes > 0;
   },
 
   delete: (id: string) => {
     const db = getDatabase();
-    db.prepare(`DELETE FROM webhook_deliveries WHERE webhook_id = ?`).run(id);
-    return db.prepare(`DELETE FROM webhooks WHERE id = ?`).run(id).changes > 0;
+    return db.transaction(() => {
+      db.prepare(`DELETE FROM webhook_deliveries WHERE webhook_id = ?`).run(id);
+      return db.prepare(`DELETE FROM webhooks WHERE id = ?`).run(id).changes > 0;
+    })();
   },
 
   recordSuccess: (id: string) => {
@@ -1150,9 +1163,15 @@ export const webhookQueries = {
 
   recordFailure: (id: string) => {
     const db = getDatabase();
-    db.prepare(`UPDATE webhooks SET failure_count = failure_count + 1, last_failure_at = datetime('now'), updated_at = datetime('now') WHERE id = ?`).run(id);
-    // Auto-disable after 10 consecutive failures
-    db.prepare(`UPDATE webhooks SET active = 0 WHERE id = ? AND failure_count >= 10`).run(id);
+    // Increment failure count and auto-disable after 10 consecutive failures (atomic)
+    db.prepare(`
+      UPDATE webhooks SET
+        failure_count = failure_count + 1,
+        last_failure_at = datetime('now'),
+        updated_at = datetime('now'),
+        active = CASE WHEN failure_count + 1 >= 10 THEN 0 ELSE active END
+      WHERE id = ?
+    `).run(id);
   },
 };
 

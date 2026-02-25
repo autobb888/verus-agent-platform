@@ -52,26 +52,31 @@ const ipLimiter = new RateLimiter(60 * 1000, 10); // 10 req/min
 let sessionCleanupInterval: ReturnType<typeof setInterval> | null = null;
 
 // Shield AUTH-CLEANUP-1: Cleanup expired sessions and challenges every 10 minutes
+// Deferred start: first run after 10 minutes (DB must be initialized before queries run)
 sessionCleanupInterval = setInterval(() => {
   try {
     const db = getDatabase();
     const now = Date.now();
-    
+
     const sessionsDeleted = db.prepare(`
       DELETE FROM sessions WHERE expires_at < ?
     `).run(now);
-    
+
     const challengesDeleted = db.prepare(`
       DELETE FROM auth_challenges WHERE expires_at < ?
     `).run(now);
-    
+
     if ((sessionsDeleted.changes || 0) > 0 || (challengesDeleted.changes || 0) > 0) {
       console.log(`[Auth] Cleanup: ${sessionsDeleted.changes || 0} sessions, ${challengesDeleted.changes || 0} challenges`);
     }
   } catch (err) {
-    console.error('[Auth] Cleanup error:', err);
+    // Silently ignore if DB not yet initialized during early startup
+    if (!(err instanceof Error && err.message.includes('not initialized'))) {
+      console.error('[Auth] Cleanup error:', err);
+    }
   }
 }, 10 * 60 * 1000);
+sessionCleanupInterval.unref();
 
 // Stop auth cleanup intervals (call on shutdown)
 export function stopAuthCleanup(): void {
@@ -299,7 +304,7 @@ export async function authRoutes(fastify: FastifyInstance): Promise<void> {
       `).run(sessionId, identityAddress, identityName, sessionNow, sessionExpiry);
       
       // Set session cookie
-      // Shield: HttpOnly, Secure (in prod), SameSite=Strict
+      // Shield: HttpOnly, Secure (in prod), SameSite=Lax (required for QR redirect flow)
       reply.setCookie(SESSION_COOKIE, sessionId, cookieOpts());
       
       fastify.log.info({ verusId, identityAddress, identityName }, 'User logged in');
@@ -421,10 +426,14 @@ export async function authRoutes(fastify: FastifyInstance): Promise<void> {
     try {
       // Proxy to the VerusID login microservice for proper WIF-based signing
       const LOGIN_SERVICE_URL = process.env.LOGIN_SERVICE_URL || 'http://localhost:8000';
+      const loginAbort = new AbortController();
+      const loginTimeout = setTimeout(() => loginAbort.abort(), 10_000);
       const loginRes = await fetch(`${LOGIN_SERVICE_URL}/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        signal: loginAbort.signal,
       });
+      clearTimeout(loginTimeout);
       
       if (!loginRes.ok) {
         throw new Error(`Login service returned ${loginRes.status}`);
@@ -518,11 +527,15 @@ export async function authRoutes(fastify: FastifyInstance): Promise<void> {
         const LOGIN_SERVICE_URL_INTERNAL = process.env.LOGIN_SERVICE_URL || 'http://localhost:8000';
         fastify.log.info('Forwarding mobile callback to login service');
         
+        const verifyAbort = new AbortController();
+        const verifyTimeout = setTimeout(() => verifyAbort.abort(), 10_000);
         const verifyRes = await fetch(`${LOGIN_SERVICE_URL_INTERNAL}/verusidlogin`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(body),
+          signal: verifyAbort.signal,
         });
+        clearTimeout(verifyTimeout);
         
         if (!verifyRes.ok) {
           const errText = await verifyRes.text();

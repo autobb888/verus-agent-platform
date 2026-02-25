@@ -79,10 +79,13 @@ function isBlockedIP(ip: string): boolean {
 export async function validateWebhookUrl(url: string): Promise<string | null> {
   try {
     const parsed = new URL(url);
+    if (parsed.username || parsed.password) {
+      return 'URLs with embedded credentials are not allowed';
+    }
     if (!['http:', 'https:'].includes(parsed.protocol)) {
       return 'Only http/https URLs are allowed';
     }
-    const port = parsed.port ? parseInt(parsed.port) : (parsed.protocol === 'https:' ? 443 : 80);
+    const port = parsed.port ? parseInt(parsed.port, 10) : (parsed.protocol === 'https:' ? 443 : 80);
     if (!ALLOWED_PORTS.includes(port)) {
       return `Port ${port} is not allowed`;
     }
@@ -138,7 +141,12 @@ export async function ssrfSafeFetch(
   try {
     // 1. Parse URL
     const parsed = new URL(url);
-    
+
+    // 1b. Reject embedded credentials
+    if (parsed.username || parsed.password) {
+      return { ok: false, status: 0, body: '', error: 'URLs with embedded credentials not allowed' };
+    }
+
     // 2. Validate protocol
     if (parsed.protocol === 'http:' && !allowHttp) {
       return { ok: false, status: 0, body: '', error: 'HTTPS required in production' };
@@ -149,8 +157,8 @@ export async function ssrfSafeFetch(
     }
     
     // 3. Validate port
-    const port = parsed.port 
-      ? parseInt(parsed.port) 
+    const port = parsed.port
+      ? parseInt(parsed.port, 10)
       : (parsed.protocol === 'https:' ? 443 : 80);
     
     if (!ALLOWED_PORTS.includes(port)) {

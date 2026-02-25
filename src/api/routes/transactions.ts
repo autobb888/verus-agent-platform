@@ -195,7 +195,14 @@ export async function transactionRoutes(fastify: FastifyInstance): Promise<void>
     let sessionOwnsInput = false;
     const inputAddresses: string[] = [];
 
-    for (const vin of decodedTx.vin || []) {
+    const vinArray = decodedTx.vin || [];
+    if (vinArray.length > 50) {
+      return reply.code(400).send({
+        error: { code: 'TX_TOO_COMPLEX', message: 'Transaction has too many inputs (max 50)' },
+      });
+    }
+
+    for (const vin of vinArray) {
       if (!vin.txid || vin.vout === undefined) continue; // coinbase or malformed
       try {
         const prevTx = await rpc.rpcCall<{

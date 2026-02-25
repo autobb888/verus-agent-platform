@@ -263,7 +263,10 @@ export function extractServicesArray(
     try {
       const parsed = parseVdxfValue(contentmap[servicesKey]);
       if (Array.isArray(parsed)) {
-        services.push(...(parsed as Array<Record<string, unknown>>));
+        // Cap to prevent DoS from oversized on-chain arrays
+        for (const item of (parsed as Array<Record<string, unknown>>).slice(0, 100)) {
+          services.push(item);
+        }
       } else if (parsed && typeof parsed === 'object') {
         services.push(parsed as Record<string, unknown>);
       }
@@ -271,8 +274,9 @@ export function extractServicesArray(
       // Skip invalid values
     }
   }
-  
-  return services;
+
+  // Hard cap: max 100 services per identity
+  return services.slice(0, 100);
 }
 
 /**
@@ -287,9 +291,10 @@ export function extractReviews(
   const reviews: Array<Record<string, unknown>> = [];
   
   if (!contentmultimap[buyerKey]) return [];
-  
-  const reviewCount = contentmultimap[buyerKey]?.length || 0;
-  
+
+  // Cap review count to prevent DoS from oversized on-chain arrays
+  const reviewCount = Math.min(contentmultimap[buyerKey]?.length || 0, 100);
+
   for (let i = 0; i < reviewCount; i++) {
     const review: Record<string, unknown> = {};
     for (const [field, iAddress] of Object.entries(REVIEW_KEYS)) {
@@ -349,6 +354,10 @@ function extractDataOfType(
  */
 export function parseVdxfValue(hexValue: string): unknown {
   try {
+    // Guard against oversized hex values (max 20KB hex = 10KB decoded)
+    if (hexValue.length > 20480) {
+      return hexValue.substring(0, 100) + '...[truncated]';
+    }
     const decoded = Buffer.from(hexValue, 'hex').toString('utf-8');
     try {
       return JSON.parse(decoded);

@@ -63,20 +63,34 @@ export class VerusRpcClient {
 
   private async call<T>(method: string, params: unknown[] = []): Promise<T> {
     const id = String(++this.requestId);
-    
-    const response = await fetch(this.url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Basic ${this.auth}`,
-      },
-      body: JSON.stringify({
-        jsonrpc: '1.0',
-        id,
-        method,
-        params,
-      }),
-    });
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 30_000);
+
+    let response: Response;
+    try {
+      response = await fetch(this.url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Basic ${this.auth}`,
+        },
+        body: JSON.stringify({
+          jsonrpc: '1.0',
+          id,
+          method,
+          params,
+        }),
+        signal: controller.signal,
+      });
+    } catch (err: any) {
+      clearTimeout(timeoutId);
+      if (err.name === 'AbortError') {
+        throw new Error(`RPC request timeout for ${method}`);
+      }
+      throw err;
+    }
+    clearTimeout(timeoutId);
 
     // Verus daemon returns HTTP 500 for RPC-level errors (e.g. "Identity not found"),
     // so we must parse the JSON body before rejecting on HTTP status.

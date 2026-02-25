@@ -25,7 +25,10 @@ export async function chatRoutes(fastify: FastifyInstance): Promise<void> {
    * GET /v1/chat/token
    * Generate a one-time token for WebSocket auth (5 min expiry)
    */
-  fastify.get('/v1/chat/token', { preHandler: requireAuth }, async (request, reply) => {
+  fastify.get('/v1/chat/token', {
+    preHandler: requireAuth,
+    config: { rateLimit: { max: 20, timeWindow: 60_000 } },
+  }, async (request, reply) => {
     const session = (request as any).session as { verusId: string };
     const tokenId = randomBytes(32).toString('hex');
     const now = new Date();

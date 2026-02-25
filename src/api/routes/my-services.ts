@@ -94,7 +94,9 @@ export async function myServiceRoutes(fastify: FastifyInstance): Promise<void> {
    * POST /v1/me/services
    * Create a new service
    */
-  fastify.post('/v1/me/services', async (request, reply) => {
+  fastify.post('/v1/me/services', {
+    config: { rateLimit: { max: 20, timeWindow: 60_000 } },
+  }, async (request, reply) => {
     const session = (request as any).session as { verusId: string };
     
     // Validate input

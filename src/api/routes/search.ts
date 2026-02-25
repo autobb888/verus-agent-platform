@@ -28,7 +28,11 @@ export async function searchRoutes(fastify: FastifyInstance): Promise<void> {
    * 
    * Full-text search over agents.
    */
-  fastify.get('/v1/search', async (request: FastifyRequest, reply: FastifyReply) => {
+  fastify.get('/v1/search', {
+    config: {
+      rateLimit: { max: 30, timeWindow: 60_000 },
+    },
+  }, async (request: FastifyRequest, reply: FastifyReply) => {
     // Parse query params
     const parsed = searchSchema.safeParse(request.query);
     

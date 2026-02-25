@@ -35,7 +35,7 @@ const createJobSchema = z.object({
   serviceId: z.string().max(100).optional(),
   description: z.string().min(1).max(2000),
   amount: z.coerce.number().min(0),
-  currency: z.string().default('VRSCTEST'),
+  currency: z.string().max(20).default('VRSCTEST'),
   deadline: z.string().max(100).optional(),
   paymentTerms: z.enum(['prepay', 'postpay', 'split']).default('prepay'),
   paymentAddress: z.string().max(100).optional(),
@@ -76,25 +76,37 @@ function calculateFeeRate(dataTerms?: { allowTraining?: boolean; allowThirdParty
   return BASE_FEE_RATE * (1 - discount);
 }
 
+// Reusable timestamp schema: must be finite and within 10 minutes
+const timestampSchema = z.number().refine(Number.isFinite, 'Timestamp must be finite');
+
 // Schema for accepting a job
 const acceptJobSchema = z.object({
-  timestamp: z.number(),
+  timestamp: timestampSchema,
   signature: z.string().min(1),
 });
 
 // Schema for delivering a job
 const deliverJobSchema = z.object({
-  deliveryHash: z.string().min(1).max(500),
+  deliveryHash: z.string().regex(/^[a-fA-F0-9]{16,128}$/, 'deliveryHash must be a valid hex hash'),
   deliveryMessage: z.string().max(2000).optional(),
-  timestamp: z.number(),
+  timestamp: timestampSchema,
   signature: z.string().min(1),
 });
 
 // Schema for completing a job
 const completeJobSchema = z.object({
-  timestamp: z.number(),
+  timestamp: timestampSchema,
   signature: z.string().min(1),
 });
+
+/** Validate timestamp is within ±10 minutes of now */
+function validateTimestampFreshness(timestamp: number): string | null {
+  const now = Math.floor(Date.now() / 1000);
+  if (timestamp < now - 600 || timestamp > now + 300) {
+    return 'Timestamp must be within the last 10 minutes';
+  }
+  return null;
+}
 
 /**
  * Generate a unique job hash from key fields
@@ -281,13 +293,18 @@ export async function jobRoutes(fastify: FastifyInstance): Promise<void> {
     const deadline = query.deadline;
     const timestamp = parseInt(query.timestamp || String(Math.floor(Date.now() / 1000)), 10);
 
-    if (!sellerVerusId || !description || !amount) {
+    if (!sellerVerusId || !description || !Number.isFinite(amount) || amount <= 0) {
       return reply.code(400).send({
-        error: { code: 'MISSING_PARAMS', message: 'sellerVerusId, description, and amount are required' },
+        error: { code: 'MISSING_PARAMS', message: 'sellerVerusId, description, and a valid positive amount are required' },
+      });
+    }
+    if (!Number.isFinite(timestamp) || timestamp <= 0) {
+      return reply.code(400).send({
+        error: { code: 'INVALID_PARAMS', message: 'Invalid timestamp' },
       });
     }
 
-    const safechatEnabled = (request.body as any)?.safechatEnabled !== false;
+    const safechatEnabled = query.safechatEnabled !== 'false';
     const message = generateJobRequestMessage(sellerVerusId, description, amount, currency, deadline, timestamp, safechatEnabled);
 
     return {
@@ -319,8 +336,8 @@ export async function jobRoutes(fastify: FastifyInstance): Promise<void> {
     
     const role = query.role as 'buyer' | 'seller' | undefined;
     const status = query.status;
-    const limit = Math.min(parseInt(query.limit || '20', 10), 100);
-    const offset = parseInt(query.offset || '0', 10);
+    const limit = Math.min(parseInt(query.limit || '20', 10) || 20, 100);
+    const offset = Math.max(parseInt(query.offset || '0', 10) || 0, 0);
 
     let jobs;
     if (role === 'buyer') {
@@ -554,6 +571,12 @@ export async function jobRoutes(fastify: FastifyInstance): Promise<void> {
 
     const { timestamp, signature } = parsed.data;
 
+    // Validate timestamp freshness
+    const tsError = validateTimestampFreshness(timestamp);
+    if (tsError) {
+      return reply.code(400).send({ error: { code: 'INVALID_TIMESTAMP', message: tsError } });
+    }
+
     // Get job
     const job = jobQueries.getById(id);
     if (!job) {
@@ -661,6 +684,12 @@ export async function jobRoutes(fastify: FastifyInstance): Promise<void> {
     }
 
     const { deliveryHash, deliveryMessage, timestamp, signature } = parsed.data;
+
+    // Validate timestamp freshness
+    const tsError = validateTimestampFreshness(timestamp);
+    if (tsError) {
+      return reply.code(400).send({ error: { code: 'INVALID_TIMESTAMP', message: tsError } });
+    }
 
     const job = jobQueries.getById(id);
     if (!job) {
@@ -840,6 +869,12 @@ export async function jobRoutes(fastify: FastifyInstance): Promise<void> {
 
     const { timestamp, signature } = parsed.data;
 
+    // Validate timestamp freshness
+    const tsError = validateTimestampFreshness(timestamp);
+    if (tsError) {
+      return reply.code(400).send({ error: { code: 'INVALID_TIMESTAMP', message: tsError } });
+    }
+
     const job = jobQueries.getById(id);
     if (!job) {
       return reply.code(404).send({
@@ -957,7 +992,7 @@ export async function jobRoutes(fastify: FastifyInstance): Promise<void> {
     // P2-DISPUTE-1: Require signature and reason for disputes
     const disputeSchema = z.object({
       reason: z.string().min(1).max(2000),
-      timestamp: z.number(),
+      timestamp: timestampSchema,
       signature: z.string().min(1),
     });
 
@@ -969,6 +1004,12 @@ export async function jobRoutes(fastify: FastifyInstance): Promise<void> {
     }
 
     const { reason, timestamp, signature } = parsed.data;
+
+    // Validate timestamp freshness
+    const tsError = validateTimestampFreshness(timestamp);
+    if (tsError) {
+      return reply.code(400).send({ error: { code: 'INVALID_TIMESTAMP', message: tsError } });
+    }
 
     const job = jobQueries.getById(id);
     if (!job) {
@@ -1108,11 +1149,11 @@ export async function jobRoutes(fastify: FastifyInstance): Promise<void> {
     }
 
     const since = query.since;
-    const limit = Math.min(parseInt(query.limit || '50', 10), 100);
-    const offset = parseInt(query.offset || '0', 10);
+    const limit = Math.min(parseInt(query.limit || '50', 10) || 50, 100);
+    const offset = Math.max(parseInt(query.offset || '0', 10) || 0, 0);
 
     let messages;
-    if (since) {
+    if (since && /^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}/.test(since)) {
       messages = jobMessageQueries.getByJobIdSince(id, since, limit);
     } else {
       messages = jobMessageQueries.getByJobId(id, limit, offset);
@@ -1478,7 +1519,7 @@ export async function jobRoutes(fastify: FastifyInstance): Promise<void> {
     }
 
     const schema = z.object({
-      amount: z.coerce.number().min(0.001),
+      amount: z.coerce.number().min(0.001).max(1000000).refine(Number.isFinite, 'Amount must be finite'),
       reason: z.string().max(1000).optional(),
     });
     const parsed = schema.safeParse(request.body);
@@ -1602,27 +1643,34 @@ export async function jobRoutes(fastify: FastifyInstance): Promise<void> {
     const schema = z.object({
       agentTxid: z.string().regex(/^[a-fA-F0-9]{64}$/).optional(),
       feeTxid: z.string().regex(/^[a-fA-F0-9]{64}$/).optional(),
+    }).refine(data => data.agentTxid || data.feeTxid, {
+      message: 'At least one of agentTxid or feeTxid must be provided',
     });
     const parsed = schema.safeParse(request.body);
     if (!parsed.success) {
-      return reply.code(400).send({ error: { code: 'VALIDATION_ERROR', message: 'Invalid txid format' } });
+      return reply.code(400).send({ error: { code: 'VALIDATION_ERROR', message: parsed.error.errors[0]?.message || 'Invalid txid format' } });
     }
 
-    if (parsed.data.agentTxid) {
-      jobExtensionQueries.setAgentPayment(extId, parsed.data.agentTxid, 0);
-    }
-    if (parsed.data.feeTxid) {
-      jobExtensionQueries.setFeePayment(extId, parsed.data.feeTxid, 0);
-    }
+    // Wrap in transaction to prevent double-increment race
+    const db = getDatabase();
+    const result = db.transaction(() => {
+      if (parsed.data.agentTxid) {
+        jobExtensionQueries.setAgentPayment(extId, parsed.data.agentTxid, 0);
+      }
+      if (parsed.data.feeTxid) {
+        jobExtensionQueries.setFeePayment(extId, parsed.data.feeTxid, 0);
+      }
 
-    // If both txids submitted, mark as paid and update job amount
-    const updatedExt = jobExtensionQueries.getByJobId(id).find(e => e.id === extId)!;
-    if (updatedExt.agent_txid && updatedExt.fee_txid) {
-      jobExtensionQueries.updateStatus(extId, 'paid');
-      // Add extension amount to job total
-      const db = getDatabase();
-      db.prepare(`UPDATE jobs SET amount = amount + ?, updated_at = datetime('now') WHERE id = ?`).run(ext.amount, id);
+      const updatedExt = jobExtensionQueries.getByJobId(id).find(e => e.id === extId)!;
+      if (updatedExt.agent_txid && updatedExt.fee_txid) {
+        jobExtensionQueries.updateStatus(extId, 'paid');
+        db.prepare(`UPDATE jobs SET amount = amount + ?, updated_at = datetime('now') WHERE id = ?`).run(ext.amount, id);
+        return { paid: true, status: 'paid' as const };
+      }
+      return { paid: false, status: 'approved' as const };
+    })();
 
+    if (result.paid) {
       createNotification({
         recipientVerusId: job.seller_verus_id,
         type: 'job.extension_paid',
@@ -1632,7 +1680,7 @@ export async function jobRoutes(fastify: FastifyInstance): Promise<void> {
       });
     }
 
-    return { data: { id: extId, status: updatedExt.agent_txid && updatedExt.fee_txid ? 'paid' : 'approved' } };
+    return { data: { id: extId, status: result.status } };
   });
 
   /**
@@ -1645,6 +1693,12 @@ export async function jobRoutes(fastify: FastifyInstance): Promise<void> {
 
     const job = jobQueries.getById(id);
     if (!job) return reply.code(404).send({ error: { code: 'NOT_FOUND', message: 'Job not found' } });
+
+    const isBuyer = job.buyer_verus_id === session.verusId;
+    const isSeller = job.seller_verus_id === session.verusId;
+    if (!isBuyer && !isSeller) {
+      return reply.code(403).send({ error: { code: 'FORBIDDEN', message: 'Not a party to this job' } });
+    }
 
     const extensions = jobExtensionQueries.getByJobId(id);
     const ext = extensions.find(e => e.id === extId);

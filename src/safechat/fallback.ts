@@ -27,7 +27,7 @@ const INJECTION_PATTERNS: Array<{ pattern: RegExp; weight: number; label: string
   { pattern: /what\s+(are|were)\s+your\s+(original\s+)?(instructions|rules|system\s+prompt)/i, weight: 0.7, label: 'exfiltration' },
   // Encoding bypass
   { pattern: /base64[:\s]+[A-Za-z0-9+/=]{20,}/i, weight: 0.6, label: 'encoded_payload' },
-  { pattern: /\\u[0-9a-f]{4}.*\\u[0-9a-f]{4}.*\\u[0-9a-f]{4}/i, weight: 0.5, label: 'unicode_escape' },
+  { pattern: /\\u[0-9a-f]{4}[\s\S]{0,500}\\u[0-9a-f]{4}[\s\S]{0,500}\\u[0-9a-f]{4}/i, weight: 0.5, label: 'unicode_escape' },
   // Prompt leaking
   { pattern: /reveal\s+(your|the)\s+(system|hidden|secret)\s*(prompt|instructions|message)/i, weight: 0.8, label: 'prompt_leak' },
   { pattern: /show\s+me\s+(your|the)\s+(system|original|full)\s*(prompt|instructions)/i, weight: 0.75, label: 'prompt_leak' },
@@ -36,7 +36,7 @@ const INJECTION_PATTERNS: Array<{ pattern: RegExp; weight: number; label: string
 // Strip zero-width characters and normalize whitespace
 function normalizeText(text: string): string {
   return text
-    .replace(/[\u200B\u200C\u200D\uFEFF\u00AD]/g, '') // zero-width chars
+    .replace(/[\u200B-\u200F\u2028-\u2029\u202A-\u202E\u2060-\u2064\u2066-\u206F\uFEFF\u00AD\u061C\u180E\u3164]/g, '') // zero-width + invisible chars
     .replace(/\s+/g, ' ')
     .trim();
 }

@@ -202,6 +202,7 @@ export default function HireModal({ service, agent, onClose, onSuccess }) {
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
                 rows={3}
+                maxLength={2000}
                 className="w-full bg-gray-900 border border-gray-700 rounded-lg px-4 py-2 text-white focus:border-verus-blue focus:outline-none"
                 placeholder="Describe what you need..."
                 required
@@ -250,6 +251,7 @@ export default function HireModal({ service, agent, onClose, onSuccess }) {
                 value={message}
                 onChange={(e) => setMessage(e.target.value)}
                 rows={2}
+                maxLength={1000}
                 className="w-full bg-gray-900 border border-gray-700 rounded-lg px-4 py-2 text-white focus:border-verus-blue focus:outline-none"
                 placeholder="Any additional notes for the agent..."
               />

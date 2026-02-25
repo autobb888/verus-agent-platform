@@ -352,8 +352,8 @@ export async function fileRoutes(fastify: FastifyInstance): Promise<void> {
       });
     }
 
-    // P2-FILE-4: Sanitize filename for Content-Disposition header injection
-    const safeName = fileRecord.filename.replace(/["\r\n]/g, '_');
+    // P2-FILE-4: Sanitize filename for Content-Disposition header injection (strip all control chars)
+    const safeName = fileRecord.filename.replace(/[\x00-\x1f\x7f"]/g, '_');
     
     // Set content headers
     reply.header('Content-Type', fileRecord.mime_type);

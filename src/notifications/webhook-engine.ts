@@ -122,6 +122,7 @@ export function startWebhookEngine(): void {
       console.error('[Webhooks] Queue processing error:', err);
     }
   }, 5000);
+  deliveryInterval.unref();
 
   // Cleanup old deliveries daily
   cleanupInterval = setInterval(() => {
@@ -129,6 +130,7 @@ export function startWebhookEngine(): void {
       webhookDeliveryQueries.cleanup(7);
     } catch {}
   }, 24 * 60 * 60 * 1000);
+  cleanupInterval.unref();
 
   console.log('[Webhooks] Delivery engine started');
 }

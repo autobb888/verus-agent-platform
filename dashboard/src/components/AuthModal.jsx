@@ -201,7 +201,7 @@ export default function AuthModal({ isOpen, onClose, onSuccess }) {
               <div className="md:hidden">
                 <p className="text-gray-300 mb-4">Tap to open Verus Mobile:</p>
                 <a
-                  href={qrChallenge.deeplink}
+                  href={/^verus(id)?:\/\//i.test(qrChallenge.deeplink) ? qrChallenge.deeplink : '#'}
                   className="inline-flex items-center gap-2 px-6 py-3 bg-blue-600 hover:bg-blue-500 text-white font-semibold rounded-lg transition-colors mb-4"
                 >
                   📱 Open Verus Mobile

@@ -42,8 +42,8 @@ export async function inboxRoutes(fastify: FastifyInstance): Promise<void> {
     const query = request.query as Record<string, string>;
     
     const status = query.status || 'pending';
-    const limit = Math.min(parseInt(query.limit || '20', 10), 100);
-    const offset = parseInt(query.offset || '0', 10);
+    const limit = Math.min(parseInt(query.limit || '20', 10) || 20, 100);
+    const offset = Math.max(parseInt(query.offset || '0', 10) || 0, 0);
 
     const items = inboxQueries.getByRecipient(session.verusId, status, limit, offset);
     const pendingCount = inboxQueries.countPending(session.verusId);
@@ -53,13 +53,11 @@ export async function inboxRoutes(fastify: FastifyInstance): Promise<void> {
         // For job-related items, include job description
         let jobDescription = null;
         if (item.vdxf_data) {
-          try {
-            const vdxf = JSON.parse(item.vdxf_data);
-            if (vdxf.jobId) {
-              const job = jobQueries.getById(vdxf.jobId);
-              if (job) jobDescription = job.description;
-            }
-          } catch {}
+          const vdxf = safeJsonParse(item.vdxf_data);
+          if (vdxf?.jobId) {
+            const job = jobQueries.getById(vdxf.jobId);
+            if (job) jobDescription = job.description;
+          }
         }
         return {
           id: item.id,
@@ -115,40 +113,38 @@ export async function inboxRoutes(fastify: FastifyInstance): Promise<void> {
     // For job notifications, include job details for the sign flow
     let jobDetails = null;
     if (item.vdxf_data) {
-      try {
-        const vdxf = JSON.parse(item.vdxf_data);
-        if (vdxf.jobId) {
-          const job = jobQueries.getById(vdxf.jobId);
-          if (job) {
-            jobDetails = {
-              id: job.id,
-              jobHash: job.job_hash,
-              buyerVerusId: job.buyer_verus_id,
-              sellerVerusId: job.seller_verus_id,
-              amount: job.amount,
-              currency: job.currency,
-              description: job.description,
-              status: job.status,
-              paymentTerms: job.payment_terms,
-              paymentTxid: job.payment_txid,
-              paymentVerified: job.payment_verified === 1,
-              signatures: {
-                request: job.request_signature ? '✓ Signed' : null,
-                acceptance: job.acceptance_signature ? '✓ Signed' : null,
-                delivery: job.delivery_signature ? '✓ Signed' : null,
-                completion: job.completion_signature ? '✓ Signed' : null,
-              },
-              timestamps: {
-                requested: job.requested_at,
-                accepted: job.accepted_at,
-                delivered: job.delivered_at,
-                completed: job.completed_at,
-              },
-              deliveryHash: job.delivery_hash,
-            };
-          }
+      const vdxf = safeJsonParse(item.vdxf_data);
+      if (vdxf?.jobId) {
+        const job = jobQueries.getById(vdxf.jobId);
+        if (job) {
+          jobDetails = {
+            id: job.id,
+            jobHash: job.job_hash,
+            buyerVerusId: job.buyer_verus_id,
+            sellerVerusId: job.seller_verus_id,
+            amount: job.amount,
+            currency: job.currency,
+            description: job.description,
+            status: job.status,
+            paymentTerms: job.payment_terms,
+            paymentTxid: job.payment_txid,
+            paymentVerified: job.payment_verified === 1,
+            signatures: {
+              request: job.request_signature ? '✓ Signed' : null,
+              acceptance: job.acceptance_signature ? '✓ Signed' : null,
+              delivery: job.delivery_signature ? '✓ Signed' : null,
+              completion: job.completion_signature ? '✓ Signed' : null,
+            },
+            timestamps: {
+              requested: job.requested_at,
+              accepted: job.accepted_at,
+              delivered: job.delivered_at,
+              completed: job.completed_at,
+            },
+            deliveryHash: job.delivery_hash,
+          };
         }
-      } catch {}
+      }
     }
 
     return {
@@ -174,7 +170,9 @@ export async function inboxRoutes(fastify: FastifyInstance): Promise<void> {
    * POST /v1/me/inbox/:id/reject
    * Reject an inbox item (don't want to add to identity)
    */
-  fastify.post('/v1/me/inbox/:id/reject', async (request, reply) => {
+  fastify.post('/v1/me/inbox/:id/reject', {
+    config: { rateLimit: { max: 20, timeWindow: 60_000 } },
+  }, async (request, reply) => {
     const session = (request as any).session as { verusId: string };
     const { id } = request.params as { id: string };
 
@@ -251,7 +249,5 @@ function generateUpdateIdentityCommand(agentName: string, item: any): string {
     contentmultimap,
   };
 
-  const escapedJson = JSON.stringify(updateJson).replace(/"/g, '\\"');
-  
   return `verus -testnet updateidentity '${JSON.stringify(updateJson)}'`;
 }

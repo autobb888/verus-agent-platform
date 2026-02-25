@@ -90,10 +90,17 @@ export default function MyServicesPage() {
     setSaving(true);
     setError('');
 
+    const price = parseFloat(form.price);
+    if (isNaN(price) || price < 0) {
+      setError('Please enter a valid price.');
+      setSaving(false);
+      return;
+    }
+
     const payload = {
       name: form.name.trim(),
       description: form.description.trim() || null,
-      price: parseFloat(form.price),
+      price,
       currency: form.currency,
       category: form.category,
       turnaround: form.turnaround.trim() || null,

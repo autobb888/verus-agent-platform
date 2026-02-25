@@ -22,6 +22,7 @@
 import type { Signer } from '../types/index.js';
 import * as secp256k1 from '@noble/secp256k1';
 import { sha256 } from '@noble/hashes/sha2';
+import { ripemd160 } from '@noble/hashes/ripemd160';
 import bs58check from 'bs58check';
 
 export interface WifSignerOptions {
@@ -90,13 +91,10 @@ export class WifSigner implements Signer {
     // RIPEMD160(SHA256(pubkey)) with version byte 0x3C (Verus testnet)
     // For mainnet, use 0x3B
     const sha = sha256(pubkey);
-    // Note: We need ripemd160 here - for now return derived from pubkey
-    // Full implementation would use @noble/hashes/ripemd160
-    
-    // Simplified: return base58check encoded
+    const hash160 = ripemd160(sha);
+
     const version = Buffer.from([0x3C]); // Verus testnet
-    const hash = sha.slice(0, 20); // Placeholder - should be RIPEMD160
-    const payload = Buffer.concat([version, hash]);
+    const payload = Buffer.concat([version, Buffer.from(hash160)]);
     return bs58check.encode(payload);
   }
 }

@@ -147,9 +147,13 @@ export async function storeFile(
     throw new Error(`File too large: ${buffer.length} bytes (max ${MAX_FILE_SIZE})`);
   }
 
-  // P2-FILE-5: Validate jobId is a UUID (prevent path traversal)
-  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(jobId)) {
+  // P2-FILE-5: Validate jobId and fileId are UUIDs (prevent path traversal)
+  const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  if (!UUID_RE.test(jobId)) {
     throw new Error('Invalid job ID format');
+  }
+  if (!UUID_RE.test(fileId)) {
+    throw new Error('Invalid file ID format');
   }
 
   // P1-FILE-2: Validate magic bytes match extension
@@ -196,6 +200,9 @@ export function readFile(storagePath: string): Buffer | null {
   }
 
   try {
+    // Reject symlinks to prevent directory escape
+    const stat = fs.lstatSync(resolved);
+    if (stat.isSymbolicLink()) return null;
     return fs.readFileSync(resolved);
   } catch {
     return null;
@@ -212,6 +219,9 @@ export function deleteFile(storagePath: string): boolean {
   }
 
   try {
+    // Reject symlinks to prevent directory escape
+    const stat = fs.lstatSync(resolved);
+    if (stat.isSymbolicLink()) return false;
     fs.unlinkSync(resolved);
     return true;
   } catch {
@@ -223,14 +233,24 @@ export function deleteFile(storagePath: string): boolean {
  * Delete all files for a job
  */
 export function deleteJobFiles(jobId: string): number {
+  // Validate jobId is a safe UUID format to prevent path traversal
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(jobId)) {
+    return 0;
+  }
   const jobDir = path.join(BASE_DIR, jobId);
+  const resolved = path.resolve(jobDir);
+  if (!resolved.startsWith(path.resolve(BASE_DIR))) return 0;
   if (!fs.existsSync(jobDir)) return 0;
 
   let count = 0;
   try {
     const files = fs.readdirSync(jobDir);
     for (const file of files) {
-      fs.unlinkSync(path.join(jobDir, file));
+      const filePath = path.join(jobDir, file);
+      // Skip symlinks
+      const stat = fs.lstatSync(filePath);
+      if (stat.isSymbolicLink()) continue;
+      fs.unlinkSync(filePath);
       count++;
     }
     fs.rmdirSync(jobDir);
@@ -244,14 +264,20 @@ export function deleteJobFiles(jobId: string): number {
  * Get total storage used by a job (bytes)
  */
 export function getJobStorageUsage(jobId: string): number {
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(jobId)) {
+    return 0;
+  }
   const jobDir = path.join(BASE_DIR, jobId);
+  const resolved = path.resolve(jobDir);
+  if (!resolved.startsWith(path.resolve(BASE_DIR))) return 0;
   if (!fs.existsSync(jobDir)) return 0;
 
   let total = 0;
   try {
     const files = fs.readdirSync(jobDir);
     for (const file of files) {
-      const stat = fs.statSync(path.join(jobDir, file));
+      const stat = fs.lstatSync(path.join(jobDir, file));
+      if (stat.isSymbolicLink()) continue;
       total += stat.size;
     }
   } catch {

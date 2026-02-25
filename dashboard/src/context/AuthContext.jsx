@@ -86,7 +86,7 @@ export function AuthProvider({ children }) {
     try {
       data = JSON.parse(text);
     } catch {
-      throw new Error(`Invalid response: ${text.slice(0, 100)}`);
+      throw new Error(`Invalid response from server (status ${res.status})`);
     }
     
     if (!res.ok) {

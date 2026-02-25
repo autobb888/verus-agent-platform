@@ -62,6 +62,7 @@ const MAX_MESSAGE_SIZE = 16 * 1024; // 16KB
 interface RoomMessageTracker {
   messages: Array<{ sender: string; timestamp: number }>;
   paused: boolean;
+  pausedAt: number;
 }
 const roomTrackers = new Map<string, RoomMessageTracker>();
 const CIRCUIT_BREAKER_WINDOW_MS = 60 * 1000;
@@ -70,24 +71,24 @@ const CIRCUIT_BREAKER_THRESHOLD = 20;
 // Multi-turn session scorer (crescendo attack detection)
 // Inline to avoid cross-project import issues. Canonical source: ~/safechat/src/scanner/session-scorer.ts
 class SessionScorer {
+  // Map insertion order is used for LRU eviction: delete+re-set moves to end
   private sessions = new Map<string, Array<{ score: number; timestamp: number }>>();
-  private accessOrder: string[] = [];
   constructor(private opts: { windowSize: number; sumThreshold: number; minFlaggedForEscalation: number; maxAgeMs: number; maxSessions?: number }) {}
   record(sessionId: string, score: number) {
     const now = Date.now();
     let scores = this.sessions.get(sessionId);
-    if (!scores) { scores = []; this.sessions.set(sessionId, scores); }
+    if (!scores) { scores = []; }
     scores.push({ score, timestamp: now });
     const cutoff = now - this.opts.maxAgeMs;
     const windowed = scores.filter(s => s.timestamp >= cutoff).slice(-this.opts.windowSize);
+    // LRU: delete and re-set to move to end of Map iteration order (O(1))
+    this.sessions.delete(sessionId);
     this.sessions.set(sessionId, windowed);
-    // LRU
-    const idx = this.accessOrder.indexOf(sessionId);
-    if (idx !== -1) this.accessOrder.splice(idx, 1);
-    this.accessOrder.push(sessionId);
     const max = this.opts.maxSessions ?? 10000;
-    while (this.sessions.size > max && this.accessOrder.length > 0) {
-      this.sessions.delete(this.accessOrder.shift()!);
+    while (this.sessions.size > max) {
+      // Evict oldest (first key in Map iteration order)
+      const oldest = this.sessions.keys().next().value;
+      if (oldest !== undefined) this.sessions.delete(oldest); else break;
     }
     const rollingSum = windowed.reduce((s, e) => s + e.score, 0);
     const flaggedCount = windowed.filter(e => e.score > 0.3).length;
@@ -154,16 +155,28 @@ function getSessionFromToken(token: string | undefined): { verusId: string; toke
   return { verusId: consumed.verus_id, tokenId: consumed.id };
 }
 
+const CIRCUIT_BREAKER_PAUSE_MAX_MS = 5 * 60 * 1000; // Auto-unpause after 5 minutes
+
 function checkCircuitBreaker(room: string, sender: string): { allowed: boolean; paused: boolean } {
   let tracker = roomTrackers.get(room);
   if (!tracker) {
-    tracker = { messages: [], paused: false };
+    tracker = { messages: [], paused: false, pausedAt: 0 };
     roomTrackers.set(room, tracker);
   }
 
-  if (tracker.paused) return { allowed: false, paused: true };
-
   const now = Date.now();
+
+  // Auto-unpause after absolute timeout to prevent permanent room DoS
+  if (tracker.paused) {
+    if (tracker.pausedAt && now - tracker.pausedAt > CIRCUIT_BREAKER_PAUSE_MAX_MS) {
+      tracker.paused = false;
+      tracker.pausedAt = 0;
+      tracker.messages = [];
+    } else {
+      return { allowed: false, paused: true };
+    }
+  }
+
   // Prune old messages
   tracker.messages = tracker.messages.filter(m => now - m.timestamp < CIRCUIT_BREAKER_WINDOW_MS);
   tracker.messages.push({ sender, timestamp: now });
@@ -173,6 +186,7 @@ function checkCircuitBreaker(room: string, sender: string): { allowed: boolean; 
     const senders = new Set(tracker.messages.map(m => m.sender));
     if (senders.size <= 2) {
       tracker.paused = true;
+      tracker.pausedAt = now;
       return { allowed: false, paused: true };
     }
   }
@@ -344,8 +358,31 @@ export function initSocketServer(httpServer: HttpServer): SocketIOServer {
       }
     });
 
+    // Per-socket message rate limiting (max 1 message per 200ms, burst of 30/min)
+    let lastMessageAt = 0;
+    let messageCount = 0;
+    let messageWindowStart = Date.now();
+
     // Send message
     socket.on('message', async (data: { jobId: string; content: string; signature?: string }) => {
+      const now = Date.now();
+      // Minimum 200ms between messages
+      if (now - lastMessageAt < 200) {
+        socket.emit('error', { message: 'Sending too fast' });
+        return;
+      }
+      // Sliding window: max 30 messages per 60 seconds
+      if (now - messageWindowStart > 60_000) {
+        messageCount = 0;
+        messageWindowStart = now;
+      }
+      if (messageCount >= 30) {
+        socket.emit('error', { message: 'Message rate limit exceeded' });
+        return;
+      }
+      lastMessageAt = now;
+      messageCount++;
+
       const { jobId, content, signature } = data || {};
       if (!jobId || !content || typeof content !== 'string') {
         socket.emit('error', { message: 'Invalid message data' });
@@ -568,12 +605,18 @@ export function initSocketServer(httpServer: HttpServer): SocketIOServer {
           emitWebhookEvent({ type: 'message.new', agentVerusId: recipient, jobId, data: { senderVerusId: socket.verusId, preview: sanitized.slice(0, 100) } });
           createNotification({ recipientVerusId: recipient, type: 'message.new', title: 'New Message', body: sanitized.slice(0, 100), jobId });
         }
-      } catch {}
+      } catch (webhookErr) {
+        console.error('[WS] Webhook/notification error:', webhookErr instanceof Error ? webhookErr.message : 'unknown');
+      }
     });
 
-    // Typing indicator
+    // Typing indicator (throttled to max 1 per 500ms per socket)
+    let lastTypingAt = 0;
     socket.on('typing', (data: { jobId: string }) => {
-      if (data?.jobId && socket.rooms.has(`job:${data.jobId}`)) {
+      const now = Date.now();
+      if (now - lastTypingAt < 500) return;
+      lastTypingAt = now;
+      if (data?.jobId && typeof data.jobId === 'string' && socket.rooms.has(`job:${data.jobId}`)) {
         socket.to(`job:${data.jobId}`).emit('typing', {
           verusId: socket.verusId,
           jobId: data.jobId,
@@ -581,8 +624,12 @@ export function initSocketServer(httpServer: HttpServer): SocketIOServer {
       }
     });
 
-    // Read receipt
+    // Read receipt (throttled: max 1 per second per socket)
+    let lastReadAt = 0;
     socket.on('read', (data: { jobId: string }) => {
+      const now = Date.now();
+      if (now - lastReadAt < 1000) return;
+      lastReadAt = now;
       if (data?.jobId && socket.rooms.has(`job:${data.jobId}`)) {
         const now = new Date().toISOString();
         readReceiptQueries.upsert(data.jobId, socket.verusId, now);
@@ -625,33 +672,29 @@ export function initSocketServer(httpServer: HttpServer): SocketIOServer {
   });
 
   // Cleanup chat tokens periodically
-  setInterval(() => {
+  const chatTokenCleanup = setInterval(() => {
     chatTokenQueries.cleanup();
   }, 5 * 60 * 1000);
+  chatTokenCleanup.unref();
 
   // Cleanup stale room trackers
-  setInterval(() => {
+  const roomTrackerCleanup = setInterval(() => {
     const now = Date.now();
     for (const [room, tracker] of roomTrackers) {
       tracker.messages = tracker.messages.filter(m => now - m.timestamp < CIRCUIT_BREAKER_WINDOW_MS);
       if (tracker.messages.length === 0 && !tracker.paused) {
         roomTrackers.delete(room);
       }
-      // Auto-unpause after 5 minutes
-      if (tracker.paused && tracker.messages.length === 0) {
+      // Auto-unpause: either messages drained or absolute timeout exceeded
+      if (tracker.paused && (tracker.messages.length === 0 || (tracker.pausedAt && now - tracker.pausedAt > CIRCUIT_BREAKER_PAUSE_MAX_MS))) {
         tracker.paused = false;
+        tracker.pausedAt = 0;
+        tracker.messages = [];
       }
     }
   }, 60 * 1000);
+  roomTrackerCleanup.unref();
 
   return io;
 }
 
-function parse(cookieHeader: string): Record<string, string> {
-  const cookies: Record<string, string> = {};
-  cookieHeader.split(';').forEach(pair => {
-    const [key, ...val] = pair.trim().split('=');
-    if (key) cookies[key] = decodeURIComponent(val.join('='));
-  });
-  return cookies;
-}

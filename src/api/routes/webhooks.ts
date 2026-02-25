@@ -20,6 +20,7 @@ import { emitWebhookEvent } from '../../notifications/webhook-engine.js';
 import { validateWebhookUrl } from '../../utils/ssrf-fetch.js';
 import { randomBytes } from 'crypto';
 import { z } from 'zod';
+import { safeJsonParse } from '../../utils/safe-json.js';
 
 const VALID_EVENTS = [
   '*',
@@ -61,7 +62,7 @@ export async function webhookRoutes(fastify: FastifyInstance): Promise<void> {
       data: hooks.map(h => ({
         id: h.id,
         url: h.url,
-        events: JSON.parse(h.events),
+        events: safeJsonParse(h.events, []),
         active: h.active === 1,
         failureCount: h.failure_count,
         lastSuccessAt: h.last_success_at,
@@ -74,7 +75,10 @@ export async function webhookRoutes(fastify: FastifyInstance): Promise<void> {
   /**
    * POST /v1/me/webhooks — Register a webhook
    */
-  fastify.post('/v1/me/webhooks', { preHandler: requireAuth }, async (request, reply) => {
+  fastify.post('/v1/me/webhooks', {
+    preHandler: requireAuth,
+    config: { rateLimit: { max: 10, timeWindow: 60_000 } },
+  }, async (request, reply) => {
     const session = (request as any).session as { verusId: string };
 
     const parsed = createWebhookSchema.safeParse(request.body);
@@ -153,7 +157,11 @@ export async function webhookRoutes(fastify: FastifyInstance): Promise<void> {
       }
     }
 
-    webhookQueries.update(id, parsed.data);
+    // Atomic update with ownership check
+    const updated = webhookQueries.update(id, parsed.data, session.verusId);
+    if (!updated) {
+      return reply.code(404).send({ error: { code: 'NOT_FOUND', message: 'Webhook not found' } });
+    }
 
     return { data: { success: true } };
   });
@@ -177,7 +185,10 @@ export async function webhookRoutes(fastify: FastifyInstance): Promise<void> {
   /**
    * POST /v1/me/webhooks/:id/test — Send a test event
    */
-  fastify.post('/v1/me/webhooks/:id/test', { preHandler: requireAuth }, async (request, reply) => {
+  fastify.post('/v1/me/webhooks/:id/test', {
+    preHandler: requireAuth,
+    config: { rateLimit: { max: 5, timeWindow: 60_000 } },
+  }, async (request, reply) => {
     const session = (request as any).session as { verusId: string };
     const { id } = request.params as { id: string };
 
@@ -205,7 +216,7 @@ export async function webhookRoutes(fastify: FastifyInstance): Promise<void> {
     const session = (request as any).session as { verusId: string };
     const { id } = request.params as { id: string };
     const query = request.query as Record<string, string>;
-    const limit = Math.min(parseInt(query.limit || '20', 10), 100);
+    const limit = Math.min(Math.max(1, parseInt(query.limit || '20', 10) || 20), 100);
 
     const hook = webhookQueries.getById(id);
     if (!hook || hook.agent_verus_id !== session.verusId) {

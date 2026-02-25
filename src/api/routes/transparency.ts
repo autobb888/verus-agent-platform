@@ -118,6 +118,7 @@ function computeTrustScore(profile: TransparencyProfile['verified']): number {
 // P2-OUT-5: Cache RPC identity lookups (5 min TTL) to prevent DoS via repeated calls
 const identityCache = new Map<string, { iAddress: string; expiresAt: number }>();
 const CACHE_TTL_MS = 5 * 60 * 1000;
+const MAX_CACHE_SIZE = 10_000;
 
 async function resolveIdentityCached(verusId: string): Promise<string | null> {
   const cached = identityCache.get(verusId);
@@ -129,7 +130,13 @@ async function resolveIdentityCached(verusId: string): Promise<string | null> {
   try {
     const identity = await rpc.getIdentity(verusId);
     const iAddress = identity.identity.identityaddress;
+    // LRU eviction: delete+re-set to move to end; evict oldest if over cap
+    identityCache.delete(verusId);
     identityCache.set(verusId, { iAddress, expiresAt: Date.now() + CACHE_TTL_MS });
+    while (identityCache.size > MAX_CACHE_SIZE) {
+      const oldest = identityCache.keys().next().value;
+      if (oldest !== undefined) identityCache.delete(oldest); else break;
+    }
     return iAddress;
   } catch {
     return null;
@@ -137,12 +144,13 @@ async function resolveIdentityCached(verusId: string): Promise<string | null> {
 }
 
 // Cleanup stale cache entries every 10 minutes
-setInterval(() => {
+const transparencyCacheCleanup = setInterval(() => {
   const now = Date.now();
   for (const [key, val] of identityCache) {
     if (val.expiresAt < now) identityCache.delete(key);
   }
 }, 10 * 60 * 1000);
+transparencyCacheCleanup.unref();
 
 export async function transparencyRoutes(fastify: FastifyInstance): Promise<void> {
 
@@ -150,7 +158,9 @@ export async function transparencyRoutes(fastify: FastifyInstance): Promise<void
    * GET /v1/agents/:verusId/transparency
    * Full transparency profile for an agent
    */
-  fastify.get('/v1/agents/:verusId/transparency', async (request, reply) => {
+  fastify.get('/v1/agents/:verusId/transparency', {
+    config: { rateLimit: { max: 30, timeWindow: 60_000 } },
+  }, async (request, reply) => {
     const { verusId } = request.params as { verusId: string };
 
     const iAddress = await resolveIdentityCached(verusId);
@@ -251,7 +261,9 @@ export async function transparencyRoutes(fastify: FastifyInstance): Promise<void
    * GET /v1/agents/:verusId/trust-level
    * Quick trust level check (lightweight)
    */
-  fastify.get('/v1/agents/:verusId/trust-level', async (request, reply) => {
+  fastify.get('/v1/agents/:verusId/trust-level', {
+    config: { rateLimit: { max: 30, timeWindow: 60_000 } },
+  }, async (request, reply) => {
     const { verusId } = request.params as { verusId: string };
 
     const iAddress = await resolveIdentityCached(verusId);

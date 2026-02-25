@@ -106,7 +106,7 @@ function PaymentQR({ jobId, type, amount, currency, onTxDetected }) {
       <div className="w-full bg-gray-950 rounded p-2 text-center">
         <p className="text-xs font-mono break-all" style={{ color: 'var(--text-secondary)' }}>{qrData.address}</p>
       </div>
-      {qrData.deeplink && (
+      {qrData.deeplink && /^verus(id|pay)?:/i.test(qrData.deeplink) && (
         <a href={qrData.deeplink} className="text-xs text-verus-blue hover:underline">
           Open in Verus Mobile →
         </a>
@@ -152,6 +152,7 @@ function ExtensionPanel({ job, loading, onSubmit, onCancel }) {
           value={extReason}
           onChange={(e) => setExtReason(e.target.value)}
           rows={2}
+          maxLength={500}
           className="w-full bg-gray-950 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm focus:border-verus-blue focus:outline-none"
           placeholder="e.g. Job requires more tokens than originally scoped..."
         />
@@ -189,6 +190,7 @@ function DeliveryPanel({ job, user, loading, onSubmit, onCancel }) {
           value={deliveryMsg}
           onChange={(e) => setDeliveryMsg(e.target.value)}
           rows={2}
+          maxLength={1000}
           className="w-full bg-gray-950 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm focus:border-verus-blue focus:outline-none"
           placeholder="Describe what was delivered..."
         />

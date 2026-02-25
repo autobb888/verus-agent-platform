@@ -27,9 +27,11 @@ export class OnboardClient {
    * ```
    */
   async register(name: string, signer: Signer): Promise<OnboardStatus> {
-    // Get address and pubkey from signer
-    const address = (signer as any).getAddress?.() || await this.deriveAddress(signer);
-    const pubkey = (signer as any).getPubkey?.() || await this.derivePubkey(signer);
+    // Get address and pubkey from signer (methods may be sync or async)
+    const addressResult = signer.getAddress?.();
+    const address = (addressResult instanceof Promise ? await addressResult : addressResult) || await this.deriveAddress(signer);
+    const pubkeyResult = signer.getPubkey?.();
+    const pubkey = (pubkeyResult instanceof Promise ? await pubkeyResult : pubkeyResult) || await this.derivePubkey(signer);
     
     // Step 1: Get challenge
     const challenge = await this.getChallenge(name, address, pubkey);
@@ -55,22 +57,22 @@ export class OnboardClient {
    * Derive address from signer (fallback for signers without getAddress)
    */
   private async deriveAddress(signer: Signer): Promise<string> {
-    // For WifSigner, we can get it directly
-    if ((signer as any).getAddress) {
-      return (signer as any).getAddress();
+    if (signer.getAddress) {
+      const result = signer.getAddress();
+      return result instanceof Promise ? await result : result;
     }
-    throw new Error('Signer must implement getAddress() or provide address directly');
+    throw new Error('Signer must implement getAddress() for onboarding');
   }
 
   /**
    * Derive pubkey from signer (fallback for signers without getPubkey)
    */
   private async derivePubkey(signer: Signer): Promise<string> {
-    // For WifSigner, we can get it directly
-    if ((signer as any).getPubkey) {
-      return (signer as any).getPubkey();
+    if (signer.getPubkey) {
+      const result = signer.getPubkey();
+      return result instanceof Promise ? await result : result;
     }
-    throw new Error('Signer must implement getPubkey() or provide pubkey directly');
+    throw new Error('Signer must implement getPubkey() for onboarding');
   }
 
   /**

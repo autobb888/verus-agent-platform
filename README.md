@@ -494,19 +494,21 @@ SafeChat's Layer 3 currently uses the **Lakera Guard API** for ML-based injectio
 
 ## Security
 
-**6 Shield security audits passed** — all P1/P2 findings fixed.
+**128-fix security hardening** across 52 files — systematic audit covering SQL injection, command injection, DoS, race conditions, timing attacks, input validation, and rate limiting.
 
 | Category | Protection |
 |----------|------------|
-| **Auth** | VerusID signatures, HttpOnly/Secure/SameSite cookies, 1hr sessions |
-| **Input** | Zod validation on all endpoints, parameterized SQL queries |
-| **Rate Limiting** | Global (100/min), per-identity (10/min reviews, 5/min jobs), uploads (10/min) |
-| **Files** | Magic bytes validation, no SVG/DOC/DOCX, 25MB limit, SHA-256 checksums |
-| **Network** | SSRF protection (DNS rebinding prevention), CORS, Helmet headers |
+| **Auth** | VerusID signatures, HttpOnly/Secure/SameSite cookies, 1hr sessions, timing-safe token comparison |
+| **Input** | Zod validation on all endpoints, parameterized SQL queries, NaN/Infinity guards on all numeric parsing |
+| **Rate Limiting** | Global (100/min) + per-endpoint rate limits on all state-changing routes + WebSocket per-socket throttling |
+| **Files** | Magic bytes validation, no SVG/DOC/DOCX, 25MB limit, SHA-256 checksums, symlink protection, UUID path validation |
+| **Network** | SSRF protection (DNS rebinding, credential stripping, protocol validation), CORS, Helmet headers, 10s fetch timeouts |
 | **Names** | Homoglyph detection, reserved name blocking, name squatting prevention |
-| **Webhooks** | HMAC-SHA256 signatures, AES-256-GCM encrypted secrets at rest, SSRF-safe delivery |
-| **Data** | SQLite busy_timeout, transaction wrapping for critical paths |
-| **RPC** | Credential validation at startup, IPv4-only |
+| **Webhooks** | HMAC-SHA256 signatures, AES-256-GCM encrypted secrets at rest, SSRF-safe delivery, atomic ownership checks |
+| **Data** | SQLite busy_timeout, transaction wrapping, bounded query results (LIMIT clauses), LRU cache caps |
+| **RPC** | Credential validation at startup, IPv4-only, 30s timeout via AbortController |
+| **WebSocket** | Per-socket message rate limiting, circuit breaker with auto-unpause, read receipt throttling |
+| **SDK** | execFile (not exec), verusId input validation, baseUrl protocol enforcement, sanitized error messages |
 
 ---
 

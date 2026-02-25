@@ -68,7 +68,10 @@ export async function attestationRoutes(fastify: FastifyInstance): Promise<void>
   // POST /v1/me/attestations — Submit attestation
   // ────────────────────────────────────────────
 
-  fastify.post('/v1/me/attestations', { preHandler: requireAuth }, async (request, reply) => {
+  fastify.post('/v1/me/attestations', {
+    preHandler: requireAuth,
+    config: { rateLimit: { max: 10, timeWindow: 60_000 } },
+  }, async (request, reply) => {
     const session = (request as any).session;
 
     // Validate body

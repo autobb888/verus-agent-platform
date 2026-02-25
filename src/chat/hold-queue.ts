@@ -68,11 +68,12 @@ export function getHeldMessages(jobId: string, senderVerusId: string): HeldMessa
  */
 export function appealMessage(holdId: string, senderVerusId: string, reason: string): boolean {
   const db = getDatabase();
+  const truncatedReason = reason.slice(0, 2000);
   const result = db.prepare(`
-    UPDATE message_hold_queue 
+    UPDATE message_hold_queue
     SET appeal_reason = ?, status = 'held'
     WHERE id = ? AND sender_verus_id = ? AND status = 'held'
-  `).run(reason, holdId, senderVerusId);
+  `).run(truncatedReason, holdId, senderVerusId);
   return result.changes > 0;
 }
 

@@ -22,6 +22,7 @@ function ensureCleanup(): void {
       limiter.cleanup(now);
     }
   }, 5 * 60 * 1000);
+  cleanupInterval.unref();
 }
 
 /** Stop the shared cleanup timer (call on graceful shutdown). */
@@ -31,6 +32,9 @@ export function stopAllCleanup(): void {
     cleanupInterval = null;
   }
 }
+
+// Hard cap on unique keys per limiter to prevent memory exhaustion
+const MAX_KEYS_PER_LIMITER = 100_000;
 
 export class RateLimiter {
   private store = new Map<string, RateLimitEntry>();
@@ -54,6 +58,10 @@ export class RateLimiter {
     const entry = this.store.get(key);
 
     if (!entry || entry.resetAt < now) {
+      // Hard cap: reject new keys if map is at capacity (prevents memory exhaustion)
+      if (!entry && this.store.size >= MAX_KEYS_PER_LIMITER) {
+        return false;
+      }
       this.store.set(key, { count: 1, resetAt: now + this.windowMs });
       return true;
     }

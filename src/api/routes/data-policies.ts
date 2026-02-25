@@ -97,7 +97,10 @@ export async function dataPolicyRoutes(fastify: FastifyInstance): Promise<void> 
   /**
    * PUT /v1/me/data-policy — Set/update my data handling policy
    */
-  fastify.put('/v1/me/data-policy', { preHandler: requireAuth }, async (request, reply) => {
+  fastify.put('/v1/me/data-policy', {
+    preHandler: requireAuth,
+    config: { rateLimit: { max: 10, timeWindow: 60_000 } },
+  }, async (request, reply) => {
     const session = (request as any).session as { verusId: string };
 
     const parsed = dataPolicySchema.safeParse(request.body);
@@ -187,7 +190,10 @@ export async function dataPolicyRoutes(fastify: FastifyInstance): Promise<void> 
    * Only seller can sign. Job must be completed.
    * This is a LEGAL commitment — not a technical guarantee.
    */
-  fastify.post('/v1/jobs/:id/deletion-attestation', { preHandler: requireAuth }, async (request, reply) => {
+  fastify.post('/v1/jobs/:id/deletion-attestation', {
+    preHandler: requireAuth,
+    config: { rateLimit: { max: 10, timeWindow: 60_000 } },
+  }, async (request, reply) => {
     const session = (request as any).session as { verusId: string };
     const { id } = request.params as { id: string };
 
@@ -310,7 +316,9 @@ export async function dataPolicyRoutes(fastify: FastifyInstance): Promise<void> 
     const session = (request as any).session as { verusId: string };
     const { id } = request.params as { id: string };
     const query = request.query as Record<string, string>;
-    const timestamp = parseInt(query.timestamp || String(Math.floor(Date.now() / 1000)), 10);
+    const now = Math.floor(Date.now() / 1000);
+    const rawTs = parseInt(query.timestamp || String(now), 10);
+    const timestamp = Number.isFinite(rawTs) && rawTs > now - 600 && rawTs < now + 300 ? rawTs : now;
 
     const job = jobQueries.getById(id);
     if (!job || job.seller_verus_id !== session.verusId) {

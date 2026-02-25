@@ -98,9 +98,13 @@ export class SafeChatHttpClient implements SafeChatProvider {
 
         let result: any;
         if (response.headers.get('x-encrypted') === 'true' && this.encryptionKey) {
-          const encryptedResponse = await response.json();
-          const decrypted = decryptPayload(encryptedResponse, this.encryptionKey);
-          result = JSON.parse(decrypted);
+          try {
+            const encryptedResponse = await response.json();
+            const decrypted = decryptPayload(encryptedResponse, this.encryptionKey);
+            result = JSON.parse(decrypted);
+          } catch (decryptErr) {
+            throw new Error(`Decryption failed: ${decryptErr instanceof Error ? decryptErr.message : 'unknown'}`);
+          }
         } else {
           result = await response.json();
         }

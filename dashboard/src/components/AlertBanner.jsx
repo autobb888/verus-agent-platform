@@ -85,8 +85,10 @@ export default function AlertBanner({ jobId }) {
                 {reportingId === alert.id && (
                   <div style={{ marginTop: 8, display: 'flex', gap: 6 }}>
                     <input
+                      type="text"
                       value={reportReason}
                       onChange={e => setReportReason(e.target.value)}
+                      maxLength={500}
                       placeholder="Reason for report..."
                       style={{
                         flex: 1, fontSize: 12, padding: '6px 10px', borderRadius: 6,

@@ -16,6 +16,7 @@ const AUTH_TAG_LENGTH = 16;
 function getKey(): Buffer | null {
   const hex = config.security.webhookEncryptionKey;
   if (!hex || hex.length !== 64) return null;
+  if (!/^[0-9a-fA-F]{64}$/.test(hex)) return null;
   return Buffer.from(hex, 'hex');
 }
 
@@ -48,10 +49,12 @@ export function decryptSecret(stored: string): string {
   if (parts.length !== 4) throw new Error('Invalid encrypted secret format');
 
   const iv = Buffer.from(parts[1], 'hex');
+  if (iv.length !== IV_LENGTH) throw new Error('Invalid IV length in encrypted secret');
   const authTag = Buffer.from(parts[2], 'hex');
+  if (authTag.length !== AUTH_TAG_LENGTH) throw new Error('Invalid auth tag length in encrypted secret');
   const ciphertext = Buffer.from(parts[3], 'hex');
 
   const decipher = createDecipheriv(ALGORITHM, key, iv);
   decipher.setAuthTag(authTag);
-  return decipher.update(ciphertext) + decipher.final('utf8');
+  return Buffer.concat([decipher.update(ciphertext), decipher.final()]).toString('utf8');
 }

@@ -86,7 +86,7 @@ export async function pricingRoutes(fastify: FastifyInstance): Promise<void> {
     const inputTokens = Math.min(Math.max(0, parseInt(q.inputTokens || '2000', 10) || 2000), 10_000_000);
     const outputTokens = Math.min(Math.max(0, parseInt(q.outputTokens || '1000', 10) || 1000), 10_000_000);
     const privacyTier = (q.privacyTier || 'standard') as PrivacyTier;
-    const vrscUsdRate = Math.max(0.0001, parseFloat(q.vrscUsdRate || '1.0') || 1.0);
+    const vrscUsdRate = Math.min(Math.max(0.0001, parseFloat(q.vrscUsdRate || '1.0') || 1.0), 1_000_000);
 
     // Validate
     if (!VALID_CATEGORIES.has(category)) {

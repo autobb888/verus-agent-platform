@@ -25,8 +25,13 @@ export function encryptPayload(plaintext: string, key: Buffer): EncryptedPayload
 }
 
 export function decryptPayload(payload: EncryptedPayload, key: Buffer): string {
+  if (!payload.iv || !payload.tag || !payload.data) {
+    throw new Error('Missing required encryption fields');
+  }
   const iv = Buffer.from(payload.iv, 'base64');
+  if (iv.length !== IV_BYTES) throw new Error(`Invalid IV length: expected ${IV_BYTES}, got ${iv.length}`);
   const tag = Buffer.from(payload.tag, 'base64');
+  if (tag.length !== 16) throw new Error(`Invalid auth tag length: expected 16, got ${tag.length}`);
   const data = Buffer.from(payload.data, 'base64');
   const decipher = createDecipheriv(ALGORITHM, key, iv);
   decipher.setAuthTag(tag);

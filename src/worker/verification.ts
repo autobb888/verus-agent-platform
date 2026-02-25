@@ -12,7 +12,7 @@
  * Shield AUTH-7: Abuse protection via retry limits and backoff
  */
 
-import { randomBytes } from 'crypto';
+import { randomBytes, timingSafeEqual } from 'crypto';
 import { getDatabase } from '../db/index.js';
 import { ssrfSafeFetch } from '../utils/ssrf-fetch.js';
 
@@ -173,16 +173,28 @@ export async function verifyChallenge(job: VerificationJob): Promise<Verificatio
     response = JSON.parse(result.body);
   } catch {
     db.prepare(`
-      UPDATE endpoint_verifications 
+      UPDATE endpoint_verifications
       SET status = 'failed', error_message = 'Invalid JSON response'
       WHERE id = ?
     `).run(job.verificationId);
-    
+
     return { success: false, error: 'Invalid JSON response' };
   }
-  
-  // Check token matches
-  if (response.token !== verification.challenge_token) {
+
+  // Validate response is a plain object with string token (max 200 chars to prevent memory abuse)
+  if (typeof response !== 'object' || response === null || Array.isArray(response) || typeof response.token !== 'string' || response.token.length > 200) {
+    db.prepare(`
+      UPDATE endpoint_verifications
+      SET status = 'failed', error_message = 'Response must be a JSON object with a string token field'
+      WHERE id = ?
+    `).run(job.verificationId);
+    return { success: false, error: 'Invalid response format' };
+  }
+
+  // Check token matches (timing-safe to prevent oracle attacks)
+  const tokenBuf = Buffer.from(response.token);
+  const expectedBuf = Buffer.from(verification.challenge_token);
+  if (tokenBuf.length !== expectedBuf.length || !timingSafeEqual(tokenBuf, expectedBuf)) {
     db.prepare(`
       UPDATE endpoint_verifications 
       SET status = 'failed', error_message = 'Token mismatch'
@@ -203,25 +215,26 @@ export async function verifyChallenge(job: VerificationJob): Promise<Verificatio
     return { success: false, error: 'VerusID mismatch' };
   }
   
-  // Success! Mark as verified
+  // Success! Mark as verified (atomic: both tables updated together)
   const nextVerification = new Date();
   nextVerification.setHours(nextVerification.getHours() + VERIFICATION_INTERVAL_HOURS);
-  
-  db.prepare(`
-    UPDATE endpoint_verifications 
-    SET status = 'verified', 
-        verified_at = datetime('now'), 
-        next_verification_at = ?,
-        error_message = NULL,
-        retry_count = 0
-    WHERE id = ?
-  `).run(nextVerification.toISOString(), job.verificationId);
-  
-  // Also update the endpoint record
-  db.prepare(`
-    UPDATE agent_endpoints SET verified = 1, verified_at = datetime('now')
-    WHERE id = ?
-  `).run(job.endpointId);
+
+  db.transaction(() => {
+    db.prepare(`
+      UPDATE endpoint_verifications
+      SET status = 'verified',
+          verified_at = datetime('now'),
+          next_verification_at = ?,
+          error_message = NULL,
+          retry_count = 0
+      WHERE id = ?
+    `).run(nextVerification.toISOString(), job.verificationId);
+
+    db.prepare(`
+      UPDATE agent_endpoints SET verified = 1, verified_at = datetime('now')
+      WHERE id = ?
+    `).run(job.endpointId);
+  })();
   
   console.log(`[Verification] SUCCESS: ${job.url} verified for ${job.verusId}`);
   return { success: true };

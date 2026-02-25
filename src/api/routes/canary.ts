@@ -48,11 +48,16 @@ export async function canaryRoutes(fastify: FastifyInstance): Promise<void> {
   const findByToken = db.prepare(`SELECT verus_id FROM agent_canaries WHERE token = ?`);
 
   // POST /v1/me/canary — Register a canary token
-  fastify.post('/v1/me/canary', { preHandler: requireAuth }, async (request, reply) => {
+  fastify.post('/v1/me/canary', {
+    preHandler: requireAuth,
+    config: { rateLimit: { max: 10, timeWindow: 60_000 } },
+  }, async (request, reply) => {
     const session = (request as any).session;
-    const { token, format } = request.body as { token?: string; format?: string };
+    const body = request.body as Record<string, unknown>;
+    const token = typeof body?.token === 'string' ? body.token : '';
+    const format = typeof body?.format === 'string' ? body.format.slice(0, 50) : undefined;
 
-    if (!token || typeof token !== 'string' || token.length < 4 || token.length > 200) {
+    if (!token || token.length < 4 || token.length > 200) {
       return reply.code(400).send({
         error: { code: 'INVALID_TOKEN', message: 'Token must be 4-200 characters' },
       });
@@ -120,7 +125,10 @@ export async function canaryRoutes(fastify: FastifyInstance): Promise<void> {
   `);
 
   // POST /v1/me/communication-policy
-  fastify.post('/v1/me/communication-policy', { preHandler: requireAuth }, async (request, reply) => {
+  fastify.post('/v1/me/communication-policy', {
+    preHandler: requireAuth,
+    config: { rateLimit: { max: 10, timeWindow: 60_000 } },
+  }, async (request, reply) => {
     const session = (request as any).session;
     const { policy, externalChannels } = request.body as {
       policy?: string;

@@ -30,7 +30,11 @@ export async function startIndexer(): Promise<void> {
   state.lastError = null;
   console.log('[Indexer] Starting...');
 
-  indexLoop();
+  indexLoop().catch(err => {
+    state.running = false;
+    state.lastError = err instanceof Error ? err.message : 'Unknown fatal error';
+    console.error('[Indexer] Fatal error in index loop:', state.lastError);
+  });
 }
 
 export function stopIndexer(): void {
@@ -114,11 +118,12 @@ async function handleReorg(expectedPreviousHash: string): Promise<void> {
   
   console.log('[Indexer] Finding common ancestor...');
   
-  // Walk back until we find a common ancestor
+  // Walk back until we find a common ancestor (max 2016 blocks ~ 2 weeks)
+  const MAX_REORG_DEPTH = 2016;
   let currentHeight = syncState.last_block_height;
   let foundAncestor = false;
-  
-  while (currentHeight > 0 && !foundAncestor) {
+
+  while (currentHeight > 0 && !foundAncestor && (syncState.last_block_height - currentHeight) < MAX_REORG_DEPTH) {
     try {
       const block = await rpc.getBlockByHeight(currentHeight);
       // If this block exists and is part of main chain, we found our ancestor
@@ -140,15 +145,13 @@ async function handleReorg(expectedPreviousHash: string): Promise<void> {
   }
 
   if (!foundAncestor) {
-    console.error('[Indexer] Could not find common ancestor, resetting to genesis');
+    console.error(`[Indexer] Could not find common ancestor within ${MAX_REORG_DEPTH} blocks, resetting to genesis`);
     agentQueries.deleteByBlockHeight(0);
     syncQueries.update(0, '0'.repeat(64));
   }
 }
 
 async function processBlock(block: { hash: string; height: number; tx: string[]; time: number }): Promise<void> {
-  const rpc = getRpcClient();
-  
   for (const txid of block.tx) {
     try {
       await processTransaction(txid, block);
@@ -267,7 +270,7 @@ async function indexAgentIdentity(
           endpoint: cap.endpoint || null,
           public: cap.public ? 1 : 0,  // Convert boolean to INTEGER
           pricing_model: cap.pricing?.model || null,
-          pricing_amount: cap.pricing?.amount ? parseFloat(cap.pricing.amount) : null,
+          pricing_amount: cap.pricing?.amount && Number.isFinite(parseFloat(cap.pricing.amount)) ? parseFloat(cap.pricing.amount) : null,
           pricing_currency: cap.pricing?.currency || null,
         });
       }
@@ -311,7 +314,7 @@ async function indexAgentIdentity(
           endpoint: cap.endpoint || null,
           public: cap.public ? 1 : 0,  // Convert boolean to INTEGER
           pricing_model: cap.pricing?.model || null,
-          pricing_amount: cap.pricing?.amount ? parseFloat(cap.pricing.amount) : null,
+          pricing_amount: cap.pricing?.amount && Number.isFinite(parseFloat(cap.pricing.amount)) ? parseFloat(cap.pricing.amount) : null,
           pricing_currency: cap.pricing?.currency || null,
         });
       }
@@ -459,11 +462,11 @@ async function indexReviewData(
   
   const transaction = db.transaction(() => {
     for (const review of reviews) {
-      const buyer = review.buyer as string;
-      const jobHash = review.jobHash as string;
-      const signature = review.signature as string;
-      const timestamp = review.timestamp as number;
-      
+      const buyer = typeof review.buyer === 'string' ? review.buyer : '';
+      const jobHash = typeof review.jobHash === 'string' ? review.jobHash : '';
+      const signature = typeof review.signature === 'string' ? review.signature : '';
+      const timestamp = typeof review.timestamp === 'number' && Number.isFinite(review.timestamp) ? review.timestamp : 0;
+
       // Validate required fields
       if (!buyer || !jobHash || !signature || !timestamp) {
         console.warn(`[Indexer] Invalid review data for ${identity.name}: missing required fields`);

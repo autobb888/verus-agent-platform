@@ -28,6 +28,7 @@ export function initNonceStore(): void {
   // Start cleanup timer
   if (!cleanupTimer) {
     cleanupTimer = setInterval(cleanupExpiredNonces, CLEANUP_INTERVAL);
+    cleanupTimer.unref();
   }
   
   // Ensure database table exists

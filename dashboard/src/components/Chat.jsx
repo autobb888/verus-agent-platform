@@ -639,6 +639,7 @@ export default function Chat({ jobId, job, onJobStatusChanged }) {
             onChange={e => setDeliveryMsg(e.target.value)}
             placeholder="Delivery message (optional)..."
             rows={2}
+            maxLength={1000}
             style={{
               width: '100%', background: 'var(--bg-secondary)', border: '1px solid var(--border-primary)',
               borderRadius: 6, padding: '6px 10px', color: 'var(--text-primary)', fontSize: 13,
@@ -730,6 +731,7 @@ export default function Chat({ jobId, job, onJobStatusChanged }) {
               value={extReason}
               onChange={e => setExtReason(e.target.value)}
               rows={2}
+              maxLength={500}
               placeholder="e.g. Job requires more tokens..."
               style={{
                 width: '100%', background: 'var(--bg-secondary)', border: '1px solid var(--border-primary)',

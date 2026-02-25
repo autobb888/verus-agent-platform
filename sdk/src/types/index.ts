@@ -224,11 +224,21 @@ export interface Signer {
    * Get the VerusID this signer represents
    */
   getVerusId(): string;
-  
+
   /**
    * Sign a message with the VerusID
    */
   sign(message: string): Promise<string>;
+
+  /**
+   * Get the R-address (optional, used during onboarding)
+   */
+  getAddress?(): string | Promise<string>;
+
+  /**
+   * Get the public key hex (optional, used during onboarding)
+   */
+  getPubkey?(): string | Promise<string>;
 }
 
 // ============================================

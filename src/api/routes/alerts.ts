@@ -126,8 +126,9 @@ export async function alertRoutes(fastify: FastifyInstance): Promise<void> {
   fastify.get('/v1/me/alerts', { preHandler: requireAuth }, async (request, reply) => {
     const session = (request as any).session as { verusId: string };
     const query = request.query as Record<string, string>;
-    const status = query.status || 'pending';
-    const limit = Math.min(parseInt(query.limit || '20', 10), 100);
+    const VALID_ALERT_STATUSES = new Set(['pending', 'dismissed', 'reported', 'expired']);
+    const status = VALID_ALERT_STATUSES.has(query.status) ? query.status : 'pending';
+    const limit = Math.min(parseInt(query.limit || '20', 10) || 20, 100);
 
     const db = getDatabase();
     const alerts = db.prepare(`
@@ -169,17 +170,17 @@ export async function alertRoutes(fastify: FastifyInstance): Promise<void> {
     const { id } = request.params as { id: string };
 
     const db = getDatabase();
-    const alert = db.prepare('SELECT * FROM alerts WHERE id = ?').get(id) as AlertRecord | undefined;
+    // Atomic dismiss: combine auth check + update in one query
+    const result = db.prepare(`
+      UPDATE alerts SET status = 'dismissed', resolved_at = datetime('now')
+      WHERE id = ? AND buyer_verus_id = ? AND status = 'pending'
+    `).run(id, session.verusId);
 
-    if (!alert || alert.buyer_verus_id !== session.verusId) {
+    if (result.changes === 0) {
       return reply.code(404).send({
         error: { code: 'NOT_FOUND', message: 'Alert not found' },
       });
     }
-
-    db.prepare(`
-      UPDATE alerts SET status = 'dismissed', resolved_at = datetime('now') WHERE id = ?
-    `).run(id);
 
     return { data: { dismissed: true } };
   });

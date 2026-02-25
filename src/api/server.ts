@@ -55,7 +55,7 @@ export async function createServer() {
           },
         },
     trustProxy: isProduction,
-    // Security: don't expose internal error details
+    // Request logging enabled for security monitoring
     disableRequestLogging: false,
     // Request body size limit (1MB)
     bodyLimit: 1024 * 1024,
@@ -91,10 +91,13 @@ export async function createServer() {
     max: config.rateLimit.max,
     timeWindow: config.rateLimit.windowMs,
     errorResponseBuilder: (_req: any, context: any) => {
-      const err = new Error('Too many requests, please slow down') as any;
-      err.statusCode = context.statusCode || 429;
-      err.code = 'RATE_LIMITED';
-      return err;
+      return {
+        statusCode: context.statusCode || 429,
+        error: {
+          code: 'RATE_LIMITED',
+          message: 'Too many requests, please slow down',
+        },
+      };
     },
   });
 
@@ -119,10 +122,13 @@ export async function createServer() {
     
     // Don't expose internal error details
     const statusCode = error.statusCode || 500;
+    const safeMessage = statusCode >= 500
+      ? 'An internal error occurred'
+      : (error.message || 'An error occurred');
     reply.code(statusCode).send({
       error: {
         code: error.code === 'FST_ERR_RATE_LIMIT_EXCEEDED' ? 'RATE_LIMITED' : (error.code || 'INTERNAL_ERROR'),
-        message: error.message || 'An internal error occurred',
+        message: safeMessage,
       },
     });
   });

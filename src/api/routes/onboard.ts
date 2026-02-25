@@ -67,7 +67,7 @@ function generateChallenge(name: string, address: string): { challenge: string; 
 /**
  * Verify an HMAC challenge token. Returns true if valid and not expired.
  */
-function verifyChallenge(name: string, address: string, challengeText: string, token: string): boolean {
+function verifyChallenge(name: string, address: string, _challengeText: string, token: string): boolean {
   const parts = token.split('|');
   if (parts.length !== 3) return false;
 
@@ -150,7 +150,7 @@ export function verifySignatureLocally(_address: string, message: string, signat
 
 // Rate limiting: 1 registration per IP per hour
 const ipRegistrations = new Map<string, { count: number; resetAt: number }>();
-const IP_LIMIT = parseInt(process.env.ONBOARD_IP_LIMIT || '5', 10); // 5/IP/hour default
+const IP_LIMIT = Math.max(1, parseInt(process.env.ONBOARD_IP_LIMIT || '5', 10) || 5); // 5/IP/hour default
 const IP_WINDOW = 60 * 60 * 1000; // 1 hour
 
 // Global daily limit
@@ -158,8 +158,8 @@ let dailyCount = 0;
 let dailyResetAt = Date.now() + 24 * 60 * 60 * 1000;
 const DAILY_LIMIT = 10;
 
-// Cleanup rate limit entries
-setInterval(() => {
+// Cleanup rate limit entries (tracked for potential shutdown)
+const onboardCleanupInterval = setInterval(() => {
   const now = Date.now();
   for (const [key, entry] of ipRegistrations.entries()) {
     if (entry.resetAt < now) ipRegistrations.delete(key);
@@ -169,6 +169,7 @@ setInterval(() => {
     dailyResetAt = now + 24 * 60 * 60 * 1000;
   }
 }, 5 * 60 * 1000);
+onboardCleanupInterval.unref();
 
 // Validation
 const NAME_REGEX = /^[a-zA-Z0-9_-]{1,64}$/;
@@ -194,7 +195,8 @@ export async function onboardRoutes(fastify: FastifyInstance): Promise<void> {
 
   // Run on startup and every 5 minutes
   cleanupStale.run();
-  setInterval(() => cleanupStale.run(), 5 * 60 * 1000);
+  const staleCleanupInterval = setInterval(() => cleanupStale.run(), 5 * 60 * 1000);
+  staleCleanupInterval.unref();
 
   // Prepared statements
   const insertOnboard = db.prepare(`
@@ -444,7 +446,11 @@ export async function onboardRoutes(fastify: FastifyInstance): Promise<void> {
     }
 
     if (row.status === 'failed') {
-      response.error = row.error;
+      // Sanitize internal error messages — don't expose RPC/system details
+      const rawErr = row.error || 'Registration failed';
+      response.error = /rpc|daemon|internal|econnrefused|timeout/i.test(rawErr)
+        ? 'Registration service error. Please retry.'
+        : rawErr;
     }
 
     return reply.send(response);
@@ -470,6 +476,12 @@ export async function onboardRoutes(fastify: FastifyInstance): Promise<void> {
 
     if (!row.commitment_txid) {
       return reply.code(400).send({ error: { code: 'NO_COMMITMENT', message: 'No commitment TX to resume from. Start a new registration.' } });
+    }
+
+    // Reject retries for registrations older than 7 days
+    const ageMs = Date.now() - new Date(row.created_at).getTime();
+    if (ageMs > 7 * 24 * 60 * 60 * 1000) {
+      return reply.code(410).send({ error: { code: 'REGISTRATION_EXPIRED', message: 'Registration is too old to retry. Please start a new registration.' } });
     }
 
     // Check if commitment is confirmed
@@ -526,12 +538,15 @@ export async function onboardRoutes(fastify: FastifyInstance): Promise<void> {
       updateOnboardRegistered.run(regTxid, `${row.name}.${PARENT_IDENTITY}`, iAddress, id);
       console.log(`[Onboard] ${id}: ✅ Retry registered ${row.name}.${PARENT_IDENTITY} (${iAddress})`);
 
-      // Auto-fund
-      const STARTUP_FUND = 0.0033;
-      try {
-        const fundTxid = await rpc.rpcCall<string>('sendtoaddress', [row.address, STARTUP_FUND]);
-        db.prepare(`UPDATE onboard_requests SET funded_amount = ?, fund_txid = ? WHERE id = ?`).run(STARTUP_FUND, fundTxid, id);
-      } catch { /* non-fatal */ }
+      // Auto-fund (only if not already funded)
+      const alreadyFunded = db.prepare('SELECT fund_txid FROM onboard_requests WHERE id = ? AND fund_txid IS NOT NULL').get(id) as any;
+      if (!alreadyFunded) {
+        const STARTUP_FUND = 0.0033;
+        try {
+          const fundTxid = await rpc.rpcCall<string>('sendtoaddress', [row.address, STARTUP_FUND]);
+          db.prepare(`UPDATE onboard_requests SET funded_amount = ?, fund_txid = ? WHERE id = ?`).run(STARTUP_FUND, fundTxid, id);
+        } catch { /* non-fatal */ }
+      }
     };
 
     doRegister().catch(err => {
