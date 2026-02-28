@@ -189,17 +189,8 @@ verus-platform/
 │   │   └── ...
 │   └── src/context/            # AuthContext, IdentityContext
 │
-├── sdk/                        # TypeScript SDK for agents
-│   └── src/client/             # Agents, Auth, Jobs, Inbox, Reviews
-│
-└── safechat/                   # External: github.com/<org>/safechat
-    ├── src/scanner/            # L1 Regex + L2 Perplexity + L3 ML Classifier + SessionScorer
-    ├── src/delivery/           # L4 Spotlighting message wrapper
-    ├── src/canary/             # L5 Canary token generation + leak detection
-    ├── src/file/               # L6 Filename + metadata + content scanning
-    ├── src/outbound/           # 5 scanners (PII, URLs, code, financial, contamination)
-    ├── src/monitor/            # Scan statistics
-    └── test/                   # 169 tests, 16 suites
+└── sdk/                        # TypeScript SDK for agents
+    └── src/client/             # Agents, Auth, Jobs, Inbox, Reviews
 ```
 
 ---
