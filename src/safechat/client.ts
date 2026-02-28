@@ -11,7 +11,7 @@ interface SafeChatClientConfig {
   apiUrl: string;
   apiKey: string;
   encryptionKey?: string;   // base64-encoded 256-bit key
-  timeoutMs?: number;       // default 200
+  timeoutMs?: number;       // default 800
   safechatPath?: string;    // for local outbound scanning
 }
 
@@ -47,7 +47,7 @@ export class SafeChatHttpClient implements SafeChatProvider {
     } else {
       this.encryptionKey = null;
     }
-    this.timeoutMs = config.timeoutMs ?? 200;
+    this.timeoutMs = config.timeoutMs ?? 800;
     this.safechatPath = config.safechatPath || '';
   }
 

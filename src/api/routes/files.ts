@@ -96,7 +96,7 @@ export async function fileRoutes(fastify: FastifyInstance): Promise<void> {
     }
 
     // Check storage limit
-    const currentUsage = getJobStorageUsage(jobId);
+    const currentUsage = await getJobStorageUsage(jobId);
     if (currentUsage >= MAX_STORAGE_PER_JOB) {
       return reply.code(400).send({
         error: { code: 'STORAGE_LIMIT', message: 'Job storage limit reached (100MB)' },
@@ -293,7 +293,7 @@ export async function fileRoutes(fastify: FastifyInstance): Promise<void> {
     }
 
     const files = jobFileQueries.getByJobId(jobId);
-    const totalStorage = getJobStorageUsage(jobId);
+    const totalStorage = await getJobStorageUsage(jobId);
 
     return {
       data: files.map(f => ({
@@ -345,7 +345,7 @@ export async function fileRoutes(fastify: FastifyInstance): Promise<void> {
       });
     }
 
-    const buffer = readFile(fileRecord.storage_path);
+    const buffer = await readFile(fileRecord.storage_path);
     if (!buffer) {
       return reply.code(404).send({
         error: { code: 'FILE_MISSING', message: 'File not found on storage' },
@@ -401,7 +401,7 @@ export async function fileRoutes(fastify: FastifyInstance): Promise<void> {
     }
 
     // Delete from storage
-    deleteStoredFile(fileRecord.storage_path);
+    await deleteStoredFile(fileRecord.storage_path);
     
     // Delete from DB
     jobFileQueries.delete(fileId);

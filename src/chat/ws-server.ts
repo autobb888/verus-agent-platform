@@ -12,6 +12,7 @@ import { getDatabase } from '../db/index.js';
 import { jobQueries, jobMessageQueries, chatTokenQueries, readReceiptQueries, serviceQueries } from '../db/index.js';
 import { parse as parseCookie } from 'cookie';
 import { unsign } from 'cookie-signature';
+import { safeJsonParse } from '../utils/safe-json.js';
 
 // Types
 interface AuthenticatedSocket extends Socket {
@@ -272,6 +273,7 @@ export function initSocketServer(httpServer: HttpServer): SocketIOServer {
         socket.sessionValidatedAt = Date.now();
       }
     }, SESSION_REVALIDATION_MS);
+    revalidateInterval.unref();
 
     // Join a job room
     socket.on('join_job', (data: { jobId: string }) => {
@@ -299,8 +301,8 @@ export function initSocketServer(httpServer: HttpServer): SocketIOServer {
         if (job.service_id) {
           const service = serviceQueries.getById(job.service_id);
           if (service?.session_params) {
-            const params = JSON.parse(service.session_params);
-            if (typeof params.duration === 'number') {
+            const params = safeJsonParse(service.session_params, null) as Record<string, unknown> | null;
+            if (params && typeof params.duration === 'number') {
               sessionDuration = Math.max(60, Math.min(86400, params.duration));
             }
           }
@@ -320,20 +322,24 @@ export function initSocketServer(httpServer: HttpServer): SocketIOServer {
 
       // Emit warning 2 minutes before expiry (if session > 3 min)
       if (sessionDuration > 180) {
-        socket.sessionWarningTimeout = setTimeout(() => {
+        const warnTimer = setTimeout(() => {
           socket.emit('session_expiring', {
             jobId,
             expiresAt: new Date(expiresAt).toISOString(),
             remainingSeconds: 120,
           });
         }, sessionDurationMs - 120_000);
+        warnTimer.unref();
+        socket.sessionWarningTimeout = warnTimer;
       }
 
       // Disconnect after session duration
-      socket.sessionTimeout = setTimeout(() => {
+      const expTimer = setTimeout(() => {
         socket.emit('error', { message: 'Session expired' });
         socket.disconnect(true);
       }, sessionDurationMs);
+      expTimer.unref();
+      socket.sessionTimeout = expTimer;
 
       // Presence: broadcast join to room
       socket.to(room).emit('user_joined', {

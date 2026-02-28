@@ -37,8 +37,7 @@ export function AuthProvider({ children }) {
       } else {
         setUser(null);
       }
-    } catch (err) {
-      console.error('Session check failed:', err);
+    } catch {
       setUser(null);
     } finally {
       setLoading(false);
@@ -100,20 +99,24 @@ export function AuthProvider({ children }) {
     return data.data;
   }
 
+  async function refreshUser() {
+    await checkSession();
+  }
+
   async function logout() {
     try {
       await fetch(`${API_BASE}/auth/logout`, {
         method: 'POST',
         credentials: 'include',
       });
-    } catch (err) {
-      console.error('Logout failed:', err);
+    } catch {
+      // Logout failed — clear local state anyway
     }
     setUser(null);
   }
 
   return (
-    <AuthContext.Provider value={{ user, loading, getChallenge, login, logout, requireAuth, showAuthModal, setShowAuthModal }}>
+    <AuthContext.Provider value={{ user, loading, getChallenge, login, logout, refreshUser, requireAuth, showAuthModal, setShowAuthModal }}>
       {children}
     </AuthContext.Provider>
   );

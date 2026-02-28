@@ -72,7 +72,7 @@ function DeletionAttestationSection({ jobId, jobHash, user }) {
       ) : (
         <div className="space-y-2">
           <pre className="text-xs p-2 bg-gray-900 rounded overflow-x-auto text-gray-300 whitespace-pre-wrap">{msg}</pre>
-          <p className="text-xs text-gray-500">
+          <p className="text-xs text-gray-400">
             Run in CLI or GUI console: <code className="text-xs bg-gray-800 px-1 rounded">signmessage "{user?.identityName}@" "{msg}"</code>
           </p>
           <input value={sig} onChange={e => setSig(e.target.value)} placeholder="Paste signature..."
@@ -106,7 +106,7 @@ function DeletionAttestationView({ jobId }) {
         Signed: {attestation.createdAt ? new Date(attestation.createdAt).toLocaleString() : 'Unknown'}
         {attestation.signatureVerified ? ' • Verified ✓' : ''}
       </p>
-      <p className="text-xs text-gray-500 mt-1 italic">
+      <p className="text-xs text-gray-400 mt-1 italic">
         This is a legal commitment, not a technical guarantee.
       </p>
     </div>
@@ -145,7 +145,7 @@ function DeliveryPanel({ job, user, loading, onSubmit, onCancel }) {
         <>
           <div className="bg-gray-950 rounded p-3">
             <div className="flex justify-between items-center mb-1">
-              <span className="text-xs text-gray-500">Sign command:</span>
+              <span className="text-xs text-gray-400">Sign command:</span>
               <CopyButton text={cmd} label="Copy" />
             </div>
             <code className="text-xs text-verus-blue break-all">{cmd}</code>
@@ -381,7 +381,7 @@ function JobCard({ job, currentUser, onUpdate }) {
                 <span className="text-yellow-400 ml-2">· Awaiting payment</span>
               )}
             </p>
-            <p className="text-xs text-gray-500 mt-1">
+            <p className="text-xs text-gray-400 mt-1">
               {isBuyer 
                 ? `You pay → seller (${job.payment.terms === 'prepay' ? 'before work starts' : 'after delivery'})`
                 : `Buyer pays you (${job.payment.terms === 'prepay' ? 'before work starts' : 'after delivery'})`
@@ -540,7 +540,7 @@ function JobCard({ job, currentUser, onUpdate }) {
               </p>
               <div className="bg-gray-950 rounded p-3">
                 <div className="flex justify-between items-center mb-2">
-                  <span className="text-xs text-gray-500">Sign command:</span>
+                  <span className="text-xs text-gray-400">Sign command:</span>
                   <CopyButton text={signPanel.command} label="Copy" />
                 </div>
                 <div className="font-mono text-xs text-verus-blue break-all whitespace-pre-wrap">
@@ -592,7 +592,7 @@ function JobCard({ job, currentUser, onUpdate }) {
                 Send <span className="text-white font-medium">{job.amount} {job.currency}</span> to the seller, then paste the transaction ID below.
               </p>
               <div className="bg-gray-950 rounded p-3">
-                <span className="text-xs text-gray-500">Payment address:</span>
+                <span className="text-xs text-gray-400">Payment address:</span>
                 <p className="text-verus-blue font-mono text-sm mt-1 break-all">{job.payment?.address || job.sellerVerusId}</p>
               </div>
               <div>

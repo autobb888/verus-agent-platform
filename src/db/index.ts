@@ -164,7 +164,7 @@ export const agentQueries = {
     const setClauses: string[] = [];
     const params: any[] = [];
     // P1-VAP-002: Whitelist allowed columns to prevent SQL injection via key names
-    const ALLOWED_COLS = new Set(['name', 'type', 'description', 'owner', 'status', 'revoked', 'public', 'updated_at', 'indexed_at', 'block_height', 'block_hash', 'tx_hash', 'protocols']);
+    const ALLOWED_COLS = new Set(['name', 'type', 'description', 'owner', 'status', 'revoked', 'public', 'updated_at', 'indexed_at', 'block_height', 'block_hash', 'tx_hash', 'protocols', 'privacy_tier']);
 
     for (const [key, value] of Object.entries(updates)) {
       if (ALLOWED_COLS.has(key)) {
@@ -1083,9 +1083,12 @@ export const chatTokenQueries = {
   consume: (id: string): ChatToken | undefined => {
     const db = getDatabase();
     const now = new Date().toISOString();
+    // Allow token reuse within 60s grace period for WebSocket reconnection
     const result = db.prepare(`
-      UPDATE chat_tokens SET used = 1 WHERE id = ? AND used = 0 AND expires_at > ?
-    `).run(id, now);
+      UPDATE chat_tokens SET used = 1, used_at = ?
+      WHERE id = ? AND expires_at > ?
+        AND (used = 0 OR (used = 1 AND used_at > datetime(?, '-60 seconds')))
+    `).run(now, id, now, now);
     if (result.changes === 0) return undefined;
     return db.prepare(`SELECT * FROM chat_tokens WHERE id = ?`).get(id) as ChatToken | undefined;
   },
@@ -1093,7 +1096,8 @@ export const chatTokenQueries = {
   cleanup: () => {
     const db = getDatabase();
     const now = new Date().toISOString();
-    db.prepare(`DELETE FROM chat_tokens WHERE expires_at < ? OR used = 1`).run(now);
+    // Keep used tokens for 60s grace period, then clean up
+    db.prepare(`DELETE FROM chat_tokens WHERE expires_at < ? OR (used = 1 AND used_at < datetime(?, '-60 seconds'))`).run(now, now);
   },
 };
 

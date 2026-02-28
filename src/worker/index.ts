@@ -83,7 +83,7 @@ async function workerLoop(): Promise<void> {
       const expiredFiles = jobFileQueries.getExpiredJobFiles(30);
       if (expiredFiles.length > 0) {
         for (const file of expiredFiles) {
-          deleteStoredFile(file.storage_path);
+          await deleteStoredFile(file.storage_path);
           jobFileQueries.delete(file.id);
         }
         console.log(`[Worker] Cleaned up ${expiredFiles.length} expired job files`);
@@ -119,7 +119,7 @@ async function workerLoop(): Promise<void> {
   }
   
   // Schedule next iteration
-  setTimeout(workerLoop, POLL_INTERVAL);
+  setTimeout(workerLoop, POLL_INTERVAL).unref();
 }
 
 /**

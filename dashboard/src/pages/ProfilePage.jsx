@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { Copy, Check, ChevronDown, ChevronRight, ExternalLink, Shield, Key, User, Database, FileCode, AlertTriangle } from 'lucide-react';
 import ProfileSetupForm from '../components/ProfileSetupForm';
+import { SkeletonCard } from '../components/Skeleton';
 
 const API_BASE = import.meta.env.VITE_API_URL || '';
 
@@ -155,8 +156,9 @@ export default function ProfilePage() {
 
   if (loading) {
     return (
-      <div className="text-center py-12">
-        <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-verus-blue mx-auto"></div>
+      <div role="status" aria-label="Loading">
+        <SkeletonCard lines={6} />
+        <span className="sr-only">Loading...</span>
       </div>
     );
   }

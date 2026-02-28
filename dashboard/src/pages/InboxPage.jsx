@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import ResolvedId from '../components/ResolvedId';
 import CopyButton from '../components/CopyButton';
+import { SkeletonList } from '../components/Skeleton';
 
 const API_BASE = import.meta.env.VITE_API_URL || '';
 
@@ -54,7 +55,7 @@ function JobAcceptPanel({ job, onAccepted }) {
       {/* Command */}
       <div className="bg-gray-950 rounded-lg p-3">
         <div className="flex justify-between items-center mb-2">
-          <span className="text-xs text-gray-500">Run this command:</span>
+          <span className="text-xs text-gray-400">Run this command:</span>
           <CopyButton text={command} label="Copy" />
         </div>
         <code className="text-xs text-verus-blue break-all">{command}</code>
@@ -291,8 +292,9 @@ export default function InboxPage() {
 
   if (loading) {
     return (
-      <div className="flex justify-center py-12">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-verus-blue"></div>
+      <div role="status" aria-label="Loading">
+        <SkeletonList count={5} lines={1} />
+        <span className="sr-only">Loading...</span>
       </div>
     );
   }

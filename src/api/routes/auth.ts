@@ -66,8 +66,12 @@ sessionCleanupInterval = setInterval(() => {
       DELETE FROM auth_challenges WHERE expires_at < ?
     `).run(now);
 
-    if ((sessionsDeleted.changes || 0) > 0 || (challengesDeleted.changes || 0) > 0) {
-      console.log(`[Auth] Cleanup: ${sessionsDeleted.changes || 0} sessions, ${challengesDeleted.changes || 0} challenges`);
+    const qrDeleted = db.prepare(`
+      DELETE FROM qr_challenges WHERE expires_at < ?
+    `).run(now);
+
+    if ((sessionsDeleted.changes || 0) > 0 || (challengesDeleted.changes || 0) > 0 || (qrDeleted.changes || 0) > 0) {
+      console.log(`[Auth] Cleanup: ${sessionsDeleted.changes || 0} sessions, ${challengesDeleted.changes || 0} challenges, ${qrDeleted.changes || 0} qr_challenges`);
     }
   } catch (err) {
     // Silently ignore if DB not yet initialized during early startup

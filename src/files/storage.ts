@@ -8,6 +8,7 @@
  */
 
 import * as fs from 'fs';
+import * as fsp from 'fs/promises';
 import * as path from 'path';
 import { createHash } from 'crypto';
 import { pipeline } from 'stream/promises';
@@ -172,7 +173,7 @@ export async function storeFile(
   }
 
   // Ensure directory exists
-  fs.mkdirSync(jobDir, { recursive: true });
+  await fsp.mkdir(jobDir, { recursive: true });
 
   const storagePath = path.join(jobDir, `${fileId}-${safeFilename}`);
   
@@ -180,7 +181,7 @@ export async function storeFile(
   const checksum = createHash('sha256').update(buffer).digest('hex');
 
   // Write file
-  fs.writeFileSync(storagePath, buffer);
+  await fsp.writeFile(storagePath, buffer);
 
   return {
     storagePath,
@@ -192,7 +193,7 @@ export async function storeFile(
 /**
  * Read a file from storage
  */
-export function readFile(storagePath: string): Buffer | null {
+export async function readFile(storagePath: string): Promise<Buffer | null> {
   // Prevent path traversal
   const resolved = path.resolve(storagePath);
   if (!resolved.startsWith(path.resolve(BASE_DIR))) {
@@ -201,9 +202,9 @@ export function readFile(storagePath: string): Buffer | null {
 
   try {
     // Reject symlinks to prevent directory escape
-    const stat = fs.lstatSync(resolved);
+    const stat = await fsp.lstat(resolved);
     if (stat.isSymbolicLink()) return null;
-    return fs.readFileSync(resolved);
+    return await fsp.readFile(resolved);
   } catch {
     return null;
   }
@@ -212,7 +213,7 @@ export function readFile(storagePath: string): Buffer | null {
 /**
  * Delete a file from storage
  */
-export function deleteFile(storagePath: string): boolean {
+export async function deleteFile(storagePath: string): Promise<boolean> {
   const resolved = path.resolve(storagePath);
   if (!resolved.startsWith(path.resolve(BASE_DIR))) {
     return false;
@@ -220,9 +221,9 @@ export function deleteFile(storagePath: string): boolean {
 
   try {
     // Reject symlinks to prevent directory escape
-    const stat = fs.lstatSync(resolved);
+    const stat = await fsp.lstat(resolved);
     if (stat.isSymbolicLink()) return false;
-    fs.unlinkSync(resolved);
+    await fsp.unlink(resolved);
     return true;
   } catch {
     return false;
@@ -232,7 +233,7 @@ export function deleteFile(storagePath: string): boolean {
 /**
  * Delete all files for a job
  */
-export function deleteJobFiles(jobId: string): number {
+export async function deleteJobFiles(jobId: string): Promise<number> {
   // Validate jobId is a safe UUID format to prevent path traversal
   if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(jobId)) {
     return 0;
@@ -240,20 +241,20 @@ export function deleteJobFiles(jobId: string): number {
   const jobDir = path.join(BASE_DIR, jobId);
   const resolved = path.resolve(jobDir);
   if (!resolved.startsWith(path.resolve(BASE_DIR))) return 0;
-  if (!fs.existsSync(jobDir)) return 0;
+  try { await fsp.access(jobDir); } catch { return 0; }
 
   let count = 0;
   try {
-    const files = fs.readdirSync(jobDir);
+    const files = await fsp.readdir(jobDir);
     for (const file of files) {
       const filePath = path.join(jobDir, file);
       // Skip symlinks
-      const stat = fs.lstatSync(filePath);
+      const stat = await fsp.lstat(filePath);
       if (stat.isSymbolicLink()) continue;
-      fs.unlinkSync(filePath);
+      await fsp.unlink(filePath);
       count++;
     }
-    fs.rmdirSync(jobDir);
+    await fsp.rmdir(jobDir);
   } catch {
     // Best effort
   }
@@ -263,25 +264,25 @@ export function deleteJobFiles(jobId: string): number {
 /**
  * Get total storage used by a job (bytes)
  */
-export function getJobStorageUsage(jobId: string): number {
+export async function getJobStorageUsage(jobId: string): Promise<number> {
   if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(jobId)) {
     return 0;
   }
   const jobDir = path.join(BASE_DIR, jobId);
   const resolved = path.resolve(jobDir);
   if (!resolved.startsWith(path.resolve(BASE_DIR))) return 0;
-  if (!fs.existsSync(jobDir)) return 0;
 
   let total = 0;
   try {
-    const files = fs.readdirSync(jobDir);
+    await fsp.access(jobDir);
+    const files = await fsp.readdir(jobDir);
     for (const file of files) {
-      const stat = fs.lstatSync(path.join(jobDir, file));
+      const stat = await fsp.lstat(path.join(jobDir, file));
       if (stat.isSymbolicLink()) continue;
       total += stat.size;
     }
   } catch {
-    // Best effort
+    // Best effort — directory may not exist
   }
   return total;
 }

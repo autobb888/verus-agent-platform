@@ -53,8 +53,9 @@ export default function TransparencyCard({ verusId }) {
 
   if (loading) {
     return (
-      <div className="card" style={{ padding: '24px', textAlign: 'center' }}>
+      <div className="card" style={{ padding: '24px', textAlign: 'center' }} role="status" aria-label="Loading">
         <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-verus-blue mx-auto" />
+        <span className="sr-only">Loading...</span>
       </div>
     );
   }

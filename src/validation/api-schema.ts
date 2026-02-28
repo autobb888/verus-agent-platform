@@ -3,7 +3,7 @@ import { z } from 'zod';
 // Query parameters for listing agents
 export const ListAgentsQuery = z.object({
   status: z.enum(['active', 'inactive', 'deprecated']).optional(),
-  type: z.enum(['autonomous', 'assisted', 'tool']).optional(),
+  type: z.enum(['autonomous', 'assisted', 'hybrid', 'tool']).optional(),
   capability: z.string().max(100).optional(),
   owner: z.string().max(200).optional(),
   limit: z.coerce.number().int().min(1).max(100).default(20),

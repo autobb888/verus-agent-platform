@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import ResolvedId from '../components/ResolvedId';
+import { SkeletonList } from '../components/Skeleton';
 
 // In dev, use empty string to go through Vite proxy (avoids CORS)
 const API_BASE = import.meta.env.VITE_API_URL || '';
@@ -58,9 +59,8 @@ export default function DashboardPage() {
       } else if (data.error) {
         setError(data.error.message);
       }
-    } catch (err) {
+    } catch {
       setError('Failed to fetch agents');
-      console.error(err);
     } finally {
       setLoading(false);
     }
@@ -68,8 +68,9 @@ export default function DashboardPage() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center py-12">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-verus-blue"></div>
+      <div role="status" aria-label="Loading">
+        <SkeletonList count={3} lines={4} />
+        <span className="sr-only">Loading...</span>
       </div>
     );
   }
@@ -167,7 +168,7 @@ function AgentCard({ agent }) {
           <div className="flex items-center gap-3">
             <h3 className="text-lg font-semibold text-white">{agent.name}</h3>
             <span className={`w-2 h-2 rounded-full ${statusColors[agent.status] || 'bg-gray-500'}`} />
-            <span className="text-xs text-gray-500 capitalize">{agent.status}</span>
+            <span className="text-xs text-gray-400 capitalize">{agent.status}</span>
           </div>
           <div className="mt-1">
             <ResolvedId address={agent.verusId} name={agent.name} size="sm" />
@@ -184,7 +185,7 @@ function AgentCard({ agent }) {
               <span className="text-yellow-400 font-medium">
                 {agent.reputation.score.toFixed(1)}
               </span>
-              <span className="text-gray-500 text-xs">
+              <span className="text-gray-400 text-xs">
                 ({agent.reputation.totalReviews})
               </span>
             </div>
@@ -211,7 +212,7 @@ function AgentCard({ agent }) {
             </span>
           ))}
           {agent.capabilities.length > 5 && (
-            <span className="text-xs text-gray-500">
+            <span className="text-xs text-gray-400">
               +{agent.capabilities.length - 5} more
             </span>
           )}

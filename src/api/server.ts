@@ -32,9 +32,11 @@ import { onboardRoutes } from './routes/onboard.js';
 import { canaryRoutes } from './routes/canary.js';
 import { pricingRoutes } from './routes/pricing.js';
 import { attestationRoutes } from './routes/attestations.js';
+import { holdQueueRoutes } from './routes/hold-queue.js';
 import multipart from '@fastify/multipart';
 import fastifyStatic from '@fastify/static';
 import helmet from '@fastify/helmet';
+import compress from '@fastify/compress';
 import { initNonceStore } from '../auth/nonce-store.js';
 import { initSocketServer, setSafeChatEngine, setOutputScanEngine } from '../chat/ws-server.js';
 
@@ -69,19 +71,38 @@ export async function createServer() {
     credentials: true, // Allow cookies
   });
 
+  // Response compression
+  await fastify.register(compress, { global: true });
+
   // Security headers
   await fastify.register(helmet, {
-    contentSecurityPolicy: false, // CSP handled per-route where needed
+    contentSecurityPolicy: isProduction ? {
+      directives: {
+        defaultSrc: ["'self'"],
+        scriptSrc: ["'self'"],
+        styleSrc: ["'self'", "'unsafe-inline'"],
+        imgSrc: ["'self'", 'data:', 'blob:'],
+        connectSrc: ["'self'", 'wss:', 'ws:'],
+        fontSrc: ["'self'"],
+        objectSrc: ["'none'"],
+        frameAncestors: ["'none'"],
+        baseUri: ["'self'"],
+        formAction: ["'self'"],
+      },
+    } : false,
     crossOriginEmbedderPolicy: false, // Allow dashboard to load resources
   });
 
   // Cookie support for sessions
-  // P2-COOKIE-1: Require COOKIE_SECRET in production
+  // P2-COOKIE-1: Require COOKIE_SECRET in production (64+ chars = 32 bytes hex)
   const cookieSecret = process.env.COOKIE_SECRET || (
     process.env.NODE_ENV === 'production'
       ? (() => { throw new Error('COOKIE_SECRET environment variable is required in production'); })()
       : 'dev-secret-change-in-production'
   );
+  if (process.env.NODE_ENV === 'production' && typeof cookieSecret === 'string' && cookieSecret.length < 64) {
+    throw new Error('COOKIE_SECRET must be at least 64 characters (32 bytes hex) in production');
+  }
   await fastify.register(cookie, {
     secret: cookieSecret as string,
   });
@@ -178,6 +199,7 @@ export async function createServer() {
   await fastify.register(pricingRoutes);
   await fastify.register(attestationRoutes);
   await fastify.register(profileRoutes);
+  await fastify.register(holdQueueRoutes);
 
   // SPA catch-all: serve dashboard/dist in production
   if (isProduction) {
@@ -195,6 +217,14 @@ export async function createServer() {
         prefix: '/',
         decorateReply: false,
         wildcard: false,
+        maxAge: '1d',
+        immutable: false,
+        setHeaders: (res: any, filePath: string) => {
+          // Immutable cache for hashed assets (Vite outputs these)
+          if (filePath.includes('/assets/')) {
+            res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+          }
+        },
       });
 
       // Catch-all: serve index.html for any non-API path

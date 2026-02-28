@@ -6,6 +6,7 @@ import { shutdownNonceStore } from './auth/nonce-store.js';
 import { stopAuthCleanup } from './api/routes/auth.js';
 import { config } from './config/index.js';
 import { startWebhookEngine, stopWebhookEngine } from './notifications/webhook-engine.js';
+import { autoReleaseExpired } from './chat/hold-queue.js';
 
 async function main() {
   console.log('[Verus Platform] Starting...');
@@ -51,6 +52,19 @@ async function main() {
 
   // Start webhook delivery engine
   startWebhookEngine();
+
+  // Hold queue: auto-release messages past SLA (every 15 min)
+  const holdQueueInterval = setInterval(() => {
+    try {
+      const released = autoReleaseExpired(24);
+      if (released > 0) {
+        console.log(`[HoldQueue] Auto-released ${released} expired messages`);
+      }
+    } catch (err) {
+      console.error('[HoldQueue] Auto-release error:', err);
+    }
+  }, 15 * 60 * 1000);
+  holdQueueInterval.unref();
 
   // Graceful shutdown
   const shutdown = async (signal: string) => {

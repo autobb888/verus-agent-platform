@@ -396,6 +396,11 @@ export function runMigrations(db: Database.Database): void {
     )
   `);
 
+  // Add used_at column for WebSocket reconnection grace period
+  try {
+    db.exec(`ALTER TABLE chat_tokens ADD COLUMN used_at TEXT DEFAULT NULL`);
+  } catch { /* column already exists */ }
+
   // Phase 6: Add safety_score to job_messages
   try {
     db.exec(`ALTER TABLE job_messages ADD COLUMN safety_score REAL`);
@@ -506,6 +511,7 @@ export function runMigrations(db: Database.Database): void {
   `);
 
   db.exec(`CREATE INDEX IF NOT EXISTS idx_webhooks_agent ON webhooks(agent_verus_id)`);
+  db.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_webhooks_agent_url ON webhooks(agent_verus_id, url)`);
   db.exec(`CREATE INDEX IF NOT EXISTS idx_webhook_deliveries_status ON webhook_deliveries(status, next_attempt_at)`);
 
   // Phase 6d: Notifications (polling alternative to webhooks)
@@ -622,6 +628,27 @@ export function runMigrations(db: Database.Database): void {
   db.exec(`CREATE INDEX IF NOT EXISTS idx_attestations_job ON attestations(job_id)`);
   db.exec(`CREATE INDEX IF NOT EXISTS idx_attestations_attested_by ON attestations(attested_by)`);
 
+  // Agent canary tokens (moved from canary.ts route handler)
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS agent_canaries (
+      id TEXT PRIMARY KEY,
+      verus_id TEXT NOT NULL,
+      token TEXT NOT NULL,
+      format TEXT NOT NULL DEFAULT 'safechat-canary-v1',
+      created_at TEXT DEFAULT (datetime('now'))
+    )
+  `);
+  db.exec(`CREATE INDEX IF NOT EXISTS idx_canaries_verus_id ON agent_canaries(verus_id)`);
+  db.exec(`CREATE INDEX IF NOT EXISTS idx_canaries_token ON agent_canaries(token)`);
+
+  // Communication policy columns on agents
+  try {
+    db.exec(`ALTER TABLE agents ADD COLUMN communication_policy TEXT DEFAULT 'safechat_only'`);
+  } catch { /* column already exists */ }
+  try {
+    db.exec(`ALTER TABLE agents ADD COLUMN external_channels TEXT DEFAULT NULL`);
+  } catch { /* column already exists */ }
+
   // Onboard funding tracking
   try {
     db.exec(`ALTER TABLE onboard_requests ADD COLUMN funded_amount REAL DEFAULT 0`);
@@ -690,4 +717,8 @@ export function runMigrations(db: Database.Database): void {
     CREATE INDEX IF NOT EXISTS idx_job_extensions_job ON job_extensions(job_id);
     CREATE INDEX IF NOT EXISTS idx_job_extensions_status ON job_extensions(status);
   `);
+
+  // Missing cleanup indexes (T3-9)
+  db.exec(`CREATE INDEX IF NOT EXISTS idx_chat_tokens_expires ON chat_tokens(expires_at)`);
+  db.exec(`CREATE INDEX IF NOT EXISTS idx_qr_challenges_expires ON qr_challenges(expires_at)`);
 }

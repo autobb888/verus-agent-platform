@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useAuth } from '../context/AuthContext';
 import CopyButton from './CopyButton';
 
@@ -20,6 +20,7 @@ export default function AuthModal({ isOpen, onClose, onSuccess }) {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const pollIntervalRef = useRef(null);
+  const modalRef = useRef(null);
 
   // Cleanup polling on unmount or close
   useEffect(() => {
@@ -38,7 +39,7 @@ export default function AuthModal({ isOpen, onClose, onSuccess }) {
             const data = await res.json();
             if (data.data?.status === 'completed') {
               if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
-              window.location.reload();
+              onSuccess?.();
             } else if (data.data?.status === 'expired') {
               if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
               setError('QR code expired. Please try again.');
@@ -68,6 +69,36 @@ export default function AuthModal({ isOpen, onClose, onSuccess }) {
     }
   }, [isOpen]);
 
+  // Focus trap
+  const handleKeyDown = useCallback((e) => {
+    if (e.key === 'Escape') { onClose(); return; }
+    if (e.key !== 'Tab' || !modalRef.current) return;
+    const focusable = modalRef.current.querySelectorAll(
+      'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+    );
+    if (focusable.length === 0) return;
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    if (e.shiftKey) {
+      if (document.activeElement === first) { e.preventDefault(); last.focus(); }
+    } else {
+      if (document.activeElement === last) { e.preventDefault(); first.focus(); }
+    }
+  }, [onClose]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    document.addEventListener('keydown', handleKeyDown);
+    // Auto-focus the modal
+    const timer = setTimeout(() => {
+      if (modalRef.current) {
+        const first = modalRef.current.querySelector('button, [href], input, select, textarea');
+        if (first) first.focus();
+      }
+    }, 50);
+    return () => { document.removeEventListener('keydown', handleKeyDown); clearTimeout(timer); };
+  }, [isOpen, handleKeyDown]);
+
   if (!isOpen) return null;
 
   async function startQRLogin() {
@@ -87,14 +118,14 @@ export default function AuthModal({ isOpen, onClose, onSuccess }) {
           const statusData = await statusRes.json();
           if (statusData.data?.status === 'completed') {
             clearInterval(pollIntervalRef.current);
-            window.location.reload();
+            onSuccess?.();
           } else if (statusData.data?.status === 'expired') {
             clearInterval(pollIntervalRef.current);
             setError('QR code expired. Please try again.');
             setMode('choose');
           }
-        } catch (err) {
-          console.error('Poll error:', err);
+        } catch {
+          // Poll error — retry on next interval
         }
       }, 2000);
     } catch (err) {
@@ -147,7 +178,7 @@ export default function AuthModal({ isOpen, onClose, onSuccess }) {
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
 
       {/* Modal */}
-      <div className="relative w-full max-w-md mx-4 bg-gray-800 rounded-xl shadow-2xl border border-gray-700 overflow-hidden">
+      <div ref={modalRef} role="dialog" aria-modal="true" aria-label="Sign In" className="relative w-full max-w-md mx-4 bg-gray-800 rounded-xl shadow-2xl border border-gray-700 overflow-hidden">
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-700">
           <div className="flex items-center gap-3">
@@ -157,7 +188,7 @@ export default function AuthModal({ isOpen, onClose, onSuccess }) {
               <p className="text-xs text-gray-400">Authenticate with your VerusID</p>
             </div>
           </div>
-          <button onClick={onClose} className="text-gray-400 hover:text-white text-xl transition-colors">✕</button>
+          <button onClick={onClose} className="text-gray-400 hover:text-white text-xl transition-colors" aria-label="Close">✕</button>
         </div>
 
         <div className="p-6">
@@ -207,7 +238,7 @@ export default function AuthModal({ isOpen, onClose, onSuccess }) {
                   📱 Open Verus Mobile
                 </a>
               </div>
-              <p className="text-xs text-gray-500 mb-3">
+              <p className="text-xs text-gray-400 mb-3">
                 Expires: {new Date(qrChallenge.expiresAt).toLocaleTimeString()}
               </p>
               <div className="animate-pulse text-gray-400 text-sm mb-4">Waiting for signature...</div>
@@ -219,7 +250,7 @@ export default function AuthModal({ isOpen, onClose, onSuccess }) {
 
           {/* Manual CLI Login */}
           {mode === 'manual' && step === 'challenge' && challenge && (
-            <form onSubmit={handleLogin} className="space-y-4">
+            <form onSubmit={handleLogin} className="space-y-4" aria-describedby={error ? 'auth-form-error' : undefined}>
               <div>
                 <label className="block text-sm font-medium text-gray-300 mb-2">Sign this message:</label>
                 <pre className="bg-gray-900 rounded-lg p-3 text-xs text-gray-300 overflow-x-auto whitespace-pre-wrap break-all border border-gray-700 max-h-24 overflow-y-auto">
@@ -269,13 +300,14 @@ export default function AuthModal({ isOpen, onClose, onSuccess }) {
 
           {/* Loading state for challenge fetch */}
           {mode === 'manual' && step === 'start' && (
-            <div className="flex items-center justify-center py-8">
+            <div className="flex items-center justify-center py-8" role="status" aria-label="Loading">
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-verus-blue"></div>
+              <span className="sr-only">Loading...</span>
             </div>
           )}
 
           {error && (
-            <div className="mt-4 p-3 bg-red-900/30 border border-red-800 rounded-lg text-red-400 text-sm">
+            <div id="auth-form-error" role="alert" className="mt-4 p-3 bg-red-900/30 border border-red-800 rounded-lg text-red-400 text-sm">
               {error}
             </div>
           )}
@@ -283,7 +315,7 @@ export default function AuthModal({ isOpen, onClose, onSuccess }) {
 
         {/* Footer */}
         <div className="px-6 py-3 border-t border-gray-700 text-center">
-          <p className="text-gray-500 text-xs">
+          <p className="text-gray-400 text-xs">
             No VerusID? <a href="https://verus.io/wallet" target="_blank" rel="noopener noreferrer" className="text-verus-blue hover:underline">Get one free</a>
           </p>
         </div>

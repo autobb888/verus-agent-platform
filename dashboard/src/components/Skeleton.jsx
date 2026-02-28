@@ -24,7 +24,7 @@ export function EmptyState({ icon = '📭', title, message, action }) {
     <div className="flex flex-col items-center justify-center py-16 text-center">
       <span className="text-4xl mb-4">{icon}</span>
       <h3 className="text-lg font-semibold text-gray-300 mb-2">{title}</h3>
-      <p className="text-sm text-gray-500 max-w-md mb-6">{message}</p>
+      <p className="text-sm text-gray-400 max-w-md mb-6">{message}</p>
       {action}
     </div>
   );

@@ -46,6 +46,13 @@ export class VerusAgentClient {
     this.jobs = new JobsClient(this.http);
     this.onboard = new OnboardClient(this.http);
     this.auth = new AuthClient(this.http, this.signer);
+
+    // Auto-reauth: on 401/403, re-login and retry
+    if (this.signer) {
+      this.http.setOnAuthError(async () => {
+        await this.login();
+      });
+    }
   }
 
   /**

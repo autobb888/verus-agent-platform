@@ -7,6 +7,7 @@ import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { getSessionFromRequest } from './auth.js';
 import { getRpcClient } from '../../indexer/rpc-client.js';
 import { VDXF_KEYS, parseVdxfValue } from '../../validation/vdxf-keys.js';
+import { agentQueries } from '../../db/index.js';
 
 async function requireAuth(request: FastifyRequest, reply: FastifyReply) {
   const session = getSessionFromRequest(request);
@@ -72,7 +73,54 @@ function decodeContentMap(cm: Record<string, string> | undefined): Record<string
   return decoded;
 }
 
+const VALID_PRIVACY_TIERS = new Set(['standard', 'private', 'sovereign']);
+
 export async function profileRoutes(fastify: FastifyInstance): Promise<void> {
+  /**
+   * PATCH /v1/me/agent — Update agent profile (privacy tier, etc.)
+   */
+  fastify.patch('/v1/me/agent', { preHandler: requireAuth }, async (request, reply) => {
+    const session = getSessionFromRequest(request)!;
+    const body = request.body as Record<string, unknown> | null;
+
+    if (!body || typeof body !== 'object') {
+      return reply.code(400).send({
+        error: { code: 'INVALID_BODY', message: 'Request body required' },
+      });
+    }
+
+    const updates: Record<string, unknown> = {};
+
+    if ('privacyTier' in body) {
+      const tier = body.privacyTier;
+      if (typeof tier !== 'string' || !VALID_PRIVACY_TIERS.has(tier)) {
+        return reply.code(400).send({
+          error: { code: 'INVALID_PRIVACY_TIER', message: 'privacyTier must be one of: standard, private, sovereign' },
+        });
+      }
+      updates.privacy_tier = tier;
+    }
+
+    if (Object.keys(updates).length === 0) {
+      return reply.code(400).send({
+        error: { code: 'NO_UPDATES', message: 'No valid fields to update' },
+      });
+    }
+
+    updates.updated_at = new Date().toISOString();
+
+    const agent = agentQueries.getById(session.verusId);
+    if (!agent) {
+      return reply.code(404).send({
+        error: { code: 'NOT_FOUND', message: 'Agent not found' },
+      });
+    }
+
+    agentQueries.update(session.verusId, updates);
+
+    return { data: { status: 'updated' } };
+  });
+
   fastify.get('/v1/me/identity', { preHandler: requireAuth }, async (request, reply) => {
     const session = getSessionFromRequest(request)!;
 

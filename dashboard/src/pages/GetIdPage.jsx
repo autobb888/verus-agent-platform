@@ -228,7 +228,7 @@ export default function GetIdPage() {
                 />
                 <span className="px-3 text-gray-500 font-mono text-sm">.agentplatform@</span>
               </div>
-              <p className="text-xs text-gray-500 mt-1">Lowercase letters and numbers only. 3-32 characters.</p>
+              <p className="text-xs text-gray-400 mt-1">Lowercase letters and numbers only. 3-32 characters.</p>
             </div>
 
             <div className="flex gap-3">
@@ -263,11 +263,11 @@ export default function GetIdPage() {
                 className="input w-full"
                 autoFocus
               />
-              <p className="text-xs text-gray-500 mt-1">Starts with R. Found in your wallet's receive screen.</p>
+              <p className="text-xs text-gray-400 mt-1">Starts with R. Found in your wallet's receive screen.</p>
             </div>
 
             <details className="mb-6">
-              <summary className="text-xs text-gray-500 cursor-pointer hover:text-gray-300">Advanced: Public Key (optional)</summary>
+              <summary className="text-xs text-gray-400 cursor-pointer hover:text-gray-300">Advanced: Public Key (optional)</summary>
               <div className="mt-2">
                 <input
                   type="text"
@@ -276,7 +276,7 @@ export default function GetIdPage() {
                   placeholder="02 or 03 followed by 64 hex characters"
                   className="input w-full"
                 />
-                <p className="text-xs text-gray-500 mt-1">Only needed for SDK/CLI users. Verus Mobile users can skip this. A future Verus Mobile update will auto-fill this field.</p>
+                <p className="text-xs text-gray-400 mt-1">Only needed for SDK/CLI users. Verus Mobile users can skip this. A future Verus Mobile update will auto-fill this field.</p>
               </div>
             </details>
 
@@ -315,7 +315,10 @@ export default function GetIdPage() {
           {result?.status !== 'registered' && (
             <div className="mb-6">
               <div className="flex items-center gap-3 mb-3">
-                <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-verus-blue"></div>
+                <div role="status" aria-label="Loading" className="inline-flex items-center">
+                  <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-verus-blue"></div>
+                  <span className="sr-only">Loading...</span>
+                </div>
                 <span className="text-gray-300">
                   {pollStatus === 'committing' && 'Committing name reservation...'}
                   {pollStatus === 'confirming' && 'Waiting for block confirmation (~60s)...'}
@@ -348,7 +351,7 @@ export default function GetIdPage() {
                     <div>
                       <span className="text-gray-400 text-sm">Startup Funds</span>
                       <div className="text-green-400 font-medium">{result.funded.amount} {result.funded.currency}</div>
-                      <div className="text-gray-500 text-xs">Enough for ~30 identity updates</div>
+                      <div className="text-gray-400 text-xs">Enough for ~30 identity updates</div>
                     </div>
                   )}
                 </div>
@@ -377,7 +380,7 @@ export default function GetIdPage() {
                       <pre className="bg-gray-900 rounded p-2 text-xs text-green-400 overflow-x-auto whitespace-pre-wrap">{`updateidentity '{"name":"${name}","parent":"i7xKUpKQDSriYFfgHYfRpFc2uzRKWLDkjW","privateaddress":"YOUR_Z_ADDRESS","revocationauthority":"YOUR_PERSONAL_ID@","recoveryauthority":"YOUR_PERSONAL_ID@"}'`}</pre>
                       <CopyButton text={`updateidentity '{"name":"${name}","parent":"i7xKUpKQDSriYFfgHYfRpFc2uzRKWLDkjW","privateaddress":"YOUR_Z_ADDRESS","revocationauthority":"YOUR_PERSONAL_ID@","recoveryauthority":"YOUR_PERSONAL_ID@"}'`} className="absolute top-1 right-1" />
                     </div>
-                    <p className="text-xs text-gray-500 mt-1">
+                    <p className="text-xs text-gray-400 mt-1">
                       Replace <code className="text-gray-400">YOUR_Z_ADDRESS</code> with the z-address from step 1,
                       and <code className="text-gray-400">YOUR_PERSONAL_ID@</code> with a VerusID you own (for account recovery).
                     </p>
@@ -442,7 +445,7 @@ function ChallengeSignStep({ challenge, name, address, onSubmit, onBack, loading
         <div className="bg-gray-950 rounded-lg p-3 font-mono text-xs text-green-400 break-all overflow-x-auto">
           <span className="text-gray-500">verus </span>{signCommand}
         </div>
-        <p className="text-xs text-gray-500 mt-1.5">
+        <p className="text-xs text-gray-400 mt-1.5">
           Paste this into the Verus CLI or the Debug Console in Verus Desktop (Help → Debug Window → Console).
         </p>
       </div>

@@ -12,7 +12,7 @@ export function getVdxfPrefix(): string {
 export const VDXF_PREFIX = getVdxfPrefix();
 
 // Agent types
-export const AgentType = z.enum(['autonomous', 'assisted', 'tool']);
+export const AgentType = z.enum(['autonomous', 'assisted', 'hybrid', 'tool']);
 export type AgentTypeValue = z.infer<typeof AgentType>;
 
 // Agent status

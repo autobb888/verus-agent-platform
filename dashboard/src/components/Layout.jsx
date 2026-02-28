@@ -38,13 +38,12 @@ export default function Layout() {
     (async () => {
       try {
         const res = await fetch('/v1/me/identity', { credentials: 'include' });
-        if (!res.ok) { console.warn('[Layout] /v1/me/identity returned', res.status); return; }
+        if (!res.ok) return;
         const data = await res.json();
         const d = data.data?.decoded;
         const cmmCount = Object.keys(d?.contentmultimap || {}).length;
         const cmCount = Object.keys(d?.contentmap || {}).length;
         const empty = cmmCount === 0 && cmCount === 0;
-        console.log('[Layout] profile check:', { cmmCount, cmCount, empty });
         setProfileEmpty(empty);
         if (empty && !sessionStorage.getItem('profileToastShown')) {
           sessionStorage.setItem('profileToastShown', 'true');
@@ -138,12 +137,13 @@ export default function Layout() {
     );
   }
 
-  function IconButton({ to, children, badge }) {
+  function IconButton({ to, children, badge, ariaLabel }) {
     const isActive = location.pathname === to;
     return (
       <Link
         to={to}
         className="relative p-2 rounded-lg transition-colors"
+        aria-label={ariaLabel}
         style={{ color: isActive ? 'var(--text-primary)' : 'var(--text-secondary)' }}
         onMouseEnter={(e) => e.currentTarget.style.color = 'var(--text-primary)'}
         onMouseLeave={(e) => { if (!isActive) e.currentTarget.style.color = 'var(--text-secondary)'; }}
@@ -165,6 +165,7 @@ export default function Layout() {
 
   return (
     <div className="min-h-screen" style={{ backgroundColor: 'var(--bg-base)' }}>
+      <a href="#main-content" className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-[100] focus:px-4 focus:py-2 focus:bg-verus-blue focus:text-white focus:rounded-lg focus:text-sm focus:font-medium">Skip to main content</a>
       {/* Header */}
       <header className="border-b sticky top-0 z-50 backdrop-blur-xl" style={{ borderColor: 'var(--border-subtle)', backgroundColor: 'rgba(15, 17, 23, 0.8)' }}>
         <div className="max-w-6xl mx-auto px-4 h-14 flex items-center justify-between">
@@ -174,6 +175,7 @@ export default function Layout() {
               className="md:hidden p-1.5 rounded-lg transition-colors"
               style={{ color: 'var(--text-secondary)' }}
               onClick={() => setMobileMenuOpen(o => !o)}
+              aria-label="Toggle menu"
             >
               {mobileMenuOpen ? <X size={20} /> : <Menu size={20} />}
             </button>
@@ -204,12 +206,12 @@ export default function Layout() {
             {user ? (
               <>
                 {/* Inbox icon */}
-                <IconButton to="/inbox">
+                <IconButton to="/inbox" ariaLabel="Inbox">
                   <Mail size={18} />
                 </IconButton>
 
                 {/* Notifications bell */}
-                <IconButton to="/dashboard" badge={unreadCount}>
+                <IconButton to="/dashboard" badge={unreadCount} ariaLabel="Notifications">
                   <Bell size={18} />
                 </IconButton>
 
@@ -218,6 +220,7 @@ export default function Layout() {
                   <button
                     onClick={() => setAvatarMenuOpen(o => !o)}
                     className="flex items-center gap-2 px-2 py-1.5 rounded-lg transition-colors"
+                    aria-label="Account menu"
                     style={{ color: 'var(--text-secondary)' }}
                     onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.05)'}
                     onMouseLeave={(e) => { if (!avatarMenuOpen) e.currentTarget.style.backgroundColor = 'transparent'; }}
@@ -338,7 +341,7 @@ export default function Layout() {
       )}
 
       {/* Main Content */}
-      <main className="max-w-6xl mx-auto px-4 py-8 page-content">
+      <main id="main-content" className="max-w-6xl mx-auto px-4 py-8 page-content">
         <Outlet />
       </main>
 

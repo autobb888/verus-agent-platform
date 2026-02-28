@@ -89,8 +89,9 @@ function PaymentQR({ jobId, type, amount, currency, onTxDetected }) {
 
   if (!qrData) {
     return (
-      <div className="flex items-center justify-center py-6">
+      <div className="flex items-center justify-center py-6" role="status" aria-label="Loading">
         <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-verus-blue"></div>
+        <span className="sr-only">Loading...</span>
       </div>
     );
   }

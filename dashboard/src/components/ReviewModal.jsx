@@ -1,5 +1,6 @@
-import { useState } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { useAuth } from '../context/AuthContext';
+import { useToast } from './Toast';
 
 const API_BASE = import.meta.env.VITE_API_URL || '';
 
@@ -7,6 +8,7 @@ const STAR_LABELS = ['Terrible', 'Poor', 'Okay', 'Good', 'Excellent'];
 
 export default function ReviewModal({ job, onClose, onSubmitted }) {
   const { user } = useAuth();
+  const addToast = useToast();
   const [rating, setRating] = useState(0);
   const [hoverRating, setHoverRating] = useState(0);
   const [message, setMessage] = useState('');
@@ -15,8 +17,32 @@ export default function ReviewModal({ job, onClose, onSubmitted }) {
   const [signature, setSignature] = useState('');
   const [error, setError] = useState(null);
 
+  const modalRef = useRef(null);
+
   const agentVerusId = job.seller?.verusId || job.sellerVerusId;
   const shortName = user?.identityName || user?.verusId;
+
+  // Focus trap (F-22)
+  const handleKeyDown = useCallback((e) => {
+    if (e.key === 'Escape') { onClose(); return; }
+    if (e.key !== 'Tab' || !modalRef.current) return;
+    const focusable = modalRef.current.querySelectorAll(
+      'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+    );
+    if (focusable.length === 0) return;
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    if (e.shiftKey) {
+      if (document.activeElement === first) { e.preventDefault(); last.focus(); }
+    } else {
+      if (document.activeElement === last) { e.preventDefault(); first.focus(); }
+    }
+  }, [onClose]);
+
+  useEffect(() => {
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [handleKeyDown]);
 
   async function handleGetSignMessage() {
     if (rating < 1 || rating > 5) {
@@ -79,6 +105,7 @@ export default function ReviewModal({ job, onClose, onSubmitted }) {
       if (!res.ok) throw new Error(data.error?.message || 'Failed to submit review');
 
       setStep('done');
+      addToast?.('Review submitted!');
       setTimeout(() => {
         onSubmitted?.();
         onClose();
@@ -91,11 +118,11 @@ export default function ReviewModal({ job, onClose, onSubmitted }) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-      <div className="bg-[#1a1a2e] border border-white/10 rounded-xl shadow-2xl w-full max-w-lg mx-4 overflow-hidden">
+      <div ref={modalRef} role="dialog" aria-modal="true" aria-label="Leave a Review" className="bg-[#1a1a2e] border border-white/10 rounded-xl shadow-2xl w-full max-w-lg mx-4 overflow-hidden">
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-white/10">
           <h2 className="text-lg font-semibold text-white">Leave a Review</h2>
-          <button onClick={onClose} className="text-gray-400 hover:text-white text-xl">✕</button>
+          <button onClick={onClose} className="text-gray-400 hover:text-white text-xl" aria-label="Close">✕</button>
         </div>
 
         <div className="p-6 space-y-5">
@@ -135,7 +162,7 @@ export default function ReviewModal({ job, onClose, onSubmitted }) {
                   maxLength={500}
                   className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-indigo-500 resize-none"
                 />
-                <div className="text-xs text-gray-500 text-right mt-1">{message.length}/500</div>
+                <div className="text-xs text-gray-400 text-right mt-1">{message.length}/500</div>
               </div>
 
               <button
@@ -214,7 +241,7 @@ export default function ReviewModal({ job, onClose, onSubmitted }) {
           )}
 
           {error && (
-            <div className="bg-red-500/10 border border-red-500/30 rounded-lg px-4 py-3 text-red-400 text-sm">
+            <div id="review-form-error" role="alert" className="bg-red-500/10 border border-red-500/30 rounded-lg px-4 py-3 text-red-400 text-sm">
               {error}
             </div>
           )}

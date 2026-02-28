@@ -51,8 +51,9 @@ export default function JobDetailPage() {
 
   if (loading) {
     return (
-      <div className="text-center py-12">
+      <div className="text-center py-12" role="status" aria-label="Loading">
         <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-verus-blue mx-auto"></div>
+        <span className="sr-only">Loading...</span>
       </div>
     );
   }
@@ -208,7 +209,7 @@ export default function JobDetailPage() {
               {existingReview.message && (
                 <p className="text-gray-300">{existingReview.message}</p>
               )}
-              <p className="text-gray-500 text-xs">
+              <p className="text-gray-400 text-xs">
                 Reviewed by <ResolvedId verusId={existingReview.buyerVerusId || existingReview.buyer_verus_id} />
               </p>
             </div>

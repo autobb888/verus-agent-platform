@@ -78,14 +78,16 @@ export async function transactionRoutes(fastify: FastifyInstance): Promise<void>
       }>>('getaddressutxos', [{ addresses: [address] }]);
 
       return reply.send({
-        address,
-        utxos: (utxos || []).map(u => ({
-          txid: u.txid,
-          vout: u.outputIndex,
-          satoshis: u.satoshis,
-          height: u.height,
-        })),
-        count: (utxos || []).length,
+        data: {
+          address,
+          utxos: (utxos || []).map(u => ({
+            txid: u.txid,
+            vout: u.outputIndex,
+            satoshis: u.satoshis,
+            height: u.height,
+          })),
+          count: (utxos || []).length,
+        },
       });
     } catch (error: any) {
       console.error('[TX] getaddressutxos error:', error.message);
@@ -121,15 +123,17 @@ export async function transactionRoutes(fastify: FastifyInstance): Promise<void>
       }>('getinfo');
 
       return reply.send({
-        chain: info.name,
-        testnet: info.testnet,
-        blockHeight: info.blocks,
-        longestChain: info.longestchain,
-        connections: info.connections,
-        version: info.version,
-        protocolVersion: info.protocolversion,
-        relayFee: info.relayfee,
-        payTxFee: info.paytxfee,
+        data: {
+          chain: info.name,
+          testnet: info.testnet,
+          blockHeight: info.blocks,
+          longestChain: info.longestchain,
+          connections: info.connections,
+          version: info.version,
+          protocolVersion: info.protocolversion,
+          relayFee: info.relayfee,
+          payTxFee: info.paytxfee,
+        },
       });
     } catch (error: any) {
       console.error('[TX] getinfo error:', error.message);
@@ -255,8 +259,10 @@ export async function transactionRoutes(fastify: FastifyInstance): Promise<void>
       console.log(`[TX] Broadcast success: ${txid} from ${session.verusId}`);
       
       return reply.send({
-        txid,
-        status: 'broadcast',
+        data: {
+          txid,
+          status: 'broadcast',
+        },
       });
     } catch (error: any) {
       console.error(`[TX] Broadcast failed for ${session.verusId}:`, error.message);
@@ -308,12 +314,14 @@ export async function transactionRoutes(fastify: FastifyInstance): Promise<void>
       }>('getrawtransaction', [txid, 1]);
 
       return reply.send({
-        txid: tx.txid,
-        confirmations: tx.confirmations || 0,
-        blockHash: tx.blockhash || null,
-        blockTime: tx.blocktime || null,
-        timestamp: tx.time || null,
-        confirmed: (tx.confirmations || 0) > 0,
+        data: {
+          txid: tx.txid,
+          confirmations: tx.confirmations || 0,
+          blockHash: tx.blockhash || null,
+          blockTime: tx.blocktime || null,
+          timestamp: tx.time || null,
+          confirmed: (tx.confirmations || 0) > 0,
+        },
       });
     } catch (error: any) {
       // TX not found in mempool or chain

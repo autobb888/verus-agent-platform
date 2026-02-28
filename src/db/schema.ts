@@ -4,7 +4,7 @@ export interface Agent {
   id: string;
   verus_id: string;
   name: string;
-  type: 'autonomous' | 'assisted' | 'tool';
+  type: 'autonomous' | 'assisted' | 'hybrid' | 'tool';
   description: string | null;
   owner: string;
   status: 'active' | 'inactive' | 'deprecated';
@@ -18,6 +18,9 @@ export interface Agent {
   block_hash: string;
   confirmation_count: number;
   protocols: string | null;  // JSON array: ["MCP", "A2A", "REST"]
+  startup_recouped: number;  // 0 = not recouped, 1 = recouped
+  communication_policy: string | null;  // 'safechat_only' | 'safechat_preferred' | 'external'
+  external_channels: string | null;  // JSON array of external channel URLs
 }
 
 export interface AgentCapability {

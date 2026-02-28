@@ -301,6 +301,9 @@ async function indexAgentIdentity(
         block_hash: block.hash,
         confirmation_count: 0,
         protocols: protocolsJson,
+        startup_recouped: 0,
+        communication_policy: null,
+        external_channels: null,
       });
       
       // Insert capabilities

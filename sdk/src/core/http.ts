@@ -9,6 +9,8 @@ export class HttpClient {
   private timeout: number;
   private headers: Record<string, string>;
   private cookies: string[] = [];
+  private onAuthError?: () => Promise<void>;
+  private retrying = false;
 
   constructor(config: ClientConfig) {
     // Validate baseUrl protocol to prevent file:// SSRF
@@ -36,6 +38,13 @@ export class HttpClient {
    */
   clearSession(): void {
     this.cookies = [];
+  }
+
+  /**
+   * Set callback for automatic re-authentication on 401/403
+   */
+  setOnAuthError(callback: () => Promise<void>): void {
+    this.onAuthError = callback;
   }
 
   /**
@@ -132,10 +141,23 @@ export class HttpClient {
 
       if (!response.ok) {
         const error = data as ApiError;
+        const statusCode = response.status;
+
+        // Auto-reauth: on 401/403, call onAuthError callback and retry once
+        if ((statusCode === 401 || statusCode === 403) && this.onAuthError && !this.retrying) {
+          this.retrying = true;
+          try {
+            await this.onAuthError();
+            return await this.request<T>(method, url, body);
+          } finally {
+            this.retrying = false;
+          }
+        }
+
         throw new PlatformError(
           error.error?.message || 'Request failed',
           error.error?.code || 'UNKNOWN_ERROR',
-          response.status
+          statusCode
         );
       }
 

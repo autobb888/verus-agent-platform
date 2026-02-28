@@ -1,0 +1,20 @@
+# VAP Production Crontab
+# Install: crontab /home/cluster/verus-platform/deploy/crontab.example
+#
+# Set your webhook URL for alerts:
+ALERT_WEBHOOK_URL=https://discord.com/api/webhooks/YOUR_WEBHOOK_ID/YOUR_WEBHOOK_TOKEN
+
+# ─── Database Backup (every 6 hours, keep last 7) ───
+0 */6 * * * cd /home/cluster/verus-platform && DB_PATH=./data/verus-platform.db BACKUP_DIR=./backups MAX_BACKUPS=28 ./scripts/backup-db.sh >> /home/cluster/logs/backup.log 2>&1
+
+# ─── SafeChat DB Backup (daily at 3am) ───
+0 3 * * * sqlite3 /home/cluster/safechat/data/safechat.db ".backup '/home/cluster/backups/safechat_$(date +\%Y\%m\%d).db'" && gzip -f "/home/cluster/backups/safechat_$(date +\%Y\%m\%d).db" 2>/dev/null
+
+# ─── Service Health Monitor (every minute) ───
+* * * * * /home/cluster/verus-platform/deploy/monitor-services.sh >> /home/cluster/logs/monitor.log 2>&1
+
+# ─── Log Rotation (daily at 2am) ───
+0 2 * * * pm2 flush >> /home/cluster/logs/maintenance.log 2>&1
+
+# ─── Prune old backups (weekly, keep last 7 days) ───
+0 4 * * 0 find /home/cluster/backups -name "*.db.gz" -mtime +7 -delete >> /home/cluster/logs/maintenance.log 2>&1

@@ -316,8 +316,8 @@ export default function MarketplacePage() {
       if (res.ok) {
         setCategories(data.data || []);
       }
-    } catch (err) {
-      console.error('Failed to fetch categories:', err);
+    } catch {
+      // Categories fetch failed — use empty list
     }
   }
 

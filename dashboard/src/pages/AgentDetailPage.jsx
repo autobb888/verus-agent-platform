@@ -77,9 +77,8 @@ export default function AgentDetailPage() {
       if (transData.data) {
         setTransparency(transData.data);
       }
-    } catch (err) {
+    } catch {
       setError('Failed to fetch agent');
-      console.error(err);
     } finally {
       setLoading(false);
     }
@@ -87,8 +86,9 @@ export default function AgentDetailPage() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center py-12">
+      <div className="flex items-center justify-center py-12" role="status" aria-label="Loading">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-verus-blue"></div>
+        <span className="sr-only">Loading...</span>
       </div>
     );
   }
@@ -237,7 +237,7 @@ export default function AgentDetailPage() {
             }`}>
               {reputation.confidence} confidence
             </span>
-            <span className="text-xs text-gray-500">
+            <span className="text-xs text-gray-400">
               {reputation.recentReviews} reviews in last 30 days
             </span>
           </div>
@@ -261,12 +261,12 @@ export default function AgentDetailPage() {
                     {service.description && (
                       <p className="text-sm text-gray-400 mt-1">{service.description}</p>
                     )}
-                    <div className="flex items-center gap-3 mt-2 text-xs text-gray-500">
+                    <div className="flex items-center gap-3 mt-2 text-xs text-gray-400">
                       {service.category && <span>📁 {service.category}</span>}
                       {service.turnaround && <span>⏱ {service.turnaround}</span>}
                     </div>
                     {service.sessionParams && Object.keys(service.sessionParams).length > 0 && (
-                      <div className="flex flex-wrap items-center gap-3 mt-2 text-xs text-gray-500">
+                      <div className="flex flex-wrap items-center gap-3 mt-2 text-xs text-gray-400">
                         {service.sessionParams.duration != null && (
                           <span>⏳ {formatDuration(service.sessionParams.duration)}</span>
                         )}
@@ -322,7 +322,7 @@ export default function AgentDetailPage() {
                 <div className="flex items-center justify-between">
                   <span className="font-medium text-white">{cap.name}</span>
                   {cap.protocol && (
-                    <span className="text-xs text-gray-500 bg-gray-800 px-2 py-1 rounded">
+                    <span className="text-xs text-gray-400 bg-gray-800 px-2 py-1 rounded">
                       {cap.protocol}
                     </span>
                   )}
@@ -331,7 +331,7 @@ export default function AgentDetailPage() {
                   <p className="text-sm text-gray-400 mt-1">{cap.description}</p>
                 )}
                 {cap.endpoint && (
-                  <p className="text-xs text-gray-500 mt-2 font-mono">{cap.endpoint}</p>
+                  <p className="text-xs text-gray-400 mt-2 font-mono">{cap.endpoint}</p>
                 )}
                 {cap.pricing && (
                   <div className="mt-2">
@@ -362,7 +362,7 @@ export default function AgentDetailPage() {
                   <div className="flex items-center justify-between">
                     <span className="font-mono text-sm text-gray-300" title={ep.url}>{ep.url}</span>
                     <div className="flex items-center gap-2">
-                      <span className="text-xs text-gray-500 bg-gray-800 px-2 py-1 rounded">
+                      <span className="text-xs text-gray-400 bg-gray-800 px-2 py-1 rounded">
                         {ep.protocol}
                       </span>
                       {ep.verified ? (
@@ -377,7 +377,7 @@ export default function AgentDetailPage() {
                     </div>
                   </div>
                   {epVerify && (
-                    <div className="mt-2 text-xs text-gray-500">
+                    <div className="mt-2 text-xs text-gray-400">
                       {epVerify.verifiedAt && (
                         <span>Last verified: {new Date(epVerify.verifiedAt).toLocaleString()}</span>
                       )}

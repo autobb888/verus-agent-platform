@@ -100,7 +100,7 @@ export default function AlertBanner({ jobId }) {
                     <button onClick={() => report(alert.id)} className="btn-primary" style={{ fontSize: 12, padding: '4px 10px' }}>
                       Submit
                     </button>
-                    <button onClick={() => { setReportingId(null); setReportReason(''); }} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}>
+                    <button onClick={() => { setReportingId(null); setReportReason(''); }} aria-label="Cancel report" style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}>
                       <X size={14} />
                     </button>
                   </div>
@@ -112,6 +112,7 @@ export default function AlertBanner({ jobId }) {
                 <button
                   onClick={() => setReportingId(alert.id)}
                   title="Report Agent"
+                  aria-label="Report Agent"
                   style={{
                     background: 'none', border: 'none', cursor: 'pointer', padding: 4,
                     color: 'var(--text-muted)', borderRadius: 4, transition: 'color 0.15s',
@@ -124,6 +125,7 @@ export default function AlertBanner({ jobId }) {
                 <button
                   onClick={() => dismiss(alert.id)}
                   title="Dismiss"
+                  aria-label="Dismiss alert"
                   style={{
                     background: 'none', border: 'none', cursor: 'pointer', padding: 4,
                     color: 'var(--text-muted)', borderRadius: 4, transition: 'color 0.15s',

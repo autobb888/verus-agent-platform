@@ -1,5 +1,7 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useAuth } from '../context/AuthContext';
+import { useToast } from '../components/Toast';
+import { SkeletonList, EmptyState } from '../components/Skeleton';
 
 const API_BASE = import.meta.env.VITE_API_URL || '';
 
@@ -16,11 +18,13 @@ const CATEGORIES = [
 
 export default function MyServicesPage() {
   const { user } = useAuth();
+  const addToast = useToast();
   const [services, setServices] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [editingService, setEditingService] = useState(null);
   const [showForm, setShowForm] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(null);
 
   const emptyForm = {
     name: '',
@@ -126,6 +130,7 @@ export default function MyServicesPage() {
       }
 
       closeForm();
+      addToast?.(editingService ? 'Service updated' : 'Service created');
       fetchServices();
     } catch (err) {
       setError(err.message);
@@ -135,7 +140,13 @@ export default function MyServicesPage() {
   }
 
   async function handleDelete(service) {
-    if (!confirm(`Delete "${service.name}"?`)) return;
+    setConfirmDelete(service);
+  }
+
+  async function executeDelete() {
+    const service = confirmDelete;
+    setConfirmDelete(null);
+    if (!service) return;
 
     try {
       const res = await fetch(`${API_BASE}/v1/me/services/${service.id}`, {
@@ -148,6 +159,7 @@ export default function MyServicesPage() {
         throw new Error(data.error?.message || 'Failed to delete');
       }
 
+      addToast?.('Service deleted');
       fetchServices();
     } catch (err) {
       setError(err.message);
@@ -156,8 +168,9 @@ export default function MyServicesPage() {
 
   if (loading) {
     return (
-      <div className="flex justify-center py-12">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-verus-blue"></div>
+      <div role="status" aria-label="Loading">
+        <SkeletonList count={3} lines={2} />
+        <span className="sr-only">Loading...</span>
       </div>
     );
   }
@@ -187,9 +200,12 @@ export default function MyServicesPage() {
 
       {/* Services List */}
       {services.length === 0 ? (
-        <div className="bg-gray-800/50 rounded-lg p-8 text-center">
-          <p className="text-gray-400">No services yet. Add your first service to get started.</p>
-        </div>
+        <EmptyState
+          icon="📋"
+          title="No services yet"
+          message="Add your first service to start offering your skills on the marketplace."
+          action={<button onClick={openCreate} className="btn-primary">+ Add Service</button>}
+        />
       ) : (
         <div className="grid gap-4">
           {services.map((service) => (
@@ -240,6 +256,32 @@ export default function MyServicesPage() {
         </div>
       )}
 
+      {/* Delete Confirmation */}
+      {confirmDelete && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-gray-800 rounded-xl max-w-sm w-full p-6 space-y-4">
+            <h3 className="text-lg font-semibold text-white">Delete Service</h3>
+            <p className="text-gray-300">
+              Are you sure you want to delete <span className="font-medium text-white">"{confirmDelete.name}"</span>?
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setConfirmDelete(null)}
+                className="flex-1 px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg font-medium transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={executeDelete}
+                className="flex-1 px-4 py-2 bg-red-600 hover:bg-red-500 text-white rounded-lg font-medium transition-colors"
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Create/Edit Modal */}
       {showForm && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
@@ -250,7 +292,7 @@ export default function MyServicesPage() {
               </h2>
             </div>
 
-            <form onSubmit={handleSubmit} className="p-6 space-y-4">
+            <form onSubmit={handleSubmit} className="p-6 space-y-4" aria-describedby={error ? 'services-form-error' : undefined}>
               <div>
                 <label className="block text-sm font-medium text-gray-300 mb-1">
                   Name *
@@ -356,7 +398,7 @@ export default function MyServicesPage() {
               </div>
 
               {error && (
-                <div className="text-red-400 text-sm">{error}</div>
+                <div id="services-form-error" role="alert" className="text-red-400 text-sm">{error}</div>
               )}
 
               <div className="flex gap-3 pt-4">

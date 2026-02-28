@@ -111,7 +111,7 @@ export default function Chat({ jobId, job, onJobStatusChanged }) {
       try {
         const tokenRes = await fetch(`${API_BASE}/v1/chat/token`, { credentials: 'include' });
         if (!tokenRes.ok) {
-          console.warn('[Chat] Failed to get chat token:', tokenRes.status);
+          // Chat token fetch failed
           return;
         }
         const tokenData = await tokenRes.json();
@@ -125,7 +125,7 @@ export default function Chat({ jobId, job, onJobStatusChanged }) {
           transports: ['websocket', 'polling'],
         });
       } catch (err) {
-        console.warn('[Chat] Error getting chat token:', err);
+        // Chat token error
         return;
       }
       if (cancelled) { socket?.disconnect(); return; }
@@ -140,8 +140,17 @@ export default function Chat({ jobId, job, onJobStatusChanged }) {
 
     socket.on('message', (msg) => {
       setMessages(prev => {
-        // Deduplicate
+        // Deduplicate by server id
         if (prev.some(m => m.id === msg.id)) return prev;
+        // Replace optimistic message from same sender with same content
+        const optimisticIdx = prev.findIndex(m =>
+          m.pending && m.senderVerusId === msg.senderVerusId && m.content === msg.content
+        );
+        if (optimisticIdx !== -1) {
+          const next = [...prev];
+          next[optimisticIdx] = msg;
+          return next;
+        }
         return [...prev, msg];
       });
     });
@@ -164,7 +173,7 @@ export default function Chat({ jobId, job, onJobStatusChanged }) {
     });
 
     socket.on('error', (err) => {
-      console.warn('[Chat] Socket error:', err.message);
+      // Socket error — handled via connected state
     });
 
     socket.on('user_joined', (data) => {
@@ -226,6 +235,16 @@ export default function Chat({ jobId, job, onJobStatusChanged }) {
     e.preventDefault();
     const content = input.trim();
     if (!content || !socketRef.current || !connected) return;
+
+    // Optimistic: show message immediately at reduced opacity
+    const optimisticId = `pending-${Date.now()}-${Math.random()}`;
+    setMessages(prev => [...prev, {
+      id: optimisticId,
+      senderVerusId: user?.verusId,
+      content,
+      createdAt: new Date().toISOString(),
+      pending: true,
+    }]);
 
     socketRef.current.emit('message', { jobId, content });
     setInput('');
@@ -932,14 +951,16 @@ export default function Chat({ jobId, job, onJobStatusChanged }) {
       </div>
 
       {/* Messages */}
-      <div style={{
+      <div role="log" aria-live="polite" aria-label="Chat messages" style={{
         flex: 1, overflowY: 'auto', padding: '12px 16px',
         display: 'flex', flexDirection: 'column', gap: 8,
       }}>
         {messages.length === 0 ? (
-          <p style={{ color: 'var(--text-muted)', textAlign: 'center', padding: '32px 0' }}>
-            No messages yet. Start the conversation!
-          </p>
+          <div style={{ textAlign: 'center', padding: '48px 16px' }}>
+            <span style={{ fontSize: 32, display: 'block', marginBottom: 12 }}>💬</span>
+            <p style={{ color: 'var(--text-primary)', fontWeight: 600, fontSize: 15, marginBottom: 4 }}>No messages yet</p>
+            <p style={{ color: 'var(--text-muted)', fontSize: 13 }}>Start the conversation — say hello!</p>
+          </div>
         ) : (
           messages.map((msg) => {
             const isMe = msg.senderVerusId === user?.verusId;
@@ -954,6 +975,7 @@ export default function Chat({ jobId, job, onJobStatusChanged }) {
                   alignSelf: isMe ? 'flex-end' : 'flex-start',
                   background: isMe ? 'rgba(59, 130, 246, 0.15)' : 'var(--bg-tertiary)',
                   border: isFlagged ? '1px solid #eab308' : '1px solid transparent',
+                  opacity: msg.pending ? 0.6 : 1,
                 }}
               >
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
@@ -1026,6 +1048,17 @@ export default function Chat({ jobId, job, onJobStatusChanged }) {
 
       {/* End-session action bar */}
       {renderActionBar()}
+
+      {/* Reconnection banner */}
+      {!connected && !inputDisabled && (
+        <div style={{
+          padding: '6px 16px', textAlign: 'center', fontSize: 13,
+          backgroundColor: 'rgba(234, 179, 8, 0.15)', color: '#fbbf24',
+          borderTop: '1px solid rgba(234, 179, 8, 0.3)',
+        }}>
+          Reconnecting to chat...
+        </div>
+      )}
 
       {/* Input */}
       <form

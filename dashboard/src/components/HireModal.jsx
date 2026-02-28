@@ -1,5 +1,6 @@
-import { useState, useMemo, useEffect, useCallback } from 'react';
+import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
+import { useToast } from './Toast';
 import TimePicker from './TimePicker';
 import CopyButton from './CopyButton';
 
@@ -19,6 +20,7 @@ function getDefaultDeadline() {
 
 export default function HireModal({ service, agent, onClose, onSuccess }) {
   const { user } = useAuth();
+  const addToast = useToast();
   const defaultDeadline = useMemo(() => getDefaultDeadline(), []);
   const [description, setDescription] = useState(service?.description || '');
   const [deadlineDate, setDeadlineDate] = useState(defaultDeadline.date);
@@ -34,6 +36,59 @@ export default function HireModal({ service, agent, onClose, onSuccess }) {
   const [requireDeletion, setRequireDeletion] = useState(true);
   const [privateMode, setPrivateMode] = useState(false); // E2E encrypted premium
   const [safechatEnabled, setSafechatEnabled] = useState(true);
+  const modalRef = useRef(null);
+
+  // Restore draft from sessionStorage on mount (F-7)
+  useEffect(() => {
+    try {
+      const draft = sessionStorage.getItem('hire-draft');
+      if (draft) {
+        const d = JSON.parse(draft);
+        if (d.serviceId === service?.id) {
+          if (d.description) setDescription(d.description);
+          if (d.message) setMessage(d.message);
+        }
+      }
+    } catch { /* ignore corrupt drafts */ }
+  }, [service?.id]);
+
+  // Save draft to sessionStorage as form changes
+  useEffect(() => {
+    try {
+      sessionStorage.setItem('hire-draft', JSON.stringify({
+        serviceId: service?.id,
+        description,
+        message,
+      }));
+    } catch { /* storage full or private mode */ }
+  }, [description, message, service?.id]);
+
+  // Clear draft on successful submit
+  function clearDraft() {
+    try { sessionStorage.removeItem('hire-draft'); } catch { /* ignore */ }
+  }
+
+  // Focus trap (F-22)
+  const handleKeyDown = useCallback((e) => {
+    if (e.key === 'Escape') { onClose(); return; }
+    if (e.key !== 'Tab' || !modalRef.current) return;
+    const focusable = modalRef.current.querySelectorAll(
+      'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+    );
+    if (focusable.length === 0) return;
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    if (e.shiftKey) {
+      if (document.activeElement === first) { e.preventDefault(); last.focus(); }
+    } else {
+      if (document.activeElement === last) { e.preventDefault(); first.focus(); }
+    }
+  }, [onClose]);
+
+  useEffect(() => {
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [handleKeyDown]);
 
   // Lock body scroll when modal is open
   useEffect(() => {
@@ -144,6 +199,8 @@ export default function HireModal({ service, agent, onClose, onSuccess }) {
         throw new Error(data.error?.message || 'Failed to create job');
       }
 
+      clearDraft();
+      addToast?.('Job created successfully');
       onSuccess?.(data.data);
       onClose();
     } catch (err) {
@@ -155,7 +212,7 @@ export default function HireModal({ service, agent, onClose, onSuccess }) {
 
   return (
     <div className="fixed inset-0 bg-black/60 flex items-end sm:items-center justify-center z-50 sm:p-4" onClick={onClose}>
-      <div className="bg-gray-800 rounded-t-xl sm:rounded-xl max-w-2xl w-full max-h-[95vh] sm:max-h-[90vh] overflow-y-auto overscroll-contain" onClick={e => e.stopPropagation()}>
+      <div ref={modalRef} role="dialog" aria-modal="true" aria-label="Hire Agent" className="bg-gray-800 rounded-t-xl sm:rounded-xl max-w-2xl w-full max-h-[95vh] sm:max-h-[90vh] overflow-y-auto overscroll-contain" onClick={e => e.stopPropagation()}>
         {/* Header */}
         <div className="p-6 border-b border-gray-700">
           <div className="flex justify-between items-start">
@@ -166,6 +223,7 @@ export default function HireModal({ service, agent, onClose, onSuccess }) {
             <button
               onClick={onClose}
               className="text-gray-400 hover:text-white text-2xl"
+              aria-label="Close"
             >
               ×
             </button>
@@ -173,7 +231,7 @@ export default function HireModal({ service, agent, onClose, onSuccess }) {
         </div>
 
         {/* Content */}
-        <form onSubmit={handleSubmit} className="p-6 space-y-6">
+        <form onSubmit={handleSubmit} className="p-6 space-y-6" aria-describedby={error ? 'hire-form-error' : undefined}>
           {/* Service details */}
           <div className="bg-gray-900 rounded-lg p-4">
             <div className="flex justify-between items-start">
@@ -217,7 +275,7 @@ export default function HireModal({ service, agent, onClose, onSuccess }) {
               <div className="grid grid-cols-2 gap-3">
                 {/* Date Picker */}
                 <div>
-                  <label className="block text-xs text-gray-500 mb-1">Date</label>
+                  <label className="block text-xs text-gray-400 mb-1">Date</label>
                   <input
                     type="date"
                     value={deadlineDate}
@@ -229,7 +287,7 @@ export default function HireModal({ service, agent, onClose, onSuccess }) {
 
                 {/* Time Picker */}
                 <div>
-                  <label className="block text-xs text-gray-500 mb-1">Time</label>
+                  <label className="block text-xs text-gray-400 mb-1">Time</label>
                   <TimePicker
                     value={deadlineTime}
                     onChange={setDeadlineTime}
@@ -368,7 +426,7 @@ export default function HireModal({ service, agent, onClose, onSuccess }) {
 
             {/* Timestamp freshness indicator */}
             <div className="flex items-center justify-between">
-              <span className="text-xs text-gray-500">
+              <span className="text-xs text-gray-400">
                 Timestamp: {new Date(timestamp * 1000).toLocaleTimeString()}
               </span>
               <button
@@ -382,7 +440,7 @@ export default function HireModal({ service, agent, onClose, onSuccess }) {
 
             <div className="bg-gray-950 rounded p-3">
               <div className="flex justify-between items-center mb-2">
-                <span className="text-xs text-gray-500">Message to sign:</span>
+                <span className="text-xs text-gray-400">Message to sign:</span>
                 <CopyButton text={signMessage} label="Copy" />
               </div>
               <div className="font-mono text-xs text-gray-300 whitespace-pre-wrap">
@@ -398,7 +456,7 @@ export default function HireModal({ service, agent, onClose, onSuccess }) {
 
             <div className="bg-gray-950 rounded p-3">
               <div className="flex justify-between items-center mb-2">
-                <span className="text-xs text-gray-500">Run this command (CLI or GUI console):</span>
+                <span className="text-xs text-gray-400">Run this command (CLI or GUI console):</span>
                 <CopyButton text={`signmessage "${user?.identityName ? `${user.identityName}@` : 'yourID@'}" "${signMessage.replace(/"/g, '\\"')}"`} label="Copy" />
               </div>
               <code className="text-xs text-verus-blue break-all">
@@ -422,7 +480,7 @@ export default function HireModal({ service, agent, onClose, onSuccess }) {
           </div>
 
           {error && (
-            <div className="bg-red-900/50 border border-red-700 rounded-lg p-4 text-red-300">
+            <div id="hire-form-error" role="alert" className="bg-red-900/50 border border-red-700 rounded-lg p-4 text-red-300">
               {error}
             </div>
           )}
