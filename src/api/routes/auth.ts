@@ -282,7 +282,7 @@ export async function authRoutes(fastify: FastifyInstance): Promise<void> {
         identityAddress = identity.identity.identityaddress;
         // Use fullyqualifiedname so sign commands show the correct ID (e.g. "alice.agentplatform@" not "alice@")
         identityName = (identity as any).fullyqualifiedname
-          ? (identity as any).fullyqualifiedname.replace(/\.VRSCTEST@$|\.VRSC@$/, '')
+          ? (identity as any).fullyqualifiedname.replace(/\.vrsctest@$|\.vrsc@$/i, '')
           : identity.identity.name;
         if (!identityAddress) {
           fastify.log.error({ verusId, identity }, 'Identity address is null/undefined');

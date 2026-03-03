@@ -176,7 +176,7 @@ function generateCompletionMessage(
 
 async function verifySignatureForIdentity(rpc: any, identityOrAddress: string, message: string, signature: string): Promise<boolean> {
   const candidates: string[] = [identityOrAddress];
-  const debugAttempts: Array<{ target: string; rpc: boolean; local: boolean }> = [];
+  const debugAttempts: Array<{ target: string; rpc: boolean; local: boolean; rpcErr: string | null; localErr: string | null }> = [];
 
   // If input is an i-address, resolve identity details to include primary addresses
   // If input is identity name, resolve both i-address and primaries.
@@ -198,33 +198,39 @@ async function verifySignatureForIdentity(rpc: any, identityOrAddress: string, m
     let localOk = false;
 
     // 1) Primary daemon verification
+    let rpcErr: string | null = null;
     try {
       rpcOk = await rpc.verifyMessage(target, message, signature);
       if (rpcOk) return true;
-    } catch {
+    } catch (err: any) {
+      rpcErr = err?.message || String(err);
       rpcOk = false;
     }
 
     // 2) Local fallback for SDK offline signatures
+    let localErr: string | null = null;
     try {
       localOk = bitcoinMessage.verify(message, target, signature, '\x15Verus signed data:\n');
       if (localOk) {
         console.warn('[Jobs] Local bitcoinjs-message fallback matched', { target });
         return true;
       }
-    } catch {
+    } catch (err: any) {
+      localErr = err?.message || String(err);
       localOk = false;
     }
 
-    debugAttempts.push({ target, rpc: rpcOk, local: localOk });
+    debugAttempts.push({ target, rpc: rpcOk, local: localOk, rpcErr, localErr });
   }
 
-  console.warn('[Jobs] Signature verification failed for all candidates', {
+  console.warn('[Jobs] Signature verification failed for all candidates', JSON.stringify({
     identityOrAddress,
-    signaturePreview: signature.slice(0, 24),
-    messagePreview: message.slice(0, 120),
+    signaturePreview: signature.slice(0, 40),
+    signatureLength: signature.length,
+    message,
+    candidateCount: [...new Set(candidates.filter(Boolean))].length,
     attempts: debugAttempts,
-  });
+  }, null, 2));
   return false;
 }
 
@@ -664,6 +670,10 @@ export async function jobRoutes(fastify: FastifyInstance): Promise<void> {
     emitWebhookEvent({ type: 'job.accepted', agentVerusId: session.verusId, jobId: id, data: { buyerVerusId: job.buyer_verus_id } });
     createNotification({ recipientVerusId: job.buyer_verus_id, type: 'job.accepted', title: 'Job Accepted', body: 'Your job has been accepted by the seller', jobId: id });
 
+    // Emit real-time WS event so buyer's page auto-updates
+    const ioAccept = getIO();
+    if (ioAccept) ioAccept.to(`job:${id}`).emit('job_status_changed', { jobId: id, status: 'accepted' });
+
     const updated = jobQueries.getById(id);
     return { data: formatJob(updated!) };
   });
@@ -897,16 +907,32 @@ export async function jobRoutes(fastify: FastifyInstance): Promise<void> {
     // Verify signature
     const expectedMessage = generateCompletionMessage(job.job_hash, timestamp);
     const rpc = getRpcClient();
+    fastify.log.info({
+      action: 'complete',
+      jobId: id,
+      buyerVerusId: session.verusId,
+      expectedMessage,
+      signaturePreview: signature.slice(0, 40),
+      signatureLength: signature.length,
+      timestamp,
+    }, 'Verifying completion signature');
     let isValid: boolean;
     try {
       isValid = await verifySignatureForIdentity(rpc, session.verusId, expectedMessage, signature);
-    } catch {
+    } catch (verifyErr: any) {
+      fastify.log.error({ error: verifyErr?.message, jobId: id }, 'Completion signature verification threw');
       return reply.code(400).send({
         error: { code: 'VERIFICATION_FAILED', message: 'Could not verify signature' },
       });
     }
 
     if (!isValid) {
+      fastify.log.warn({
+        jobId: id,
+        buyerVerusId: session.verusId,
+        expectedMessage,
+        signaturePreview: signature.slice(0, 40),
+      }, 'Completion signature verification returned false');
       return reply.code(401).send({
         error: { code: 'INVALID_SIGNATURE', message: 'Signature verification failed' },
       });
@@ -1387,13 +1413,15 @@ export async function jobRoutes(fastify: FastifyInstance): Promise<void> {
     const freshJob = jobQueries.getById(id)!;
     if (freshJob.status === 'in_progress') {
       fastify.log.info({ jobId: id }, 'Job moved to in_progress after both payments');
+      const ioPayment = getIO();
+      if (ioPayment) ioPayment.to(`job:${id}`).emit('job_status_changed', { jobId: id, status: 'in_progress' });
     }
     fastify.log.info({ jobId: id, txid, paymentVerified }, 'Agent payment recorded');
     emitWebhookEvent({ type: 'job.payment', agentVerusId: job.seller_verus_id, jobId: id, data: { txid, verified: paymentVerified === 1 } });
     createNotification({ recipientVerusId: job.seller_verus_id, type: 'job.payment', title: 'Payment Received', body: `Payment txid: ${txid.slice(0, 16)}...`, jobId: id });
 
     const updatedJob = jobQueries.getById(id);
-    return { 
+    return {
       data: formatJob(updatedJob!),
       meta: { verificationNote },
     };
@@ -1492,6 +1520,8 @@ export async function jobRoutes(fastify: FastifyInstance): Promise<void> {
       fastify.log.info({ jobId: id }, 'Job moved to in_progress after both payments');
       emitWebhookEvent({ type: 'job.started', agentVerusId: job.seller_verus_id, jobId: id, data: {} });
       createNotification({ recipientVerusId: job.seller_verus_id, type: 'job.started', title: 'Job Started', body: 'Both payments received — job is now in progress', jobId: id });
+      const ioFee = getIO();
+      if (ioFee) ioFee.to(`job:${id}`).emit('job_status_changed', { jobId: id, status: 'in_progress' });
     }
 
     return { data: formatJob(updatedJob), meta: { verificationNote } };
