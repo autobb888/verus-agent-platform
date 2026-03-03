@@ -174,15 +174,35 @@ function generateCompletionMessage(
   return `VAP-COMPLETE|Job:${jobHash}|Ts:${timestamp}|I confirm the work has been delivered satisfactorily.`;
 }
 
-async function verifySignatureForIdentity(rpc: any, identityOrAddress: string, message: string, signature: string): Promise<boolean> {
-  const candidates: string[] = [identityOrAddress];
+async function verifySignatureForIdentity(rpc: any, identityOrAddress: string, message: string, signature: string, identityName?: string | null): Promise<boolean> {
+  const candidates: string[] = [];
   const debugAttempts: Array<{ target: string; rpc: boolean; local: boolean; rpcErr: string | null; localErr: string | null }> = [];
 
-  // If input is an i-address, resolve identity details to include primary addresses
-  // If input is identity name, resolve both i-address and primaries.
+  // CIdentitySignature verification requires the identity name (e.g. "alice.agentplatform@")
+  // so we must try it FIRST before falling back to i-address / R-address.
   try {
     const identity = await rpc.getIdentity(identityOrAddress);
     const idObj = identity?.identity;
+    // Fully qualified name is the best candidate for CIdentitySignature verification
+    const fqn = (identity as any).fullyqualifiedname;
+    if (fqn) {
+      candidates.push(fqn);
+    }
+    // Also try the identity name with parent (e.g. "alice.agentplatform@")
+    if (idObj?.name && idObj?.parent) {
+      // Get parent name to reconstruct qualified name
+      try {
+        const parentIdentity = await rpc.getIdentity(idObj.parent);
+        const parentName = (parentIdentity as any).fullyqualifiedname || parentIdentity?.identity?.name;
+        if (parentName) {
+          const cleanParent = parentName.replace(/@$/, '');
+          candidates.push(`${idObj.name}.${cleanParent}@`);
+        }
+      } catch {
+        // Parent resolution failed, use short name
+        candidates.push(`${idObj.name}@`);
+      }
+    }
     if (Array.isArray(idObj?.primaryaddresses)) {
       candidates.push(...idObj.primaryaddresses);
     }
@@ -190,8 +210,17 @@ async function verifySignatureForIdentity(rpc: any, identityOrAddress: string, m
       candidates.push(idObj.identityaddress);
     }
   } catch {
-    // ignore resolution failures and use provided value only
+    // ignore resolution failures
   }
+
+  // Add the provided identity name if available
+  if (identityName) {
+    const nameWithAt = identityName.endsWith('@') ? identityName : `${identityName}@`;
+    candidates.push(nameWithAt);
+  }
+
+  // Add the raw input as final fallback
+  candidates.push(identityOrAddress);
 
   for (const target of [...new Set(candidates.filter(Boolean))]) {
     let rpcOk = false;
@@ -337,7 +366,7 @@ export async function jobRoutes(fastify: FastifyInstance): Promise<void> {
    * Get my jobs (as buyer or seller)
    */
   fastify.get('/v1/me/jobs', { preHandler: requireAuth }, async (request, reply) => {
-    const session = (request as any).session as { verusId: string };
+    const session = (request as any).session as { verusId: string; identityName: string | null };
     const query = request.query as Record<string, string>;
     
     const role = query.role as 'buyer' | 'seller' | undefined;
@@ -377,7 +406,7 @@ export async function jobRoutes(fastify: FastifyInstance): Promise<void> {
    * Create a new job request (authenticated, buyer initiates)
    */
   fastify.post('/v1/jobs', { preHandler: requireAuth }, async (request, reply) => {
-    const session = (request as any).session as { verusId: string };
+    const session = (request as any).session as { verusId: string; identityName: string | null };
     
     // P4-RATE-1: Check IP rate limit
     const clientIp = request.ip;
@@ -459,7 +488,7 @@ export async function jobRoutes(fastify: FastifyInstance): Promise<void> {
     }, 'Verifying job request signature');
     let isValid: boolean;
     try {
-      isValid = await rpc.verifyMessage(buyerVerusId, expectedMessage, signature);
+      isValid = await verifySignatureForIdentity(rpc, buyerVerusId, expectedMessage, signature, session.identityName);
       fastify.log.info({ isValid }, 'Signature verification result');
     } catch (error) {
       fastify.log.error({ error }, 'Signature verification failed');
@@ -565,7 +594,7 @@ export async function jobRoutes(fastify: FastifyInstance): Promise<void> {
    * Accept a job (seller)
    */
   fastify.post('/v1/jobs/:id/accept', { preHandler: requireAuth }, async (request, reply) => {
-    const session = (request as any).session as { verusId: string };
+    const session = (request as any).session as { verusId: string; identityName: string | null };
     const { id } = request.params as { id: string };
     const parsed = acceptJobSchema.safeParse(request.body);
 
@@ -618,7 +647,7 @@ export async function jobRoutes(fastify: FastifyInstance): Promise<void> {
     let isValid: boolean;
     try {
       // Deterministic signer target for accept: the job seller identity/address
-      isValid = await verifySignatureForIdentity(rpc, job.seller_verus_id, expectedMessage, signature);
+      isValid = await verifySignatureForIdentity(rpc, job.seller_verus_id, expectedMessage, signature, session.identityName);
       fastify.log.info({
         jobId: id,
         verifyTarget: job.seller_verus_id,
@@ -683,7 +712,7 @@ export async function jobRoutes(fastify: FastifyInstance): Promise<void> {
    * Mark job as delivered (seller)
    */
   fastify.post('/v1/jobs/:id/deliver', { preHandler: requireAuth }, async (request, reply) => {
-    const session = (request as any).session as { verusId: string };
+    const session = (request as any).session as { verusId: string; identityName: string | null };
     const { id } = request.params as { id: string };
     const parsed = deliverJobSchema.safeParse(request.body);
 
@@ -725,7 +754,7 @@ export async function jobRoutes(fastify: FastifyInstance): Promise<void> {
     const rpc = getRpcClient();
     let isValid: boolean;
     try {
-      isValid = await verifySignatureForIdentity(rpc, session.verusId, expectedMessage, signature);
+      isValid = await verifySignatureForIdentity(rpc, session.verusId, expectedMessage, signature, session.identityName);
     } catch {
       return reply.code(400).send({
         error: { code: 'VERIFICATION_FAILED', message: 'Could not verify signature' },
@@ -779,7 +808,7 @@ export async function jobRoutes(fastify: FastifyInstance): Promise<void> {
    * Sends WS event + notification to other party who can extend or confirm end.
    */
   fastify.post('/v1/jobs/:id/end-session', { preHandler: requireAuth }, async (request, reply) => {
-    const session = (request as any).session as { verusId: string };
+    const session = (request as any).session as { verusId: string; identityName: string | null };
     const { id } = request.params as { id: string };
 
     const endSessionSchema = z.object({
@@ -867,7 +896,7 @@ export async function jobRoutes(fastify: FastifyInstance): Promise<void> {
    * Confirm job completion (buyer)
    */
   fastify.post('/v1/jobs/:id/complete', { preHandler: requireAuth }, async (request, reply) => {
-    const session = (request as any).session as { verusId: string };
+    const session = (request as any).session as { verusId: string; identityName: string | null };
     const { id } = request.params as { id: string };
     const parsed = completeJobSchema.safeParse(request.body);
 
@@ -918,7 +947,7 @@ export async function jobRoutes(fastify: FastifyInstance): Promise<void> {
     }, 'Verifying completion signature');
     let isValid: boolean;
     try {
-      isValid = await verifySignatureForIdentity(rpc, session.verusId, expectedMessage, signature);
+      isValid = await verifySignatureForIdentity(rpc, session.verusId, expectedMessage, signature, session.identityName);
     } catch (verifyErr: any) {
       fastify.log.error({ error: verifyErr?.message, jobId: id }, 'Completion signature verification threw');
       return reply.code(400).send({
@@ -1012,7 +1041,7 @@ export async function jobRoutes(fastify: FastifyInstance): Promise<void> {
    * Open a dispute (buyer or seller)
    */
   fastify.post('/v1/jobs/:id/dispute', { preHandler: requireAuth }, async (request, reply) => {
-    const session = (request as any).session as { verusId: string };
+    const session = (request as any).session as { verusId: string; identityName: string | null };
     const { id } = request.params as { id: string };
 
     // P2-DISPUTE-1: Require signature and reason for disputes
@@ -1063,7 +1092,7 @@ export async function jobRoutes(fastify: FastifyInstance): Promise<void> {
     const rpc = getRpcClient();
     let isValid: boolean;
     try {
-      isValid = await verifySignatureForIdentity(rpc, session.verusId, disputeMessage, signature);
+      isValid = await verifySignatureForIdentity(rpc, session.verusId, disputeMessage, signature, session.identityName);
     } catch {
       return reply.code(400).send({
         error: { code: 'VERIFICATION_FAILED', message: 'Could not verify signature' },
@@ -1108,7 +1137,7 @@ export async function jobRoutes(fastify: FastifyInstance): Promise<void> {
    * Cancel a job (only if not yet accepted)
    */
   fastify.post('/v1/jobs/:id/cancel', { preHandler: requireAuth }, async (request, reply) => {
-    const session = (request as any).session as { verusId: string };
+    const session = (request as any).session as { verusId: string; identityName: string | null };
     const { id } = request.params as { id: string };
 
     const job = jobQueries.getById(id);
@@ -1156,7 +1185,7 @@ export async function jobRoutes(fastify: FastifyInstance): Promise<void> {
    * Get messages for a job
    */
   fastify.get('/v1/jobs/:id/messages', { preHandler: requireAuth }, async (request, reply) => {
-    const session = (request as any).session as { verusId: string };
+    const session = (request as any).session as { verusId: string; identityName: string | null };
     const { id } = request.params as { id: string };
     const query = request.query as Record<string, string>;
 
@@ -1205,7 +1234,7 @@ export async function jobRoutes(fastify: FastifyInstance): Promise<void> {
    * Send a message on a job
    */
   fastify.post('/v1/jobs/:id/messages', { preHandler: requireAuth }, async (request, reply) => {
-    const session = (request as any).session as { verusId: string };
+    const session = (request as any).session as { verusId: string; identityName: string | null };
     const { id } = request.params as { id: string };
 
     const job = jobQueries.getById(id);
@@ -1268,7 +1297,7 @@ export async function jobRoutes(fastify: FastifyInstance): Promise<void> {
     if (signature) {
       const rpc = getRpcClient();
       try {
-        const isValid = await verifySignatureForIdentity(rpc, session.verusId, content, signature);
+        const isValid = await verifySignatureForIdentity(rpc, session.verusId, content, signature, session.identityName);
         signed = isValid ? 1 : 0;
       } catch {
         // Signature verification failed, treat as unsigned
@@ -1307,7 +1336,7 @@ export async function jobRoutes(fastify: FastifyInstance): Promise<void> {
    * Record payment transaction ID
    */
   fastify.post('/v1/jobs/:id/payment', { preHandler: requireAuth }, async (request, reply) => {
-    const session = (request as any).session as { verusId: string };
+    const session = (request as any).session as { verusId: string; identityName: string | null };
     const { id } = request.params as { id: string };
 
     const job = jobQueries.getById(id);
@@ -1432,7 +1461,7 @@ export async function jobRoutes(fastify: FastifyInstance): Promise<void> {
    * Record platform fee (5%) transaction ID — paid to SafeChat address
    */
   fastify.post('/v1/jobs/:id/platform-fee', { preHandler: requireAuth }, async (request, reply) => {
-    const session = (request as any).session as { verusId: string };
+    const session = (request as any).session as { verusId: string; identityName: string | null };
     const { id } = request.params as { id: string };
 
     const job = jobQueries.getById(id);
@@ -1532,7 +1561,7 @@ export async function jobRoutes(fastify: FastifyInstance): Promise<void> {
    * Request a session extension (additional payment for more work)
    */
   fastify.post('/v1/jobs/:id/extensions', { preHandler: requireAuth }, async (request, reply) => {
-    const session = (request as any).session as { verusId: string };
+    const session = (request as any).session as { verusId: string; identityName: string | null };
     const { id } = request.params as { id: string };
 
     const job = jobQueries.getById(id);
@@ -1585,7 +1614,7 @@ export async function jobRoutes(fastify: FastifyInstance): Promise<void> {
    * Get all extensions for a job
    */
   fastify.get('/v1/jobs/:id/extensions', { preHandler: requireAuth }, async (request, reply) => {
-    const session = (request as any).session as { verusId: string };
+    const session = (request as any).session as { verusId: string; identityName: string | null };
     const { id } = request.params as { id: string };
 
     const job = jobQueries.getById(id);
@@ -1617,7 +1646,7 @@ export async function jobRoutes(fastify: FastifyInstance): Promise<void> {
    * Approve an extension request (other party)
    */
   fastify.post('/v1/jobs/:id/extensions/:extId/approve', { preHandler: requireAuth }, async (request, reply) => {
-    const session = (request as any).session as { verusId: string };
+    const session = (request as any).session as { verusId: string; identityName: string | null };
     const { id, extId } = request.params as { id: string; extId: string };
 
     const job = jobQueries.getById(id);
@@ -1656,7 +1685,7 @@ export async function jobRoutes(fastify: FastifyInstance): Promise<void> {
    * Record extension payment (agent payment txid)
    */
   fastify.post('/v1/jobs/:id/extensions/:extId/payment', { preHandler: requireAuth }, async (request, reply) => {
-    const session = (request as any).session as { verusId: string };
+    const session = (request as any).session as { verusId: string; identityName: string | null };
     const { id, extId } = request.params as { id: string; extId: string };
 
     const job = jobQueries.getById(id);
@@ -1718,7 +1747,7 @@ export async function jobRoutes(fastify: FastifyInstance): Promise<void> {
    * Reject an extension request
    */
   fastify.post('/v1/jobs/:id/extensions/:extId/reject', { preHandler: requireAuth }, async (request, reply) => {
-    const session = (request as any).session as { verusId: string };
+    const session = (request as any).session as { verusId: string; identityName: string | null };
     const { id, extId } = request.params as { id: string; extId: string };
 
     const job = jobQueries.getById(id);
