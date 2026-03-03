@@ -194,24 +194,44 @@ export async function submitReviewRoutes(fastify: FastifyInstance): Promise<void
       });
     }
 
-    // Verify the buyer's signature against the resolved identity address
+    // Verify the buyer's signature — try identity name first (required for CIdentitySignature)
     const expectedMessage = generateReviewMessage(agentVerusId, jobHash, message, rating, timestamp);
 
-    let isValid: boolean;
+    // Build candidate list: FQN first, then identity name variants, then i-address
+    const candidates: string[] = [];
     try {
-      isValid = await rpc.verifyMessage(buyerIAddress, expectedMessage, signature);
-    } catch (error) {
-      fastify.log.error({ error, buyerIAddress }, 'Signature verification failed');
-      return reply.code(400).send({
-        error: {
-          code: 'VERIFICATION_FAILED',
-          message: 'Could not verify signature',
-        },
-      });
+      const buyerIdentityFull = await rpc.getIdentity(buyerVerusId);
+      const fqn = (buyerIdentityFull as any).fullyqualifiedname;
+      if (fqn) candidates.push(fqn);
+      const idObj = buyerIdentityFull?.identity;
+      if (idObj?.name && idObj?.parent) {
+        try {
+          const parentIdentity = await rpc.getIdentity(idObj.parent);
+          const parentName = (parentIdentity as any).fullyqualifiedname || parentIdentity?.identity?.name;
+          if (parentName) candidates.push(`${idObj.name}.${parentName.replace(/@$/, '')}@`);
+        } catch {
+          candidates.push(`${idObj.name}@`);
+        }
+      }
+      if (Array.isArray(idObj?.primaryaddresses)) candidates.push(...idObj.primaryaddresses);
+      if (idObj?.identityaddress) candidates.push(idObj.identityaddress);
+    } catch { /* resolution failed, fall through */ }
+    if (buyerVerusId.endsWith('@')) candidates.push(buyerVerusId);
+    else candidates.push(buyerVerusId, `${buyerVerusId}@`);
+    candidates.push(buyerIAddress);
+
+    let isValid = false;
+    for (const target of [...new Set(candidates.filter(Boolean))]) {
+      try {
+        if (await rpc.verifyMessage(target, expectedMessage, signature)) {
+          isValid = true;
+          break;
+        }
+      } catch { /* try next */ }
     }
 
     if (!isValid) {
-      fastify.log.warn({ buyerVerusId, jobHash }, 'Invalid review signature');
+      fastify.log.warn({ buyerVerusId, buyerIAddress, jobHash, candidates: [...new Set(candidates.filter(Boolean))] }, 'Invalid review signature');
       return reply.code(401).send({
         error: {
           code: 'INVALID_SIGNATURE',

@@ -20,7 +20,7 @@ export default function ReviewModal({ job, onClose, onSubmitted }) {
   const modalRef = useRef(null);
 
   const agentVerusId = job.seller?.verusId || job.sellerVerusId;
-  const shortName = user?.identityName || user?.verusId;
+  const idName = user?.identityName ? `${user.identityName}@` : (user?.verusId || 'yourID@');
 
   // Focus trap (F-22)
   const handleKeyDown = useCallback((e) => {
@@ -184,11 +184,11 @@ export default function ReviewModal({ job, onClose, onSubmitted }) {
                 </label>
                 <div className="bg-black/40 border border-white/10 rounded-lg p-3">
                   <code className="text-xs text-green-400 break-all select-all">
-                    verus -testnet signmessage "{shortName}" "{signData.message}"
+                    verus -testnet signmessage "{idName}" "{signData.message}"
                   </code>
                 </div>
                 <button
-                  onClick={() => navigator.clipboard.writeText(`verus -testnet signmessage "${shortName}" "${signData.message}"`)}
+                  onClick={() => navigator.clipboard.writeText(`verus -testnet signmessage "${idName}" "${signData.message}"`)}
                   className="text-xs text-violet-400 hover:text-violet-300 mt-2"
                 >
                   📋 Copy command
@@ -201,7 +201,13 @@ export default function ReviewModal({ job, onClose, onSubmitted }) {
                 <input
                   type="text"
                   value={signature}
-                  onChange={e => setSignature(e.target.value)}
+                  onChange={e => {
+                    let val = e.target.value;
+                    if (val.trim().startsWith('{')) {
+                      try { const p = JSON.parse(val.trim()); if (p.signature) val = p.signature; } catch { /* not JSON */ }
+                    }
+                    setSignature(val);
+                  }}
                   placeholder="Paste the signature output here..."
                   className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-violet-500 font-mono text-sm"
                 />
