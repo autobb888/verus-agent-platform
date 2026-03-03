@@ -265,22 +265,21 @@ export async function transactionRoutes(fastify: FastifyInstance): Promise<void>
         },
       });
     } catch (error: any) {
-      console.error(`[TX] Broadcast failed for ${session.verusId}:`, error.message);
-      
-      // Parse common RPC errors
-      if (error.message.includes('missing inputs') || error.message.includes('bad-txns')) {
+      const errMsg = error.message || String(error);
+      console.error(`[TX] Broadcast failed for ${session.verusId}:`, errMsg);
+
+      // RPC errors (daemon received request but rejected the TX) → 400
+      if (errMsg.includes('RPC error:')) {
+        // Extract the daemon's actual error detail
+        const detail = errMsg.replace(/^RPC error:\s*-?\d+\s*-\s*/, '').trim() || errMsg;
         return reply.code(400).send({
-          error: { code: 'TX_REJECTED', message: 'Transaction rejected: invalid inputs or double-spend' },
-        });
-      }
-      if (error.message.includes('insufficient fee') || error.message.includes('min relay fee')) {
-        return reply.code(400).send({
-          error: { code: 'INSUFFICIENT_FEE', message: 'Transaction fee too low' },
+          error: { code: 'TX_REJECTED', message: `Transaction rejected: ${detail}` },
         });
       }
 
+      // Connection/timeout errors → true 502
       return reply.code(502).send({
-        error: { code: 'BROADCAST_FAILED', message: 'Failed to broadcast transaction' },
+        error: { code: 'BROADCAST_FAILED', message: `Failed to broadcast transaction: ${errMsg}` },
       });
     }
   });
