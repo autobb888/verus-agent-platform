@@ -54,9 +54,11 @@ export default function Chat({ jobId, job, onJobStatusChanged, onJobAccepted }) 
   // Delivery panel state
   const [deliveryMsg, setDeliveryMsg] = useState('');
   const [deliverySig, setDeliverySig] = useState('');
+  const [deliveryTs, setDeliveryTs] = useState(null);
 
   // Complete panel state
   const [completeSig, setCompleteSig] = useState('');
+  const [completeTs, setCompleteTs] = useState(null);
 
   // Review panel state
   const [reviewRating, setReviewRating] = useState(0);
@@ -295,7 +297,6 @@ export default function Chat({ jobId, job, onJobStatusChanged, onJobAccepted }) 
     setActionLoading(true);
     setActionError(null);
     try {
-      const ts = Math.floor(Date.now() / 1000);
       const res = await fetch(`${API_BASE}/v1/jobs/${jobId}/deliver`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -303,7 +304,7 @@ export default function Chat({ jobId, job, onJobStatusChanged, onJobAccepted }) 
         body: JSON.stringify({
           deliveryHash: 'pending',
           deliveryMessage: deliveryMsg || undefined,
-          timestamp: ts,
+          timestamp: deliveryTs,
           signature: deliverySig.trim(),
         }),
       });
@@ -312,6 +313,7 @@ export default function Chat({ jobId, job, onJobStatusChanged, onJobAccepted }) 
       setEndSessionPanel(null);
       setDeliveryMsg('');
       setDeliverySig('');
+      setDeliveryTs(null);
       onJobStatusChanged?.();
     } catch (err) {
       setActionError(err.message);
@@ -324,19 +326,19 @@ export default function Chat({ jobId, job, onJobStatusChanged, onJobAccepted }) 
     setActionLoading(true);
     setActionError(null);
     try {
-      const ts = Math.floor(Date.now() / 1000);
       const res = await fetch(`${API_BASE}/v1/jobs/${jobId}/complete`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
         body: JSON.stringify({
-          timestamp: ts,
+          timestamp: completeTs,
           signature: completeSig.trim(),
         }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error?.message || 'Completion failed');
       setCompleteSig('');
+      setCompleteTs(null);
       setEndSessionPanel('review');
       onJobStatusChanged?.();
     } catch (err) {
@@ -540,7 +542,13 @@ export default function Chat({ jobId, job, onJobStatusChanged, onJobAccepted }) 
               <input
                 type="text"
                 value={reviewSig}
-                onChange={e => setReviewSig(e.target.value)}
+                onChange={e => {
+                  let val = e.target.value;
+                  if (val.trim().startsWith('{')) {
+                    try { const p = JSON.parse(val.trim()); if (p.signature) val = p.signature; } catch { /* not JSON */ }
+                  }
+                  setReviewSig(val);
+                }}
                 placeholder="Paste signature..."
                 style={{
                   width: '100%', marginTop: 8, background: 'var(--bg-secondary)',
@@ -583,7 +591,8 @@ export default function Chat({ jobId, job, onJobStatusChanged, onJobAccepted }) 
 
     // Completion panel (buyer, job delivered)
     if (endSessionPanel === 'complete' && isBuyer) {
-      const ts = Math.floor(Date.now() / 1000);
+      if (!completeTs) setCompleteTs(Math.floor(Date.now() / 1000));
+      const ts = completeTs || Math.floor(Date.now() / 1000);
       const msg = `VAP-COMPLETE|Job:${job.jobHash}|Ts:${ts}|I confirm the work has been delivered satisfactorily.`;
       const cmd = buildSignCmd(idName, msg);
 
@@ -609,7 +618,13 @@ export default function Chat({ jobId, job, onJobStatusChanged, onJobAccepted }) 
           <input
             type="text"
             value={completeSig}
-            onChange={e => setCompleteSig(e.target.value)}
+            onChange={e => {
+              let val = e.target.value;
+              if (val.trim().startsWith('{')) {
+                try { const p = JSON.parse(val.trim()); if (p.signature) val = p.signature; } catch { /* not JSON */ }
+              }
+              setCompleteSig(val);
+            }}
             placeholder="Paste signature..."
             style={{
               width: '100%', marginTop: 8, background: 'var(--bg-secondary)',
@@ -628,7 +643,7 @@ export default function Chat({ jobId, job, onJobStatusChanged, onJobAccepted }) 
               {actionLoading ? 'Submitting...' : 'Confirm Complete'}
             </button>
             <button
-              onClick={() => { setEndSessionPanel(null); setCompleteSig(''); }}
+              onClick={() => { setEndSessionPanel(null); setCompleteSig(''); setCompleteTs(null); }}
               style={{
                 background: 'none', border: '1px solid var(--border-primary)',
                 borderRadius: 6, padding: '6px 14px', fontSize: 13,
@@ -644,7 +659,8 @@ export default function Chat({ jobId, job, onJobStatusChanged, onJobAccepted }) 
 
     // Delivery panel (seller)
     if (endSessionPanel === 'deliver' && isSeller) {
-      const ts = Math.floor(Date.now() / 1000);
+      if (!deliveryTs) setDeliveryTs(Math.floor(Date.now() / 1000));
+      const ts = deliveryTs || Math.floor(Date.now() / 1000);
       const deliveryHash = 'pending';
       const msg = `VAP-DELIVER|Job:${job.jobHash}|Delivery:${deliveryHash}|Ts:${ts}|I have delivered the work for this job.`;
       const cmd = buildSignCmd(idName, msg);
@@ -683,7 +699,13 @@ export default function Chat({ jobId, job, onJobStatusChanged, onJobAccepted }) 
           <input
             type="text"
             value={deliverySig}
-            onChange={e => setDeliverySig(e.target.value)}
+            onChange={e => {
+              let val = e.target.value;
+              if (val.trim().startsWith('{')) {
+                try { const p = JSON.parse(val.trim()); if (p.signature) val = p.signature; } catch { /* not JSON */ }
+              }
+              setDeliverySig(val);
+            }}
             placeholder="Paste signature..."
             style={{
               width: '100%', marginTop: 8, background: 'var(--bg-secondary)',
@@ -702,7 +724,7 @@ export default function Chat({ jobId, job, onJobStatusChanged, onJobAccepted }) 
               {actionLoading ? 'Submitting...' : 'Submit Delivery'}
             </button>
             <button
-              onClick={() => { setEndSessionPanel(null); setDeliverySig(''); setDeliveryMsg(''); }}
+              onClick={() => { setEndSessionPanel(null); setDeliverySig(''); setDeliveryMsg(''); setDeliveryTs(null); }}
               style={{
                 background: 'none', border: '1px solid var(--border-primary)',
                 borderRadius: 6, padding: '6px 14px', fontSize: 13,
