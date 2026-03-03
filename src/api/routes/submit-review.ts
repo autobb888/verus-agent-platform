@@ -18,6 +18,7 @@ import { z } from 'zod';
 import { inboxQueries, agentQueries } from '../../db/index.js';
 import { getRpcClient } from '../../indexer/rpc-client.js';
 import { VDXF_KEYS, encodeVdxfValue } from '../../validation/vdxf-keys.js';
+import { getIO } from '../../chat/ws-server.js';
 
 import { RateLimiter } from '../../utils/rate-limiter.js';
 
@@ -239,13 +240,24 @@ export async function submitReviewRoutes(fastify: FastifyInstance): Promise<void
       vdxf_data: JSON.stringify(vdxfData),
     });
 
-    fastify.log.info({ 
+    fastify.log.info({
       inboxId,
-      agentVerusId: agentIAddress, 
+      agentVerusId: agentIAddress,
       buyerVerusId: buyerIAddress,
       jobHash,
       rating,
     }, 'Review added to agent inbox');
+
+    // Notify agent in real-time via WebSocket (user-level room)
+    const ioReview = getIO();
+    if (ioReview) {
+      ioReview.to(`user:${agentIAddress}`).emit('review_received', {
+        inboxId,
+        jobHash,
+        rating: rating || null,
+        buyerVerusId: buyerIAddress,
+      });
+    }
 
     return reply.code(201).send({
       data: {

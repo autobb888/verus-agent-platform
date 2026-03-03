@@ -11,7 +11,7 @@ function CopyButton({ text }) {
   return (
     <button
       onClick={() => { navigator.clipboard.writeText(text); setCopied(true); setTimeout(() => setCopied(false), 2000); }}
-      className="inline-flex items-center gap-1 text-gray-500 hover:text-indigo-400 transition-colors"
+      className="inline-flex items-center gap-1 text-gray-500 hover:text-violet-400 transition-colors"
       title="Copy"
     >
       {copied ? <Check className="w-3.5 h-3.5 text-green-400" /> : <Copy className="w-3.5 h-3.5" />}
@@ -28,9 +28,9 @@ function CollapsibleSection({ title, icon: Icon, children, defaultOpen = false, 
         className="w-full flex items-center gap-3 px-5 py-4 bg-white/[0.02] hover:bg-white/[0.04] transition-colors text-left"
       >
         {open ? <ChevronDown className="w-4 h-4 text-gray-500" /> : <ChevronRight className="w-4 h-4 text-gray-500" />}
-        {Icon && <Icon className="w-4 h-4 text-indigo-400" />}
+        {Icon && <Icon className="w-4 h-4 text-violet-400" />}
         <span className="text-white font-medium">{title}</span>
-        {badge && <span className="ml-auto text-xs px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300">{badge}</span>}
+        {badge && <span className="ml-auto text-xs px-2 py-0.5 rounded-full bg-violet-500/20 text-violet-300">{badge}</span>}
       </button>
       {open && <div className="px-5 pb-5 pt-2">{children}</div>}
     </div>
@@ -67,7 +67,7 @@ function DecodedDataView({ decoded }) {
         return (
           <div key={key} className="bg-white/[0.03] rounded-lg p-3 border border-white/5">
             <div className="flex items-center gap-2 mb-1">
-              <span className="text-indigo-400 text-xs font-mono">{definedKey || key}</span>
+              <span className="text-violet-400 text-xs font-mono">{definedKey || key}</span>
               {definedKey && <span className="text-gray-600 text-xs">→ {shortLabel}</span>}
               <CopyButton text={definedKey || key} />
             </div>
@@ -115,7 +115,7 @@ function SchemaReference({ schema }) {
                 {(schema[key] || []).map(({ field, definedKey, iAddress }) => (
                   <tr key={field} className="border-t border-white/5">
                     <td className="py-1.5 pr-4 text-gray-300">{field}</td>
-                    <td className="py-1.5 pr-4 font-mono text-xs text-indigo-400">{definedKey}</td>
+                    <td className="py-1.5 pr-4 font-mono text-xs text-violet-400">{definedKey}</td>
                     <td className="py-1.5 font-mono text-xs text-gray-500 flex items-center gap-1">
                       <span className="truncate max-w-[200px]">{iAddress}</span>
                       <CopyButton text={iAddress} />
@@ -192,7 +192,7 @@ export default function ProfilePage() {
           href={`https://explorer.verustest.net/address/${identity.iAddress}`}
           target="_blank"
           rel="noopener noreferrer"
-          className="flex items-center gap-1.5 text-sm text-indigo-400 hover:text-indigo-300 transition-colors"
+          className="flex items-center gap-1.5 text-sm text-violet-400 hover:text-violet-300 transition-colors"
         >
           View on Explorer <ExternalLink className="w-3.5 h-3.5" />
         </a>
@@ -201,7 +201,7 @@ export default function ProfilePage() {
       {/* Identity Card */}
       <div className="card">
         <div className="flex items-center gap-3 mb-5">
-          <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center">
+          <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-violet-500 to-purple-600 flex items-center justify-center">
             <User className="w-6 h-6 text-white" />
           </div>
           <div>
@@ -247,7 +247,7 @@ export default function ProfilePage() {
                     If your keys are compromised, you won't be able to revoke or recover your ID. Set these to a separate VerusID you control.
                   </p>
                   <a href="https://wiki.autobb.app/docs/concepts/verusid/" target="_blank" rel="noopener noreferrer"
-                    className="text-indigo-400 hover:text-indigo-300 text-xs font-medium mt-2 inline-block">
+                    className="text-violet-400 hover:text-violet-300 text-xs font-medium mt-2 inline-block">
                     Learn more about VerusID security →
                   </a>
                   <div className="mt-3 relative">
@@ -301,7 +301,7 @@ export default function ProfilePage() {
         )}
         {decodedCmmCount === 0 && decodedCmCount === 0 && (
           <p className="text-gray-500 text-sm italic">
-            No agentplatform data found on this identity. Use <code className="text-indigo-400">updateidentity</code> to publish agent/service data.
+            No agentplatform data found on this identity. Use <code className="text-violet-400">updateidentity</code> to publish agent/service data.
           </p>
         )}
       </CollapsibleSection>
@@ -342,7 +342,7 @@ export default function ProfilePage() {
       {/* Schema Reference */}
       <CollapsibleSection title="agentplatform DefinedKey Schema Reference" icon={Key}>
         <p className="text-gray-400 text-sm mb-4">
-          These DefinedKeys are registered under <code className="text-indigo-400">agentplatform@</code> on VRSCTEST. 
+          These DefinedKeys are registered under <code className="text-violet-400">agentplatform@</code> on VRSCTEST. 
           Use the i-addresses as contentmultimap keys.
         </p>
         <SchemaReference schema={identity.schema} />

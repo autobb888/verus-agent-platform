@@ -337,7 +337,14 @@ function JobCard({ job, currentUser, onUpdate }) {
 
   return (
     <div className="card">
-      <div className="flex justify-between items-start">
+      <div
+        className="flex justify-between items-start cursor-pointer"
+        onClick={() => setExpanded(!expanded)}
+        role="button"
+        tabIndex={0}
+        aria-expanded={expanded}
+        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setExpanded(!expanded); } }}
+      >
         <div className="flex-1">
           <div className="flex items-center gap-3">
             <span className={`badge badge-${job.status}`}>
@@ -360,12 +367,7 @@ function JobCard({ job, currentUser, onUpdate }) {
             {job.amount} {job.currency} · Created {new Date(job.timestamps.created).toLocaleDateString()}
           </p>
         </div>
-        <button
-          onClick={() => setExpanded(!expanded)}
-          className="text-gray-400 hover:text-white ml-4"
-        >
-          {expanded ? '▲' : '▼'}
-        </button>
+        <span className="text-gray-400 ml-4 transition-transform" style={{ transform: expanded ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }}>▼</span>
       </div>
 
       {expanded && (
@@ -418,7 +420,7 @@ function JobCard({ job, currentUser, onUpdate }) {
 
           {/* Review prompt for buyers on completed jobs */}
           {job.status === 'completed' && !isSeller && (
-            <Link to={`/jobs/${job.id}`} className="inline-flex items-center gap-2 text-indigo-400 hover:text-indigo-300 text-sm font-medium mt-2">
+            <Link to={`/jobs/${job.id}`} className="inline-flex items-center gap-2 text-violet-400 hover:text-violet-300 text-sm font-medium mt-2">
               ⭐ Leave a Review
             </Link>
           )}
@@ -447,23 +449,29 @@ function JobCard({ job, currentUser, onUpdate }) {
               </button>
             )}
 
-            {/* Buyer: Submit payment txid */}
-            {isBuyer && job.status === 'accepted' && !job.payment?.txid && !signPanel && (
-              <button
-                onClick={() => {
-                  setSignPanel({ action: 'payment', type: 'txid' });
-                  setSignatureInput('');
-                }}
-                disabled={loading}
+            {/* Buyer: Pay now — link to detail page for guided payment flow */}
+            {isBuyer && job.status === 'accepted' && !job.payment?.txid && (
+              <Link
+                to={`/jobs/${job.id}?action=pay`}
                 className="btn-primary text-sm"
+                onClick={(e) => e.stopPropagation()}
               >
-                Submit Payment
-              </button>
+                Pay Now →
+              </Link>
             )}
 
             {/* Buyer: Payment submitted, waiting */}
-            {isBuyer && job.status === 'accepted' && job.payment?.txid && (
-              <span className="text-yellow-400 text-sm">⏳ Payment submitted — verifying...</span>
+            {isBuyer && job.status === 'accepted' && job.payment?.txid && !job.payment?.platformFeeTxid && (
+              <Link
+                to={`/jobs/${job.id}?action=pay`}
+                className="btn-primary text-sm"
+                onClick={(e) => e.stopPropagation()}
+              >
+                Pay Platform Fee →
+              </Link>
+            )}
+            {isBuyer && job.status === 'accepted' && job.payment?.txid && job.payment?.platformFeeTxid && (
+              <span className="text-yellow-400 text-sm">⏳ Both payments submitted — verifying...</span>
             )}
 
             {/* Seller: Waiting for payment */}

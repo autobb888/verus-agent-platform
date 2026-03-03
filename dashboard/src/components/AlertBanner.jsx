@@ -4,7 +4,7 @@ import { AlertTriangle, Info, XCircle, X, Flag, ChevronDown } from 'lucide-react
 const API_BASE = import.meta.env.VITE_API_URL || '';
 
 const SEVERITY_CONFIG = {
-  info: { color: '#60a5fa', bg: 'rgba(96,165,250,0.08)', border: 'rgba(96,165,250,0.2)', Icon: Info },
+  info: { color: '#A78BFA', bg: 'rgba(96,165,250,0.08)', border: 'rgba(96,165,250,0.2)', Icon: Info },
   warning: { color: '#fbbf24', bg: 'rgba(251,191,36,0.08)', border: 'rgba(251,191,36,0.2)', Icon: AlertTriangle },
   critical: { color: '#ef4444', bg: 'rgba(239,68,68,0.08)', border: 'rgba(239,68,68,0.2)', Icon: XCircle },
 };

@@ -133,11 +133,11 @@ export default function GetIdPage() {
         {STEPS.map((s, i) => (
           <div key={s.num} className="flex items-center">
             <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold
-              ${step >= s.num ? 'bg-verus-blue text-white' : 'bg-gray-700 text-gray-400'}`}>
+              ${step >= s.num ? 'bg-verus-blue text-white' : 'bg-white/[0.06] text-gray-400'}`}>
               {step > s.num ? '✓' : s.num}
             </div>
             {i < STEPS.length - 1 && (
-              <div className={`w-12 h-0.5 mx-1 ${step > s.num ? 'bg-verus-blue' : 'bg-gray-700'}`} />
+              <div className={`w-12 h-0.5 mx-1 ${step > s.num ? 'bg-verus-blue' : 'bg-white/[0.06]'}`} />
             )}
           </div>
         ))}
@@ -161,7 +161,7 @@ export default function GetIdPage() {
           <h3 className="text-sm font-medium text-gray-300 mb-3">📱 Verus Mobile</h3>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
             <a href="https://apps.apple.com/app/verus-mobile/id1528675517" target="_blank" rel="noopener"
-              className="flex items-center gap-3 p-4 bg-gray-800 rounded-lg hover:bg-gray-700 transition">
+              className="flex items-center gap-3 p-4 bg-[#0d0e14] rounded-lg hover:bg-white/[0.06] transition">
               <span className="text-2xl">🍎</span>
               <div>
                 <div className="text-white font-medium">App Store</div>
@@ -169,7 +169,7 @@ export default function GetIdPage() {
               </div>
             </a>
             <a href="https://play.google.com/store/apps/details?id=org.ArtisticCompass.VerusMobile" target="_blank" rel="noopener"
-              className="flex items-center gap-3 p-4 bg-gray-800 rounded-lg hover:bg-gray-700 transition">
+              className="flex items-center gap-3 p-4 bg-[#0d0e14] rounded-lg hover:bg-white/[0.06] transition">
               <span className="text-2xl">🤖</span>
               <div>
                 <div className="text-white font-medium">Google Play</div>
@@ -181,7 +181,7 @@ export default function GetIdPage() {
           <h3 className="text-sm font-medium text-gray-300 mb-3">🖥️ Verus Desktop / CLI</h3>
           <div className="mb-6">
             <a href="https://verus.io/wallet/desktop" target="_blank" rel="noopener"
-              className="flex items-center gap-3 p-4 bg-gray-800 rounded-lg hover:bg-gray-700 transition">
+              className="flex items-center gap-3 p-4 bg-[#0d0e14] rounded-lg hover:bg-white/[0.06] transition">
               <span className="text-2xl">💻</span>
               <div>
                 <div className="text-white font-medium">Verus Desktop</div>
@@ -190,7 +190,7 @@ export default function GetIdPage() {
             </a>
           </div>
 
-          <div className="bg-gray-800/50 rounded-lg p-4 mb-6">
+          <div className="bg-white/[0.03] rounded-lg p-4 mb-6">
             <h3 className="text-sm font-medium text-gray-300 mb-2">After installing:</h3>
             <ol className="text-sm text-gray-400 space-y-1 list-decimal list-inside">
               <li>Create a new wallet (or import existing)</li>
@@ -216,7 +216,7 @@ export default function GetIdPage() {
           <form onSubmit={(e) => { e.preventDefault(); if (name.trim()) setStep(3); }}>
             <div className="mb-4">
               <label className="block text-sm font-medium text-gray-300 mb-2">Identity Name</label>
-              <div className="flex items-center bg-gray-800 rounded-lg overflow-hidden border border-gray-600 focus-within:border-verus-blue">
+              <div className="flex items-center bg-[#0d0e14] rounded-lg overflow-hidden border border-white/10 focus-within:border-verus-blue">
                 <input
                   type="text"
                   value={name}
@@ -326,7 +326,7 @@ export default function GetIdPage() {
                   {!pollStatus && 'Starting registration...'}
                 </span>
               </div>
-              <div className="w-full bg-gray-700 rounded-full h-2">
+              <div className="w-full bg-white/[0.06] rounded-full h-2">
                 <div className={`bg-verus-blue h-2 rounded-full transition-all duration-1000 ${
                   pollStatus === 'committing' ? 'w-1/3' :
                   pollStatus === 'confirming' ? 'w-2/3' : 'w-1/6'
@@ -358,7 +358,7 @@ export default function GetIdPage() {
               </div>
 
               {/* Secure Your Identity */}
-              <div className="bg-gray-800/50 rounded-lg p-4 mb-6">
+              <div className="bg-white/[0.03] rounded-lg p-4 mb-6">
                 <h3 className="text-sm font-medium text-white mb-3">🔒 Secure Your Identity</h3>
                 <p className="text-xs text-gray-400 mb-4">
                   We recommend setting your revocation & recovery to a personal VerusID you control,
@@ -369,7 +369,7 @@ export default function GetIdPage() {
                   <div>
                     <div className="text-xs text-gray-400 mb-1">1. Generate a z-address (in Verus CLI/Desktop console):</div>
                     <div className="relative">
-                      <pre className="bg-gray-900 rounded p-2 text-xs text-green-400 overflow-x-auto">z_getnewaddress</pre>
+                      <pre className="bg-[#0a0b10] rounded p-2 text-xs text-green-400 overflow-x-auto">z_getnewaddress</pre>
                       <CopyButton text="z_getnewaddress" className="absolute top-1 right-1" />
                     </div>
                   </div>
@@ -377,7 +377,7 @@ export default function GetIdPage() {
                   <div>
                     <div className="text-xs text-gray-400 mb-1">2. Update your identity (replace values with your own):</div>
                     <div className="relative">
-                      <pre className="bg-gray-900 rounded p-2 text-xs text-green-400 overflow-x-auto whitespace-pre-wrap">{`updateidentity '{"name":"${name}","parent":"i7xKUpKQDSriYFfgHYfRpFc2uzRKWLDkjW","privateaddress":"YOUR_Z_ADDRESS","revocationauthority":"YOUR_PERSONAL_ID@","recoveryauthority":"YOUR_PERSONAL_ID@"}'`}</pre>
+                      <pre className="bg-[#0a0b10] rounded p-2 text-xs text-green-400 overflow-x-auto whitespace-pre-wrap">{`updateidentity '{"name":"${name}","parent":"i7xKUpKQDSriYFfgHYfRpFc2uzRKWLDkjW","privateaddress":"YOUR_Z_ADDRESS","revocationauthority":"YOUR_PERSONAL_ID@","recoveryauthority":"YOUR_PERSONAL_ID@"}'`}</pre>
                       <CopyButton text={`updateidentity '{"name":"${name}","parent":"i7xKUpKQDSriYFfgHYfRpFc2uzRKWLDkjW","privateaddress":"YOUR_Z_ADDRESS","revocationauthority":"YOUR_PERSONAL_ID@","recoveryauthority":"YOUR_PERSONAL_ID@"}'`} className="absolute top-1 right-1" />
                     </div>
                     <p className="text-xs text-gray-400 mt-1">
@@ -388,7 +388,7 @@ export default function GetIdPage() {
                 </div>
               </div>
 
-              <div className="bg-gray-800/50 rounded-lg p-4 mb-6">
+              <div className="bg-white/[0.03] rounded-lg p-4 mb-6">
                 <h3 className="text-sm font-medium text-gray-300 mb-2">What's next?</h3>
                 <ol className="text-sm text-gray-400 space-y-2 list-decimal list-inside">
                   <li>Open your Verus wallet — your new ID should appear automatically</li>
@@ -411,7 +411,7 @@ export default function GetIdPage() {
       )}
 
       {/* Info box */}
-      <div className="mt-8 bg-gray-800/30 border border-gray-700 rounded-lg p-4">
+      <div className="mt-8 bg-white/[0.02] border border-white/10 rounded-lg p-4">
         <h3 className="text-sm font-medium text-gray-300 mb-2">ℹ️ About VerusIDs</h3>
         <p className="text-xs text-gray-400">
           Your <span className="text-verus-blue">agentplatform@</span> identity is a real VerusID on the Verus blockchain.
@@ -442,7 +442,7 @@ function ChallengeSignStep({ challenge, name, address, onSubmit, onBack, loading
           <label className="text-sm font-medium text-gray-400">CLI / GUI Console Command</label>
           <CopyButton text={signCommand} label="📋 Copy Command" variant="pill" />
         </div>
-        <div className="bg-gray-950 rounded-lg p-3 font-mono text-xs text-green-400 break-all overflow-x-auto">
+        <div className="bg-[#050508] rounded-lg p-3 font-mono text-xs text-green-400 break-all overflow-x-auto">
           <span className="text-gray-500">verus </span>{signCommand}
         </div>
         <p className="text-xs text-gray-400 mt-1.5">
@@ -451,7 +451,7 @@ function ChallengeSignStep({ challenge, name, address, onSubmit, onBack, loading
       </div>
 
       {/* Method 2: Verus Mobile instructions */}
-      <div className="bg-gray-800/50 rounded-lg p-4 mb-5 border border-gray-700/50">
+      <div className="bg-white/[0.03] rounded-lg p-4 mb-5 border border-white/[0.06]">
         <p className="text-sm font-medium text-gray-300 mb-2">📱 Using Verus Mobile instead?</p>
         <ol className="text-xs text-gray-400 space-y-1.5 list-decimal list-inside">
           <li>Open Verus Mobile → go to your identity</li>
@@ -459,7 +459,7 @@ function ChallengeSignStep({ challenge, name, address, onSubmit, onBack, loading
           <li>Paste the challenge string below:</li>
         </ol>
         <div className="flex items-center gap-2 mt-2">
-          <div className="bg-gray-950 rounded p-2 font-mono text-xs text-gray-300 break-all flex-1">
+          <div className="bg-[#050508] rounded p-2 font-mono text-xs text-gray-300 break-all flex-1">
             {challenge}
           </div>
           <CopyButton text={challenge} label="📋 Copy" variant="pill" />

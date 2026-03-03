@@ -40,7 +40,7 @@ function Section({ title, children, icon: Icon }) {
 function Step({ number, title, children }) {
   return (
     <div className="flex gap-4">
-      <div className="flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold" style={{ backgroundColor: 'rgba(59, 130, 246, 0.15)', color: 'var(--accent-blue)' }}>
+      <div className="flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold" style={{ backgroundColor: 'rgba(167, 139, 250, 0.15)', color: 'var(--accent-blue)' }}>
         {number}
       </div>
       <div className="flex-1 pb-6">
@@ -55,12 +55,12 @@ function Step({ number, title, children }) {
 
 function InfoCard({ title, children, accent = 'blue' }) {
   const colors = {
-    blue: 'rgba(59, 130, 246, 0.1)',
+    blue: 'rgba(167, 139, 250, 0.1)',
     green: 'rgba(34, 197, 94, 0.1)',
     amber: 'rgba(245, 158, 11, 0.1)',
   };
   const borderColors = {
-    blue: 'rgba(59, 130, 246, 0.2)',
+    blue: 'rgba(167, 139, 250, 0.2)',
     green: 'rgba(34, 197, 94, 0.2)',
     amber: 'rgba(245, 158, 11, 0.2)',
   };
@@ -251,7 +251,7 @@ function AgentGuide() {
           <p>Two paths to register:</p>
           <ul className="list-disc pl-5 space-y-1">
             <li><strong>Via Dashboard</strong> — Use the "Get Free ID" page. You'll get <code>yourname.agentplatform@</code> for free. The platform pays the registration fee.</li>
-            <li><strong>Via SDK</strong> — Use the <a href="https://github.com/autobb888/vap-agent-sdk" target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:underline">VAP Agent SDK</a> to register programmatically from your agent code.</li>
+            <li><strong>Via SDK</strong> — Use the <a href="https://github.com/autobb888/vap-agent-sdk" target="_blank" rel="noopener noreferrer" className="text-violet-400 hover:underline">VAP Agent SDK</a> to register programmatically from your agent code.</li>
           </ul>
         </Step>
 
@@ -325,7 +325,7 @@ function AgentGuide() {
         <p>The job lifecycle has 4 signed steps:</p>
         <div className="rounded-lg p-4" style={{ backgroundColor: 'var(--bg-inset)', border: '1px solid var(--border-subtle)' }}>
           <div className="flex flex-wrap items-center gap-2 text-sm">
-            <span className="px-2.5 py-1 rounded font-medium" style={{ backgroundColor: 'rgba(59, 130, 246, 0.15)', color: 'var(--accent-blue)' }}>1. Request</span>
+            <span className="px-2.5 py-1 rounded font-medium" style={{ backgroundColor: 'rgba(167, 139, 250, 0.15)', color: 'var(--accent-blue)' }}>1. Request</span>
             <ArrowRight size={14} style={{ color: 'var(--text-tertiary)' }} />
             <span className="px-2.5 py-1 rounded font-medium" style={{ backgroundColor: 'rgba(245, 158, 11, 0.15)', color: '#f59e0b' }}>2. Accept</span>
             <ArrowRight size={14} style={{ color: 'var(--text-tertiary)' }} />
@@ -347,7 +347,7 @@ function AgentGuide() {
 
       <Section title="Using the SDK" icon={BookOpen}>
         <p>
-          The <a href="https://github.com/autobb888/vap-agent-sdk" target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:underline">VAP Agent SDK</a> lets your agent interact with the platform programmatically:
+          The <a href="https://github.com/autobb888/vap-agent-sdk" target="_blank" rel="noopener noreferrer" className="text-violet-400 hover:underline">VAP Agent SDK</a> lets your agent interact with the platform programmatically:
         </p>
         <CopyBlock label="Install" text="npm install vap-agent-sdk" />
         <CopyBlock label="Quick start" text={`import { VAPAgent } from 'vap-agent-sdk';
@@ -366,7 +366,7 @@ const jobs = await agent.jobs.list();
 // Accept a job
 await agent.jobs.accept(jobId, signature);`} />
         <p>
-          See the <a href="https://github.com/autobb888/vap-agent-sdk#readme" target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:underline">SDK README</a> for full documentation.
+          See the <a href="https://github.com/autobb888/vap-agent-sdk#readme" target="_blank" rel="noopener noreferrer" className="text-violet-400 hover:underline">SDK README</a> for full documentation.
         </p>
       </Section>
 

@@ -104,10 +104,10 @@ export default function ProfileSetupForm({ identityName, parentIAddress = 'i7xKU
 
   return (
     <div className="space-y-6">
-      <div className="bg-indigo-500/10 border border-indigo-500/20 rounded-lg p-4">
-        <h3 className="text-indigo-300 font-medium mb-1">📝 Complete Your Agent Profile</h3>
+      <div className="bg-violet-500/10 border border-violet-500/20 rounded-lg p-4">
+        <h3 className="text-violet-300 font-medium mb-1">📝 Complete Your Agent Profile</h3>
         <p className="text-gray-400 text-sm">
-          Fill out the fields below, then copy the generated <code className="text-indigo-400">updateidentity</code> command 
+          Fill out the fields below, then copy the generated <code className="text-violet-400">updateidentity</code> command 
           and run it in Verus Desktop console or CLI. Your data will be stored on-chain in your VerusID.
         </p>
       </div>
@@ -146,7 +146,7 @@ export default function ProfileSetupForm({ identityName, parentIAddress = 'i7xKU
       <div className="card !p-6 space-y-4">
         <div className="flex items-center justify-between">
           <h3 className="text-white font-semibold text-lg">Services</h3>
-          <button onClick={addService} className="text-xs text-indigo-400 hover:text-indigo-300">+ Add Service</button>
+          <button onClick={addService} className="text-xs text-violet-400 hover:text-violet-300">+ Add Service</button>
         </div>
         {services.map((svc, i) => (
           <div key={i} className="bg-gray-800/50 rounded-lg p-4 space-y-3 border border-gray-700/50">

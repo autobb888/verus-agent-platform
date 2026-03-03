@@ -26,7 +26,7 @@ function buildSignCmd(idName, message) {
 
 const STAR_LABELS = ['Terrible', 'Poor', 'Okay', 'Good', 'Excellent'];
 
-export default function Chat({ jobId, job, onJobStatusChanged }) {
+export default function Chat({ jobId, job, onJobStatusChanged, onJobAccepted }) {
   const { user } = useAuth();
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState('');
@@ -201,6 +201,10 @@ export default function Chat({ jobId, job, onJobStatusChanged }) {
     socket.on('job_status_changed', (data) => {
       setJobStatus(data.status);
       onJobStatusChanged?.();
+      // Auto-open payment for buyer when agent accepts
+      if (data.status === 'accepted' && isBuyer) {
+        onJobAccepted?.();
+      }
       // Auto-open relevant panel for buyer
       if (data.status === 'delivered' && isBuyer) {
         setEndSessionPanel(null); // Let them see the delivered banner
@@ -527,7 +531,7 @@ export default function Chat({ jobId, job, onJobStatusChanged }) {
               </p>
               <div style={{
                 background: 'var(--bg-secondary)', borderRadius: 6, padding: 8,
-                fontFamily: 'monospace', fontSize: 11, color: '#3b82f6',
+                fontFamily: 'monospace', fontSize: 11, color: '#A78BFA',
                 wordBreak: 'break-all', whiteSpace: 'pre-wrap', marginBottom: 8,
               }}>
                 {buildSignCmd(idName, reviewSignData.message)}
@@ -596,7 +600,7 @@ export default function Chat({ jobId, job, onJobStatusChanged }) {
           </p>
           <div style={{
             background: 'var(--bg-secondary)', borderRadius: 6, padding: 8,
-            fontFamily: 'monospace', fontSize: 11, color: '#3b82f6',
+            fontFamily: 'monospace', fontSize: 11, color: '#A78BFA',
             wordBreak: 'break-all', whiteSpace: 'pre-wrap', marginBottom: 8,
           }}>
             {cmd}
@@ -670,7 +674,7 @@ export default function Chat({ jobId, job, onJobStatusChanged }) {
           </p>
           <div style={{
             background: 'var(--bg-secondary)', borderRadius: 6, padding: 8,
-            fontFamily: 'monospace', fontSize: 11, color: '#3b82f6',
+            fontFamily: 'monospace', fontSize: 11, color: '#A78BFA',
             wordBreak: 'break-all', whiteSpace: 'pre-wrap', marginBottom: 8,
           }}>
             {cmd}
@@ -825,11 +829,11 @@ export default function Chat({ jobId, job, onJobStatusChanged }) {
       if (isBuyer) {
         return (
           <div style={{
-            padding: '10px 16px', background: 'rgba(59, 130, 246, 0.1)',
-            borderTop: '1px solid rgba(59, 130, 246, 0.3)',
+            padding: '10px 16px', background: 'rgba(167, 139, 250, 0.1)',
+            borderTop: '1px solid rgba(167, 139, 250, 0.3)',
             display: 'flex', alignItems: 'center', justifyContent: 'space-between',
           }}>
-            <span style={{ color: '#3b82f6', fontWeight: 600, fontSize: 13 }}>
+            <span style={{ color: '#A78BFA', fontWeight: 600, fontSize: 13 }}>
               Work delivered — ready to confirm?
             </span>
             <button
@@ -844,11 +848,11 @@ export default function Chat({ jobId, job, onJobStatusChanged }) {
       }
       return (
         <div style={{
-          padding: '10px 16px', background: 'rgba(59, 130, 246, 0.1)',
-          borderTop: '1px solid rgba(59, 130, 246, 0.3)',
+          padding: '10px 16px', background: 'rgba(167, 139, 250, 0.1)',
+          borderTop: '1px solid rgba(167, 139, 250, 0.3)',
           display: 'flex', alignItems: 'center', gap: 8,
         }}>
-          <span style={{ color: '#3b82f6', fontWeight: 600, fontSize: 13 }}>
+          <span style={{ color: '#A78BFA', fontWeight: 600, fontSize: 13 }}>
             Delivered — waiting for buyer confirmation
           </span>
         </div>
@@ -893,6 +897,21 @@ export default function Chat({ jobId, job, onJobStatusChanged }) {
               {isSeller ? 'End & Deliver' : 'End & Complete'}
             </button>
           </div>
+        </div>
+      );
+    }
+
+    // Buyer/seller already requested end — show waiting state
+    if (jobStatus === 'in_progress' && sessionEndingInfo && sessionEndingInfo.requestedBy === user?.verusId) {
+      return (
+        <div style={{
+          padding: '10px 16px', background: 'rgba(245, 158, 11, 0.1)',
+          borderTop: '1px solid rgba(245, 158, 11, 0.3)',
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        }}>
+          <span style={{ color: '#f59e0b', fontWeight: 600, fontSize: 13 }}>
+            End session requested — waiting for {isBuyer ? 'seller to deliver' : 'buyer to confirm'}...
+          </span>
         </div>
       );
     }
@@ -973,7 +992,7 @@ export default function Chat({ jobId, job, onJobStatusChanged }) {
                   borderRadius: 8,
                   maxWidth: '80%',
                   alignSelf: isMe ? 'flex-end' : 'flex-start',
-                  background: isMe ? 'rgba(59, 130, 246, 0.15)' : 'var(--bg-tertiary)',
+                  background: isMe ? 'rgba(167, 139, 250, 0.15)' : 'var(--bg-tertiary)',
                   border: isFlagged ? '1px solid #eab308' : '1px solid transparent',
                   opacity: msg.pending ? 0.6 : 1,
                 }}

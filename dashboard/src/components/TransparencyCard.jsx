@@ -81,7 +81,7 @@ export default function TransparencyCard({ verusId }) {
         }}>
           <div style={{
             height: '100%', borderRadius: 2, width: `${trustScore}%`,
-            background: trustScore >= 70 ? '#34d399' : trustScore >= 40 ? '#60a5fa' : '#8b8fa3',
+            background: trustScore >= 70 ? '#34d399' : trustScore >= 40 ? '#A78BFA' : '#8b8fa3',
             transition: 'width 0.5s ease',
           }} />
         </div>

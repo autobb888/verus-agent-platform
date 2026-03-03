@@ -259,7 +259,7 @@ export default function MyServicesPage() {
       {/* Delete Confirmation */}
       {confirmDelete && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-gray-800 rounded-xl max-w-sm w-full p-6 space-y-4">
+          <div className="bg-[#0d0e14] rounded-xl max-w-sm w-full p-6 space-y-4">
             <h3 className="text-lg font-semibold text-white">Delete Service</h3>
             <p className="text-gray-300">
               Are you sure you want to delete <span className="font-medium text-white">"{confirmDelete.name}"</span>?
@@ -267,7 +267,7 @@ export default function MyServicesPage() {
             <div className="flex gap-3">
               <button
                 onClick={() => setConfirmDelete(null)}
-                className="flex-1 px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg font-medium transition-colors"
+                className="flex-1 px-4 py-2 bg-white/[0.06] hover:bg-white/[0.08] text-white rounded-lg font-medium transition-colors"
               >
                 Cancel
               </button>
@@ -285,8 +285,8 @@ export default function MyServicesPage() {
       {/* Create/Edit Modal */}
       {showForm && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-gray-800 rounded-xl max-w-lg w-full max-h-[90vh] overflow-y-auto">
-            <div className="p-6 border-b border-gray-700">
+          <div className="bg-[#0d0e14] rounded-xl max-w-lg w-full max-h-[90vh] overflow-y-auto">
+            <div className="p-6 border-b border-white/10">
               <h2 className="text-xl font-semibold text-white">
                 {editingService ? 'Edit Service' : 'Add Service'}
               </h2>
@@ -301,7 +301,7 @@ export default function MyServicesPage() {
                   type="text"
                   value={form.name}
                   onChange={(e) => setForm({ ...form, name: e.target.value })}
-                  className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-verus-blue"
+                  className="w-full px-3 py-2 bg-white/[0.06] border border-white/10 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-verus-blue"
                   placeholder="e.g., Smart Contract Audit"
                   required
                 />
@@ -314,7 +314,7 @@ export default function MyServicesPage() {
                 <textarea
                   value={form.description}
                   onChange={(e) => setForm({ ...form, description: e.target.value })}
-                  className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-verus-blue resize-none"
+                  className="w-full px-3 py-2 bg-white/[0.06] border border-white/10 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-verus-blue resize-none"
                   rows={3}
                   placeholder="Describe what you offer..."
                 />
@@ -331,7 +331,7 @@ export default function MyServicesPage() {
                     min="0"
                     value={form.price}
                     onChange={(e) => setForm({ ...form, price: e.target.value })}
-                    className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-verus-blue"
+                    className="w-full px-3 py-2 bg-white/[0.06] border border-white/10 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-verus-blue"
                     placeholder="100"
                     required
                   />
@@ -343,7 +343,7 @@ export default function MyServicesPage() {
                   <select
                     value={form.currency}
                     onChange={(e) => setForm({ ...form, currency: e.target.value })}
-                    className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:border-verus-blue"
+                    className="w-full px-3 py-2 bg-white/[0.06] border border-white/10 rounded-lg text-white focus:outline-none focus:border-verus-blue"
                   >
                     <option value="VRSCTEST">VRSCTEST</option>
                     <option value="VRSC">VRSC</option>
@@ -359,7 +359,7 @@ export default function MyServicesPage() {
                   <select
                     value={form.category}
                     onChange={(e) => setForm({ ...form, category: e.target.value })}
-                    className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:border-verus-blue"
+                    className="w-full px-3 py-2 bg-white/[0.06] border border-white/10 rounded-lg text-white focus:outline-none focus:border-verus-blue"
                   >
                     {CATEGORIES.map((cat) => (
                       <option key={cat} value={cat}>
@@ -376,7 +376,7 @@ export default function MyServicesPage() {
                     type="text"
                     value={form.turnaround}
                     onChange={(e) => setForm({ ...form, turnaround: e.target.value })}
-                    className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-verus-blue"
+                    className="w-full px-3 py-2 bg-white/[0.06] border border-white/10 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-verus-blue"
                     placeholder="e.g., 24 hours"
                   />
                 </div>
@@ -389,7 +389,7 @@ export default function MyServicesPage() {
                 <select
                   value={form.status}
                   onChange={(e) => setForm({ ...form, status: e.target.value })}
-                  className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:border-verus-blue"
+                  className="w-full px-3 py-2 bg-white/[0.06] border border-white/10 rounded-lg text-white focus:outline-none focus:border-verus-blue"
                 >
                   <option value="active">Active</option>
                   <option value="inactive">Inactive</option>
@@ -405,7 +405,7 @@ export default function MyServicesPage() {
                 <button
                   type="button"
                   onClick={closeForm}
-                  className="flex-1 px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg font-medium transition-colors"
+                  className="flex-1 px-4 py-2 bg-white/[0.06] hover:bg-white/[0.08] text-white rounded-lg font-medium transition-colors"
                 >
                   Cancel
                 </button>

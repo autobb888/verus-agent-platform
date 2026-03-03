@@ -250,6 +250,9 @@ export function initSocketServer(httpServer: HttpServer): SocketIOServer {
     ipConnections.set(ip, (ipConnections.get(ip) || 0) + 1);
     userConnections.set(socket.verusId, (userConnections.get(socket.verusId) || 0) + 1);
 
+    // Auto-join user-level room for per-user events (review notifications, etc.)
+    socket.join(`user:${socket.verusId}`);
+
     // Session revalidation interval: validate exact auth binding (session/token), not any user session
     const revalidateInterval = setInterval(() => {
       let valid = false;

@@ -15,6 +15,7 @@ import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { getSessionFromRequest } from './auth.js';
 import { inboxQueries, agentQueries, jobQueries } from '../../db/index.js';
 import { VDXF_KEYS, encodeVdxfValue } from '../../validation/vdxf-keys.js';
+import { getRpcClient } from '../../indexer/rpc-client.js';
 
 import { safeJsonParse } from '../../utils/safe-json.js';
 
@@ -201,6 +202,41 @@ export async function inboxRoutes(fastify: FastifyInstance): Promise<void> {
   });
 
   /**
+   * POST /v1/me/inbox/:id/accept
+   * Accept an inbox item (agent has added it to their identity)
+   */
+  fastify.post('/v1/me/inbox/:id/accept', {
+    config: { rateLimit: { max: 20, timeWindow: 60_000 } },
+  }, async (request, reply) => {
+    const session = (request as any).session as { verusId: string };
+    const { id } = request.params as { id: string };
+    const { txid } = (request.body || {}) as { txid?: string };
+
+    const item = inboxQueries.getById(id);
+    if (!item) {
+      return reply.code(404).send({
+        error: { code: 'NOT_FOUND', message: 'Inbox item not found' },
+      });
+    }
+
+    if (item.recipient_verus_id !== session.verusId) {
+      return reply.code(403).send({
+        error: { code: 'FORBIDDEN', message: 'Not your inbox item' },
+      });
+    }
+
+    if (item.status !== 'pending') {
+      return reply.code(400).send({
+        error: { code: 'ALREADY_PROCESSED', message: 'Item already processed' },
+      });
+    }
+
+    inboxQueries.updateStatus(id, 'accepted');
+
+    return { data: { success: true, status: 'accepted', txid: txid || null } };
+  });
+
+  /**
    * GET /v1/me/inbox/count
    * Get count of pending inbox items
    */
@@ -208,6 +244,76 @@ export async function inboxRoutes(fastify: FastifyInstance): Promise<void> {
     const session = (request as any).session as { verusId: string };
     const count = inboxQueries.countPending(session.verusId);
     return { data: { pending: count } };
+  });
+
+  /**
+   * GET /v1/me/identity/raw
+   * Returns the agent's current on-chain identity data + previous identity UTXO
+   * Used by SDK for offline identity update transaction building
+   */
+  fastify.get('/v1/me/identity/raw', {
+    config: { rateLimit: { max: 10, timeWindow: 60_000 } },
+  }, async (request, reply) => {
+    const session = (request as any).session as { verusId: string };
+    const rpc = getRpcClient();
+
+    try {
+      const identity = await rpc.getIdentity(session.verusId);
+      if (!identity?.identity) {
+        return reply.code(404).send({
+          error: { code: 'IDENTITY_NOT_FOUND', message: 'Identity not found on chain' },
+        });
+      }
+
+      // Get the identity transaction to find the previous output (needed for spending)
+      let prevOutput = null;
+      if (identity.txid) {
+        try {
+          const tx = await rpc.rpcCall<{
+            txid: string;
+            vout: Array<{ value: number; n: number; scriptPubKey: { hex: string; type: string; identityprimary?: unknown } }>;
+          }>('getrawtransaction', [identity.txid, 1]);
+
+          // Use vout from getidentity response if available, otherwise search
+          const searchVout = identity.vout != null ? identity.vout : undefined;
+
+          for (const vout of tx.vout || []) {
+            const isIdentityOutput = searchVout != null
+              ? vout.n === searchVout
+              : (vout.scriptPubKey?.identityprimary !== undefined || vout.scriptPubKey?.type === 'identity_primary');
+
+            if (isIdentityOutput) {
+              prevOutput = {
+                txid: identity.txid,
+                vout: vout.n,
+                scriptHex: vout.scriptPubKey.hex,
+                value: vout.value,
+              };
+              break;
+            }
+          }
+        } catch (txErr) {
+          fastify.log.warn({ txid: identity.txid, error: txErr }, 'Could not fetch identity tx');
+        }
+      }
+
+      // Get chain info for tx building
+      const info = await rpc.rpcCall<{ blocks: number }>('getinfo');
+
+      return {
+        data: {
+          identity: identity.identity,
+          txid: identity.txid || null,
+          blockHeight: info.blocks,
+          prevOutput,
+        },
+      };
+    } catch (error) {
+      fastify.log.error({ error, verusId: session.verusId }, 'Failed to fetch raw identity');
+      return reply.code(502).send({
+        error: { code: 'RPC_ERROR', message: 'Failed to fetch identity from chain' },
+      });
+    }
   });
 }
 

@@ -167,8 +167,8 @@ export default function Layout() {
     <div className="min-h-screen" style={{ backgroundColor: 'var(--bg-base)' }}>
       <a href="#main-content" className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-[100] focus:px-4 focus:py-2 focus:bg-verus-blue focus:text-white focus:rounded-lg focus:text-sm focus:font-medium">Skip to main content</a>
       {/* Header */}
-      <header className="border-b sticky top-0 z-50 backdrop-blur-xl" style={{ borderColor: 'var(--border-subtle)', backgroundColor: 'rgba(15, 17, 23, 0.8)' }}>
-        <div className="max-w-6xl mx-auto px-4 h-14 flex items-center justify-between">
+      <header className="border-b sticky top-0 z-50 backdrop-blur-xl" style={{ borderColor: 'var(--border-subtle)', backgroundColor: 'rgba(5, 5, 8, 0.85)' }}>
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between">
           <div className="flex items-center gap-4 md:gap-6 min-w-0">
             {/* Mobile hamburger */}
             <button
@@ -181,9 +181,8 @@ export default function Layout() {
             </button>
 
             <Link to="/" className="flex items-center gap-2 shrink-0">
-              <span className="text-xl font-bold text-verus-blue">⚡</span>
-              <span className="font-semibold text-white hidden lg:inline">Verus Agent Platform</span>
-              <span className="font-semibold text-white hidden sm:inline lg:hidden">VAP</span>
+              <span className="text-lg font-bold" style={{ fontFamily: "'Lexend', sans-serif", color: '#A78BFA', letterSpacing: '-0.02em' }}>VAP</span>
+              <span className="font-medium text-white hidden lg:inline text-sm" style={{ fontFamily: "'Outfit', sans-serif" }}>Verus Agent Platform</span>
             </Link>
             
             {/* Desktop nav — just core items */}
@@ -225,7 +224,7 @@ export default function Layout() {
                     onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.05)'}
                     onMouseLeave={(e) => { if (!avatarMenuOpen) e.currentTarget.style.backgroundColor = 'transparent'; }}
                   >
-                    <div className="w-7 h-7 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white text-xs font-bold shrink-0">
+                    <div className="w-7 h-7 rounded-full flex items-center justify-center text-white text-xs font-bold shrink-0" style={{ background: 'linear-gradient(135deg, #A78BFA, #7C3AED)' }}>
                       {initials}
                     </div>
                     <span className="hidden sm:inline text-sm font-medium max-w-[120px] truncate" style={{ color: 'var(--text-primary)' }}>
@@ -290,8 +289,8 @@ export default function Layout() {
             ) : (
               <button
                 onClick={requireAuth}
-                className="px-4 py-2 text-sm font-medium rounded-lg transition-colors"
-                style={{ backgroundColor: 'var(--accent-blue)', color: 'white' }}
+                className="px-4 py-2 text-sm font-medium rounded-lg transition-all hover:opacity-90"
+                style={{ backgroundColor: '#A78BFA', color: 'white', fontFamily: "'Outfit', sans-serif" }}
               >
                 Sign In
               </button>
@@ -332,7 +331,7 @@ export default function Layout() {
           <div className="bg-amber-500/10 border border-amber-500/30 rounded-lg p-4 flex items-center gap-3">
             <AlertTriangle className="w-5 h-5 text-amber-400 shrink-0" />
             <p className="text-amber-200 text-sm flex-1">
-              Your profile is empty — nobody knows what you're offering! <Link to="/profile" className="text-indigo-400 hover:underline font-medium">Set up your profile →</Link>
+              Your profile is empty — nobody knows what you're offering! <Link to="/profile" className="text-violet-400 hover:underline font-medium">Set up your profile →</Link>
             </p>
             <button onClick={() => { setProfileBannerDismissed(true); sessionStorage.setItem('profileBannerDismissed', 'true'); }}
               className="text-gray-500 hover:text-gray-300 text-xs">Dismiss</button>
@@ -341,7 +340,7 @@ export default function Layout() {
       )}
 
       {/* Main Content */}
-      <main id="main-content" className="max-w-6xl mx-auto px-4 py-8 page-content">
+      <main id="main-content" className={location.pathname === '/' ? 'page-content' : 'max-w-6xl mx-auto px-4 py-8 page-content'}>
         <Outlet />
       </main>
 
@@ -353,7 +352,7 @@ export default function Layout() {
             <div>
               <p className="text-white text-sm font-medium">Your profile is empty!</p>
               <p className="text-gray-400 text-xs mt-1">Nobody knows what you're offering. Set up your profile so others can find you.</p>
-              <Link to="/profile" onClick={() => setShowToast(false)} className="text-indigo-400 hover:text-indigo-300 text-xs font-medium mt-2 inline-block">
+              <Link to="/profile" onClick={() => setShowToast(false)} className="text-violet-400 hover:text-violet-300 text-xs font-medium mt-2 inline-block">
                 Set up profile →
               </Link>
             </div>

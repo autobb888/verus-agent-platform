@@ -157,8 +157,8 @@ function JobTimeline({ item }) {
             fontSize: 11,
             fontWeight: 600,
             textTransform: 'uppercase',
-            background: job.status === 'completed' ? 'rgba(34,197,94,0.15)' : job.status === 'in_progress' ? 'rgba(168,85,247,0.15)' : 'rgba(59,130,246,0.15)',
-            color: job.status === 'completed' ? '#4ade80' : job.status === 'in_progress' ? '#c084fc' : '#60a5fa',
+            background: job.status === 'completed' ? 'rgba(34,197,94,0.15)' : job.status === 'in_progress' ? 'rgba(168,85,247,0.15)' : 'rgba(167,139,250,0.15)',
+            color: job.status === 'completed' ? '#4ade80' : job.status === 'in_progress' ? '#c084fc' : '#A78BFA',
           }}>
             {job.status.replace('_', ' ')}
           </span>
@@ -177,7 +177,7 @@ function JobTimeline({ item }) {
                 top: 24,
                 bottom: 0,
                 width: 2,
-                background: step.done ? 'rgba(59,130,246,0.4)' : 'rgba(255,255,255,0.06)',
+                background: step.done ? 'rgba(167,139,250,0.4)' : 'rgba(255,255,255,0.06)',
               }} />
             )}
             {/* Icon */}
@@ -373,15 +373,15 @@ export default function InboxPage() {
                       width: '100%',
                       padding: '14px 20px',
                       textAlign: 'left',
-                      background: isSelected ? 'rgba(96, 165, 250, 0.08)' : 'transparent',
-                      borderLeft: isSelected ? '3px solid #60a5fa' : '3px solid transparent',
+                      background: isSelected ? 'rgba(167, 139, 250, 0.08)' : 'transparent',
+                      borderLeft: isSelected ? '3px solid #A78BFA' : '3px solid transparent',
                       borderBottom: '1px solid rgba(255,255,255,0.04)',
                       cursor: 'pointer',
                       transition: 'background 0.15s',
                       border: 'none',
                       borderLeftWidth: 3,
                       borderLeftStyle: 'solid',
-                      borderLeftColor: isSelected ? '#60a5fa' : 'transparent',
+                      borderLeftColor: isSelected ? '#A78BFA' : 'transparent',
                       borderBottomWidth: 1,
                       borderBottomStyle: 'solid',
                       borderBottomColor: 'rgba(255,255,255,0.04)',
@@ -547,7 +547,7 @@ export default function InboxPage() {
                   <div style={{ marginTop: 20 }}>
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
                       <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>Update Command</span>
-                      <CopyButton text={selectedItem.updateCommand} label="Copy" className="text-verus-blue hover:text-blue-400 text-sm" />
+                      <CopyButton text={selectedItem.updateCommand} label="Copy" className="text-verus-blue hover:text-violet-400 text-sm" />
                     </div>
                     <pre style={{
                       background: 'rgba(255,255,255,0.03)',
@@ -570,14 +570,14 @@ export default function InboxPage() {
                 {selectedItem.type === 'review' && (
                 <div style={{
                   marginTop: 20,
-                  background: 'rgba(59, 130, 246, 0.08)',
-                  border: '1px solid rgba(59, 130, 246, 0.2)',
+                  background: 'rgba(167, 139, 250, 0.08)',
+                  border: '1px solid rgba(167, 139, 250, 0.2)',
                   borderRadius: 8,
                   padding: 16,
                   fontSize: 13,
                 }}>
-                  <p style={{ color: '#93c5fd', fontWeight: 600 }}>Next steps:</p>
-                  <ol style={{ color: '#bfdbfe', marginTop: 8, paddingLeft: 20, display: 'flex', flexDirection: 'column', gap: 4 }}>
+                  <p style={{ color: '#C4B5FD', fontWeight: 600 }}>Next steps:</p>
+                  <ol style={{ color: '#DDD6FE', marginTop: 8, paddingLeft: 20, display: 'flex', flexDirection: 'column', gap: 4 }}>
                     <li>Copy the command above</li>
                     <li>Run it in your terminal</li>
                     <li>The review will appear on your profile once confirmed</li>

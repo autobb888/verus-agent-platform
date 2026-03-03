@@ -196,16 +196,22 @@ function DeliveryPanel({ job, user, loading, onSubmit, onCancel }) {
           placeholder="Describe what was delivered..."
         />
       </div>
-      <p className="text-gray-400 text-xs">Sign this message (CLI or GUI console):</p>
+      <p className="text-gray-400 text-xs">Run this command in Verus CLI or Desktop console, then paste the <strong>signature</strong> value below.</p>
       <div className="bg-gray-950 rounded p-3 font-mono text-xs text-verus-blue break-all whitespace-pre-wrap select-all">
         {cmd}
       </div>
       <div>
-        <label className="block text-xs text-gray-400 mb-1">Paste Signature</label>
+        <label className="block text-xs text-gray-400 mb-1">Paste Signature (base64 string starting with A...)</label>
         <input
           type="text"
           value={sig}
-          onChange={(e) => setSig(e.target.value)}
+          onChange={(e) => {
+            let val = e.target.value;
+            if (val.trim().startsWith('{')) {
+              try { const p = JSON.parse(val.trim()); if (p.signature) val = p.signature; } catch { /* not JSON */ }
+            }
+            setSig(val);
+          }}
           className="w-full bg-gray-950 border border-gray-700 rounded-lg px-3 py-2 text-white font-mono text-sm focus:border-verus-blue focus:outline-none"
           placeholder="AW1B..."
         />
@@ -224,7 +230,7 @@ function DeliveryPanel({ job, user, loading, onSubmit, onCancel }) {
   );
 }
 
-export default function JobActions({ job, onUpdate }) {
+export default function JobActions({ job, onUpdate, autoOpenPayment, onAutoOpenConsumed, onJobStarted }) {
   const { user } = useAuth();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -233,6 +239,20 @@ export default function JobActions({ job, onUpdate }) {
 
   const isBuyer = job.buyerVerusId === user?.verusId;
   const isSeller = job.sellerVerusId === user?.verusId;
+
+  // Auto-open payment panel when autoOpenPayment is set
+  useEffect(() => {
+    if (autoOpenPayment && isBuyer && job.status === 'accepted' && !signPanel) {
+      if (!job.payment?.txid) {
+        setSignPanel({ action: 'payment', type: 'txid' });
+        setSignatureInput('');
+      } else if (!job.payment?.platformFeeTxid) {
+        setSignPanel({ action: 'platform-fee', type: 'fee-txid' });
+        setSignatureInput('');
+      }
+      onAutoOpenConsumed?.();
+    }
+  }, [autoOpenPayment, job.status, job.payment?.txid, job.payment?.platformFeeTxid]);
 
   async function handleAction(action, body = {}) {
     setLoading(true);
@@ -248,6 +268,24 @@ export default function JobActions({ job, onUpdate }) {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error?.message || 'Action failed');
+
+      // Auto-advance: after agent payment, move to platform fee step
+      if (action === 'payment' && data.data?.payment?.txid && !data.data?.payment?.platformFeeTxid) {
+        setSignatureInput('');
+        setSignPanel({ action: 'platform-fee', type: 'fee-txid' });
+        if (onUpdate) onUpdate();
+        return; // Don't close panel
+      }
+
+      // After platform-fee succeeds and job is in_progress, notify parent
+      if (action === 'platform-fee' && data.data?.status === 'in_progress') {
+        setSignPanel(null);
+        setSignatureInput('');
+        if (onUpdate) onUpdate();
+        onJobStarted?.();
+        return;
+      }
+
       setSignPanel(null);
       setSignatureInput('');
       if (onUpdate) onUpdate();
@@ -376,14 +414,25 @@ export default function JobActions({ job, onUpdate }) {
       {signPanel && signPanel.type !== 'txid' && signPanel.type !== 'delivery' && (
         <div className="bg-gray-900 rounded-lg p-4 space-y-3 border border-gray-700">
           <h4 className="text-white font-medium text-sm">Sign to {signPanel.action}</h4>
-          <p className="text-gray-400 text-xs">Copy the command, run it in CLI or GUI console, paste the signature.</p>
+          <p className="text-gray-400 text-xs">Run this command in Verus CLI or Desktop console, then paste the <strong>signature</strong> value below.</p>
           <div className="bg-gray-950 rounded p-3 font-mono text-xs text-verus-blue break-all whitespace-pre-wrap select-all">
             {signPanel.command}
           </div>
           <div>
-            <label className="block text-xs text-gray-400 mb-1">Paste Signature</label>
+            <label className="block text-xs text-gray-400 mb-1">Paste Signature (base64 string starting with A...)</label>
             <input
-              type="text" value={signatureInput} onChange={(e) => setSignatureInput(e.target.value)}
+              type="text" value={signatureInput}
+              onChange={(e) => {
+                let val = e.target.value;
+                // Auto-extract signature from JSON if user pastes full signmessage output
+                if (val.trim().startsWith('{')) {
+                  try {
+                    const parsed = JSON.parse(val.trim());
+                    if (parsed.signature) val = parsed.signature;
+                  } catch { /* not JSON, use as-is */ }
+                }
+                setSignatureInput(val);
+              }}
               className="w-full bg-gray-950 border border-gray-700 rounded-lg px-3 py-2 text-white font-mono text-sm focus:border-verus-blue focus:outline-none"
               placeholder="AW1B..."
             />
@@ -404,7 +453,13 @@ export default function JobActions({ job, onUpdate }) {
       {/* Agent Payment Panel */}
       {signPanel && signPanel.type === 'txid' && (
         <div className="bg-gray-900 rounded-lg p-4 space-y-3 border border-gray-700">
-          <h4 className="text-white font-medium text-sm">Step 1: Pay Agent</h4>
+          <div className="flex items-center justify-between mb-1">
+            <h4 className="text-white font-medium text-sm">Step 1: Pay Agent</h4>
+            <span className="text-xs text-gray-500">Step 1 of 2</span>
+          </div>
+          <div className="w-full bg-gray-800 rounded-full h-1.5">
+            <div className="bg-verus-blue h-1.5 rounded-full" style={{ width: '50%' }}></div>
+          </div>
           <p className="text-gray-400 text-xs">
             Send <span className="text-white font-medium">{job.amount} {job.currency}</span> to the agent. Scan the QR or paste the transaction ID manually.
           </p>
@@ -444,7 +499,13 @@ export default function JobActions({ job, onUpdate }) {
       {/* Platform Fee Panel */}
       {signPanel && signPanel.type === 'fee-txid' && (
         <div className="bg-gray-900 rounded-lg p-4 space-y-3 border border-gray-700">
-          <h4 className="text-white font-medium text-sm">Step 2: Pay Platform Fee</h4>
+          <div className="flex items-center justify-between mb-1">
+            <h4 className="text-white font-medium text-sm">Step 2: Pay Platform Fee</h4>
+            <span className="text-xs text-emerald-400">Final Step</span>
+          </div>
+          <div className="w-full bg-gray-800 rounded-full h-1.5">
+            <div className="bg-emerald-500 h-1.5 rounded-full" style={{ width: '100%' }}></div>
+          </div>
           <p className="text-gray-400 text-xs">
             Send <span className="text-white font-medium">{job.payment?.feeAmount?.toFixed(4)} {job.currency}</span> (5% fee) to the SafeChat address. Scan the QR or paste manually.
           </p>

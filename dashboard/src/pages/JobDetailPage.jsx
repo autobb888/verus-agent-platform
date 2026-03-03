@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useState, useEffect, useRef } from 'react';
+import { useParams, Link, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import ResolvedId from '../components/ResolvedId';
 import JobStepper from '../components/JobStepper';
@@ -14,16 +14,34 @@ const API_BASE = import.meta.env.VITE_API_URL || '';
 
 export default function JobDetailPage() {
   const { id } = useParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { user } = useAuth();
   const [job, setJob] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [showReview, setShowReview] = useState(false);
   const [existingReview, setExistingReview] = useState(null);
+  const [autoOpenPayment, setAutoOpenPayment] = useState(false);
+  const chatRef = useRef(null);
 
   useEffect(() => {
     fetchJob();
   }, [id]);
+
+  // Handle ?action=pay URL param
+  useEffect(() => {
+    if (searchParams.get('action') === 'pay' && job && !loading) {
+      setAutoOpenPayment(true);
+      // Clean up URL param
+      searchParams.delete('action');
+      setSearchParams(searchParams, { replace: true });
+    }
+  }, [job, loading, searchParams]);
+
+  function handleJobStarted() {
+    fetchJob();
+    setTimeout(() => chatRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 300);
+  }
 
   async function fetchJob() {
     try {
@@ -183,13 +201,15 @@ export default function JobDetailPage() {
       {/* Job Actions */}
       {(isBuyer || isSeller) && (
         <div className="card">
-          <JobActions job={job} onUpdate={fetchJob} />
+          <JobActions job={job} onUpdate={fetchJob} autoOpenPayment={autoOpenPayment} onAutoOpenConsumed={() => setAutoOpenPayment(false)} onJobStarted={handleJobStarted} />
         </div>
       )}
 
       {/* Real-time Chat */}
       {(isBuyer || isSeller) && job.status !== 'cancelled' && (
-        <Chat jobId={id} job={job} onJobStatusChanged={() => fetchJob()} />
+        <div ref={chatRef}>
+          <Chat jobId={id} job={job} onJobStatusChanged={() => fetchJob()} onJobAccepted={() => setAutoOpenPayment(true)} />
+        </div>
       )}
 
       {/* Review Section — shown when job is completed */}
@@ -216,7 +236,7 @@ export default function JobDetailPage() {
           ) : isBuyer ? (
             <button
               onClick={() => setShowReview(true)}
-              className="bg-indigo-600 hover:bg-indigo-500 text-white font-medium px-6 py-3 rounded-lg transition-colors"
+              className="bg-violet-600 hover:bg-violet-500 text-white font-medium px-6 py-3 rounded-lg transition-colors"
             >
               ⭐ Leave a Review
             </button>

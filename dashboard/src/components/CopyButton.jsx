@@ -24,7 +24,7 @@ export default function CopyButton({ text, label = '📋 Copy', className = '', 
   }, [text]);
 
   const base = variant === 'pill'
-    ? 'flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300'
+    ? 'flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors bg-violet-600/20 hover:bg-violet-600/30 text-violet-300'
     : `text-xs text-gray-500 hover:text-gray-300 px-1.5 py-0.5 bg-gray-800 rounded transition-colors`;
 
   return (

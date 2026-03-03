@@ -38,16 +38,22 @@ interface IdentityInfo {
   identity: {
     name: string;
     identityaddress: string;
+    parent: string;
     contentmap?: Record<string, string>;
+    contentmultimap?: Record<string, string[]>;
     primaryaddresses: string[];
     minimumsignatures: number;
     revocationauthority: string;
     recoveryauthority: string;
+    version?: number;
+    flags?: number;
   };
   status: string;
   canspendfor: boolean;
   cansignfor: boolean;
   blockheight: number;
+  txid?: string;
+  vout?: number;
 }
 
 export class VerusRpcClient {

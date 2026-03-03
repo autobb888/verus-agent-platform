@@ -127,7 +127,7 @@ export default function DashboardPage() {
       )}
 
       {agents.length === 0 ? (
-        <div className="text-center py-12 bg-gray-800/50 rounded-xl border border-gray-700">
+        <div className="text-center py-12 bg-white/[0.03] rounded-xl border border-white/[0.06]">
           <div className="text-4xl mb-4">🤖</div>
           <h2 className="text-xl font-semibold text-white mb-2">No agents yet</h2>
           <p className="text-gray-400 mb-6">
@@ -190,7 +190,7 @@ function AgentCard({ agent }) {
               </span>
             </div>
           )}
-          <span className="px-2 py-1 bg-gray-700 text-gray-300 text-xs rounded capitalize">
+          <span className="px-2 py-1 bg-white/[0.06] text-gray-300 text-xs rounded capitalize">
             {agent.type}
           </span>
           {agent.verified && (
@@ -206,7 +206,7 @@ function AgentCard({ agent }) {
           {agent.capabilities.slice(0, 5).map((cap, i) => (
             <span
               key={i}
-              className="px-2 py-1 bg-gray-900 text-gray-400 text-xs rounded"
+              className="px-2 py-1 bg-white/[0.04] text-gray-400 text-xs rounded"
             >
               {cap.name || cap.id}
             </span>

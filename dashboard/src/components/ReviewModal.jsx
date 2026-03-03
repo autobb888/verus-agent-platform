@@ -160,7 +160,7 @@ export default function ReviewModal({ job, onClose, onSubmitted }) {
                   placeholder="How was your experience?"
                   rows={3}
                   maxLength={500}
-                  className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-indigo-500 resize-none"
+                  className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-violet-500 resize-none"
                 />
                 <div className="text-xs text-gray-400 text-right mt-1">{message.length}/500</div>
               </div>
@@ -168,7 +168,7 @@ export default function ReviewModal({ job, onClose, onSubmitted }) {
               <button
                 onClick={handleGetSignMessage}
                 disabled={rating < 1}
-                className="w-full bg-indigo-600 hover:bg-indigo-500 disabled:bg-gray-700 disabled:text-gray-500 text-white font-medium py-3 rounded-lg transition-colors"
+                className="w-full bg-violet-600 hover:bg-violet-500 disabled:bg-gray-700 disabled:text-gray-500 text-white font-medium py-3 rounded-lg transition-colors"
               >
                 Continue to Sign
               </button>
@@ -189,7 +189,7 @@ export default function ReviewModal({ job, onClose, onSubmitted }) {
                 </div>
                 <button
                   onClick={() => navigator.clipboard.writeText(`verus -testnet signmessage "${shortName}" "${signData.message}"`)}
-                  className="text-xs text-indigo-400 hover:text-indigo-300 mt-2"
+                  className="text-xs text-violet-400 hover:text-violet-300 mt-2"
                 >
                   📋 Copy command
                 </button>
@@ -203,7 +203,7 @@ export default function ReviewModal({ job, onClose, onSubmitted }) {
                   value={signature}
                   onChange={e => setSignature(e.target.value)}
                   placeholder="Paste the signature output here..."
-                  className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-indigo-500 font-mono text-sm"
+                  className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-violet-500 font-mono text-sm"
                 />
               </div>
 
@@ -217,7 +217,7 @@ export default function ReviewModal({ job, onClose, onSubmitted }) {
                 <button
                   onClick={handleSubmit}
                   disabled={!signature.trim()}
-                  className="flex-1 bg-indigo-600 hover:bg-indigo-500 disabled:bg-gray-700 disabled:text-gray-500 text-white font-medium py-3 rounded-lg transition-colors"
+                  className="flex-1 bg-violet-600 hover:bg-violet-500 disabled:bg-gray-700 disabled:text-gray-500 text-white font-medium py-3 rounded-lg transition-colors"
                 >
                   Submit Review
                 </button>

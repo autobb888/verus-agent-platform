@@ -80,7 +80,7 @@ export default function RegisterAgentPage() {
         </p>
         <Link
           to="/"
-          className="inline-block px-6 py-3 bg-verus-blue hover:bg-blue-600 text-white font-medium rounded-lg transition-colors"
+          className="inline-block px-6 py-3 bg-verus-blue hover:bg-violet-500 text-white font-medium rounded-lg transition-colors"
         >
           View My Agents
         </Link>
@@ -106,7 +106,7 @@ export default function RegisterAgentPage() {
       )}
 
       {step === 'form' && (
-        <div className="bg-gray-800 rounded-xl border border-gray-700 p-6">
+        <div className="bg-[#0d0e14] rounded-xl border border-white/10 p-6">
           <div className="space-y-4">
             <div>
               <label className="block text-sm font-medium text-gray-300 mb-1">
@@ -117,7 +117,7 @@ export default function RegisterAgentPage() {
                 value={formData.verusId}
                 onChange={(e) => setFormData({ ...formData, verusId: e.target.value })}
                 placeholder="my-agent@"
-                className="w-full px-4 py-2 bg-gray-900 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-verus-blue"
+                className="w-full px-4 py-2 bg-[#0a0b10] border border-white/10 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-verus-blue"
                 required
               />
               <p className="text-xs text-gray-500 mt-1">
@@ -134,7 +134,7 @@ export default function RegisterAgentPage() {
                 value={formData.name}
                 onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                 placeholder="My Agent"
-                className="w-full px-4 py-2 bg-gray-900 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-verus-blue"
+                className="w-full px-4 py-2 bg-[#0a0b10] border border-white/10 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-verus-blue"
                 required
               />
             </div>
@@ -146,7 +146,7 @@ export default function RegisterAgentPage() {
               <select
                 value={formData.type}
                 onChange={(e) => setFormData({ ...formData, type: e.target.value })}
-                className="w-full px-4 py-2 bg-gray-900 border border-gray-700 rounded-lg text-white focus:outline-none focus:border-verus-blue"
+                className="w-full px-4 py-2 bg-[#0a0b10] border border-white/10 rounded-lg text-white focus:outline-none focus:border-verus-blue"
               >
                 <option value="autonomous">Autonomous</option>
                 <option value="assisted">Assisted</option>
@@ -164,14 +164,14 @@ export default function RegisterAgentPage() {
                 onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                 placeholder="What does your agent do?"
                 rows={3}
-                className="w-full px-4 py-2 bg-gray-900 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-verus-blue"
+                className="w-full px-4 py-2 bg-[#0a0b10] border border-white/10 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-verus-blue"
               />
             </div>
 
             <button
               onClick={generatePayload}
               disabled={!formData.verusId || !formData.name}
-              className="w-full py-3 px-4 bg-verus-blue hover:bg-blue-600 text-white font-medium rounded-lg transition-colors disabled:opacity-50"
+              className="w-full py-3 px-4 bg-verus-blue hover:bg-violet-500 text-white font-medium rounded-lg transition-colors disabled:opacity-50"
             >
               Continue to Sign
             </button>
@@ -180,21 +180,21 @@ export default function RegisterAgentPage() {
       )}
 
       {step === 'sign' && payload && (
-        <div className="bg-gray-800 rounded-xl border border-gray-700 p-6 space-y-6">
+        <div className="bg-[#0d0e14] rounded-xl border border-white/10 p-6 space-y-6">
           <div>
             <label className="block text-sm font-medium text-gray-300 mb-2">
               Sign this payload with your VerusID ({payload.verusId}):
             </label>
-            <pre className="bg-gray-900 rounded-lg p-4 text-xs text-gray-300 overflow-x-auto whitespace-pre-wrap break-all border border-gray-700">
+            <pre className="bg-[#0a0b10] rounded-lg p-4 text-xs text-gray-300 overflow-x-auto whitespace-pre-wrap break-all border border-white/10">
               {JSON.stringify(payload, null, 2)}
             </pre>
           </div>
 
-          <div className="border-t border-gray-700 pt-4">
+          <div className="border-t border-white/10 pt-4">
             <p className="text-sm text-gray-400 mb-2">
               Use Verus CLI to sign the JSON payload:
             </p>
-            <code className="block bg-gray-900 px-3 py-2 rounded text-xs text-gray-300 overflow-x-auto">
+            <code className="block bg-[#0a0b10] px-3 py-2 rounded text-xs text-gray-300 overflow-x-auto">
               verus signmessage "{payload.verusId}" '{JSON.stringify(payload)}'
             </code>
           </div>
@@ -208,21 +208,21 @@ export default function RegisterAgentPage() {
               onChange={(e) => setSignature(e.target.value)}
               placeholder="Paste the signature here..."
               rows={3}
-              className="w-full px-4 py-2 bg-gray-900 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-verus-blue font-mono text-sm"
+              className="w-full px-4 py-2 bg-[#0a0b10] border border-white/10 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-verus-blue font-mono text-sm"
             />
           </div>
 
           <div className="flex gap-3">
             <button
               onClick={() => setStep('form')}
-              className="flex-1 py-3 px-4 bg-gray-700 hover:bg-gray-600 text-white font-medium rounded-lg transition-colors"
+              className="flex-1 py-3 px-4 bg-white/[0.06] hover:bg-white/[0.08] text-white font-medium rounded-lg transition-colors"
             >
               ← Back
             </button>
             <button
               onClick={handleSubmit}
               disabled={loading || !signature}
-              className="flex-1 py-3 px-4 bg-verus-blue hover:bg-blue-600 text-white font-medium rounded-lg transition-colors disabled:opacity-50"
+              className="flex-1 py-3 px-4 bg-verus-blue hover:bg-violet-500 text-white font-medium rounded-lg transition-colors disabled:opacity-50"
             >
               {loading ? 'Registering...' : 'Register Agent'}
             </button>

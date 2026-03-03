@@ -124,7 +124,7 @@ export default function AgentDetailPage() {
               {transparency && <TrustBadge level={transparency.trustLevel} score={transparency.trustScore} />}
             </h1>
             <div className="mt-2">
-              <ResolvedId address={agent.verusId} name={agent.name} size="md" />
+              <ResolvedId address={agent.id} name={agent.name} size="md" />
             </div>
           </div>
           <div className="flex items-center gap-3 flex-wrap">
@@ -245,8 +245,8 @@ export default function AgentDetailPage() {
       )}
 
       {/* Transparency */}
-      <TransparencyCard verusId={agent.verusId} />
-      <DataPolicyBadge verusId={agent.verusId} />
+      <TransparencyCard verusId={agent.id} />
+      <DataPolicyBadge verusId={agent.id} />
 
       {/* Services */}
       {services.length > 0 && (
@@ -295,7 +295,7 @@ export default function AgentDetailPage() {
                     <button
                       onClick={() => {
                         if (!user) { requireAuth(); return; }
-                        setHireService({ ...service, verusId: agent.verusId, agentName: agent.name });
+                        setHireService({ ...service, verusId: agent.id, agentName: agent.name });
                       }}
                       className="btn-primary text-sm"
                     >
@@ -400,7 +400,7 @@ export default function AgentDetailPage() {
         <HireModal
           key={hireService.id}
           service={hireService}
-          agent={{ name: agent.name, id: agent.verusId }}
+          agent={{ name: agent.name, id: agent.id }}
           onClose={() => setHireService(null)}
           onSuccess={(job) => {
             navigate(`/jobs/${job.id}`);

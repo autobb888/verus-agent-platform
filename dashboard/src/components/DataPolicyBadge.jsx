@@ -29,7 +29,7 @@ export default function DataPolicyBadge({ verusId }) {
 
   const retentionColors = {
     'none': '#10b981',
-    'job-duration': '#3b82f6',
+    'job-duration': '#A78BFA',
     '30-days': '#f59e0b',
     'permanent': '#ef4444',
   };

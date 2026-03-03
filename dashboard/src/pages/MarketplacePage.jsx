@@ -15,13 +15,13 @@ const CATEGORY_COLORS = {
   education:   { bg: 'bg-green-500/10',   text: 'text-green-400' },
   development: { bg: 'bg-purple-500/10',  text: 'text-purple-400' },
   defi:        { bg: 'bg-amber-500/10',   text: 'text-amber-400' },
-  identity:    { bg: 'bg-indigo-500/10',  text: 'text-indigo-400' },
+  identity:    { bg: 'bg-violet-500/10',  text: 'text-violet-400' },
   security:    { bg: 'bg-red-500/10',     text: 'text-red-400' },
   data:        { bg: 'bg-cyan-500/10',    text: 'text-cyan-400' },
   finance:     { bg: 'bg-emerald-500/10', text: 'text-emerald-400' },
   legal:       { bg: 'bg-orange-500/10',  text: 'text-orange-400' },
 };
-const DEFAULT_CAT_COLOR = { bg: 'bg-slate-500/10', text: 'text-slate-400' };
+const DEFAULT_CAT_COLOR = { bg: 'bg-slate-500/10', text: 'text-gray-400' };
 
 // ─── Helpers ────────────────────────────────────────────────────────
 function useDebounce(value, delay) {
@@ -90,27 +90,27 @@ function FeaturedAgents({ services }) {
       <div className="flex items-center gap-2 mb-4">
         <span className="text-lg">⭐</span>
         <h2 className="text-lg font-semibold text-white">Featured Agents</h2>
-        <span className="text-sm text-slate-400">Top rated</span>
+        <span className="text-sm text-gray-400">Top rated</span>
       </div>
       <div className="flex gap-4 overflow-x-auto pb-2" style={{ scrollbarWidth: 'thin' }}>
         {featured.map(agent => (
           <Link
             key={agent.verusId}
             to={`/agents/${encodeURIComponent(agent.verusId)}`}
-            className="flex-shrink-0 w-56 p-4 bg-gradient-to-br from-slate-800 to-slate-800/50
-                       border border-slate-700/50 rounded-xl hover:border-indigo-500/30
+            className="flex-shrink-0 w-56 p-4 bg-white/[0.03]
+                       border border-white/[0.06] rounded-xl hover:border-violet-500/30
                        transition-all duration-200 group no-underline"
           >
             <div className="flex items-center gap-3 mb-3">
               <AgentAvatar name={agent.name} verusId={agent.verusId} size="md" />
               <div className="min-w-0">
-                <div className="font-medium text-white text-sm group-hover:text-indigo-400 transition-colors truncate">
+                <div className="font-medium text-white text-sm group-hover:text-violet-400 transition-colors truncate">
                   {agent.name}{agent.name && !agent.name.includes('.') && !agent.name.startsWith('i') ? '.agentplatform@' : ''}
                 </div>
-                <div className="text-xs text-slate-500 truncate">{agent.serviceCount} service{agent.serviceCount !== 1 ? 's' : ''}</div>
+                <div className="text-xs text-gray-500 truncate">{agent.serviceCount} service{agent.serviceCount !== 1 ? 's' : ''}</div>
               </div>
             </div>
-            <div className="flex items-center gap-3 text-xs text-slate-400">
+            <div className="flex items-center gap-3 text-xs text-gray-400">
               {agent.rating > 0 && (
                 <span className="flex items-center gap-1">
                   <span className="text-yellow-400">★</span> {agent.rating.toFixed(1)}
@@ -133,17 +133,17 @@ function StatsBar({ services }) {
 
   return (
     <div className="flex items-center justify-center gap-6 mb-8 py-3
-                    border-y border-slate-800 text-sm text-slate-400">
+                    border-y border-white/[0.06] text-sm text-gray-400">
       <div className="flex items-center gap-1.5">
         <span className="text-white font-semibold">{agents}</span> agents
       </div>
-      <span className="text-slate-700">·</span>
+      <span className="text-gray-700">·</span>
       <div className="flex items-center gap-1.5">
         <span className="text-white font-semibold">{services.length}</span> services
       </div>
       {totalJobs > 0 && (
         <>
-          <span className="text-slate-700">·</span>
+          <span className="text-gray-700">·</span>
           <div className="flex items-center gap-1.5">
             <span className="text-white font-semibold">{totalJobs}</span> jobs completed
           </div>
@@ -165,14 +165,14 @@ function MarketplaceEmpty({ searchQuery, category }) {
             ? `No ${category} services yet`
             : 'No services available'}
       </h3>
-      <p className="text-sm text-slate-400 mb-4">
+      <p className="text-sm text-gray-400 mb-4">
         {searchQuery
           ? 'Try different keywords or browse all categories'
           : 'Be the first to offer this service'}
       </p>
       <Link
         to="/register"
-        className="text-sm text-indigo-400 hover:text-indigo-300 font-medium no-underline"
+        className="text-sm text-violet-400 hover:text-violet-300 font-medium no-underline"
       >
         Register your agent →
       </Link>
@@ -186,8 +186,8 @@ function ServiceCard({ service, onHire }) {
   const hasSafechat = service.transparency?.safechat || service.transparency?.features?.safechat;
 
   return (
-    <div className="group bg-slate-800/50 border border-slate-700/50 rounded-xl p-5
-                    hover:border-indigo-500/30 hover:shadow-lg hover:shadow-indigo-500/5
+    <div className="group bg-white/[0.03] border border-white/[0.06] rounded-xl p-5
+                    hover:border-violet-500/30 hover:shadow-lg hover:shadow-violet-500/5
                     hover:-translate-y-0.5 transition-all duration-200">
       {/* Header: Title + Rating */}
       <div className="flex items-start justify-between mb-3">
@@ -198,7 +198,7 @@ function ServiceCard({ service, onHire }) {
           <div className="flex items-center gap-1 flex-shrink-0 bg-yellow-500/10 px-2 py-1 rounded-lg" style={{ border: '1px solid rgba(251,191,36,0.15)' }}>
             <span className="text-yellow-400 text-sm">★</span>
             <span className="text-yellow-400 font-bold text-sm">{service.reputation.score.toFixed(1)}</span>
-            <span className="text-slate-500 text-xs">({service.reputation.totalReviews || 0})</span>
+            <span className="text-gray-500 text-xs">({service.reputation.totalReviews || 0})</span>
           </div>
         )}
       </div>
@@ -208,7 +208,7 @@ function ServiceCard({ service, onHire }) {
         <AgentAvatar name={service.agent_name || service.agentName} verusId={service.verusId} size="sm" />
         <Link
           to={`/agents/${encodeURIComponent(service.verusId)}`}
-          className="text-sm text-slate-300 hover:text-indigo-400 transition-colors no-underline truncate"
+          className="text-sm text-gray-300 hover:text-violet-400 transition-colors no-underline truncate"
         >
           {(() => { const n = service.agent_name || service.agentName; return n && !n.includes('.') && !n.startsWith('i') ? n + '.agentplatform@' : (n || service.verusId); })()}
         </Link>
@@ -221,7 +221,7 @@ function ServiceCard({ service, onHire }) {
             </span>
           )}
           {hasSafechat && (
-            <span className="text-xs bg-indigo-500/10 text-indigo-400 px-1.5 py-0.5 rounded" title="SafeChat protected">
+            <span className="text-xs bg-violet-500/10 text-violet-400 px-1.5 py-0.5 rounded" title="SafeChat protected">
               🛡️
             </span>
           )}
@@ -237,28 +237,28 @@ function ServiceCard({ service, onHire }) {
 
       {/* Description */}
       {service.description && (
-        <p className="text-sm text-slate-400 leading-relaxed mb-4 line-clamp-2">
+        <p className="text-sm text-gray-400 leading-relaxed mb-4 line-clamp-2">
           {service.description}
         </p>
       )}
 
       {/* Jobs stats */}
       {service.reputation?.completedJobs > 0 && (
-        <div className="flex items-center gap-3 mb-4 text-xs text-slate-500">
+        <div className="flex items-center gap-3 mb-4 text-xs text-gray-500">
           <span>{service.reputation.completedJobs} jobs completed</span>
         </div>
       )}
 
       {/* Footer: Price + Tags + Turnaround */}
-      <div className="flex items-end justify-between pt-3 border-t border-slate-700/50">
+      <div className="flex items-end justify-between pt-3 border-t border-white/[0.06]">
         <div>
           <span className="text-xl font-bold text-white">{service.price}</span>
-          <span className="text-sm text-slate-500 ml-1">{service.currency}</span>
+          <span className="text-sm text-gray-500 ml-1">{service.currency}</span>
         </div>
         <div className="flex items-center gap-2">
           <CategoryTag category={service.category} />
           {service.turnaround && (
-            <span className="text-xs text-slate-500 flex items-center gap-1">
+            <span className="text-xs text-gray-500 flex items-center gap-1">
               <Clock className="w-3 h-3" />
               {service.turnaround}
             </span>
@@ -270,14 +270,14 @@ function ServiceCard({ service, onHire }) {
       <div className="flex gap-2 mt-4">
         <button
           onClick={() => onHire(service)}
-          className="flex-1 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white text-sm
+          className="flex-1 py-2.5 bg-violet-600 hover:bg-violet-500 text-white text-sm
                      font-medium rounded-lg text-center transition-colors duration-150 cursor-pointer border-0"
         >
           {getCtaText(service)}
         </button>
         <Link
           to={`/agents/${encodeURIComponent(service.verusId)}`}
-          className="px-4 py-2.5 bg-slate-700/50 hover:bg-slate-700 text-slate-300
+          className="px-4 py-2.5 bg-white/[0.06] hover:bg-white/[0.1] text-gray-300
                      text-sm font-medium rounded-lg text-center transition-colors duration-150 no-underline"
         >
           View
@@ -386,28 +386,28 @@ export default function MarketplacePage() {
         <h1 className="text-3xl font-bold text-white tracking-tight">
           Verus Agent Platform
         </h1>
-        <p className="text-slate-400 mt-2 max-w-xl mx-auto text-base leading-relaxed">
+        <p className="text-gray-400 mt-2 max-w-xl mx-auto text-base leading-relaxed">
           The agent marketplace where AI agents own their identity, build verifiable reputation, and get hired — with built-in prompt injection protection.
           Self-sovereign IDs. Prompt injection protection. Cryptographic trust.
         </p>
         <div className="flex items-center justify-center gap-6 mt-4 text-sm">
-          <span className="text-indigo-400">🔗 Powered by VerusID</span>
-          <span className="text-emerald-400">🛡️ SafeChat Protected</span>
-          <span className="text-amber-400">⭐ On-chain Reputation</span>
+          <span className="text-violet-400">Powered by VerusID</span>
+          <span className="text-emerald-400">SafeChat Protected</span>
+          <span className="text-amber-400">On-chain Reputation</span>
         </div>
       </div>
 
       {/* Search Bar — Hero Position */}
       <div className="relative w-full max-w-2xl mx-auto">
-        <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400 pointer-events-none" />
+        <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400 pointer-events-none" />
         <input
           type="text"
           placeholder="Search agents, services, or capabilities..."
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
-          className="w-full pl-12 pr-4 py-3.5 bg-slate-800/50 border border-slate-700
+          className="w-full pl-12 pr-4 py-3.5 bg-white/[0.03] border border-slate-700
                      rounded-xl text-white placeholder-slate-400
-                     focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500
+                     focus:outline-none focus:border-violet-500 focus:ring-1 focus:ring-violet-500
                      transition-all duration-200 text-base"
         />
       </div>
@@ -430,7 +430,7 @@ export default function MarketplacePage() {
           <select
             value={selectedCategory}
             onChange={(e) => setSelectedCategory(e.target.value)}
-            className="px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:border-indigo-500"
+            className="px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:border-violet-500"
           >
             <option value="">All Categories</option>
             {categories.map((cat) => (
@@ -444,7 +444,7 @@ export default function MarketplacePage() {
           <select
             value={sortBy}
             onChange={(e) => setSortBy(e.target.value)}
-            className="px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:border-indigo-500"
+            className="px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:border-violet-500"
           >
             <option value="created_at">Newest</option>
             <option value="price">Price</option>

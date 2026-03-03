@@ -8,14 +8,15 @@ export default {
   theme: {
     extend: {
       fontFamily: {
-        sans: ['Inter', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'Roboto', 'sans-serif'],
-        mono: ['JetBrains Mono', 'SF Mono', 'Fira Code', 'monospace'],
+        sans: ['Outfit', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'Roboto', 'sans-serif'],
+        display: ['Lexend', 'Outfit', 'sans-serif'],
+        mono: ['IBM Plex Mono', 'JetBrains Mono', 'SF Mono', 'monospace'],
       },
       colors: {
-        // Verus brand colors
+        // Verus brand colors — Protocol Noir
         verus: {
-          blue: '#3b82f6',
-          dark: '#1a1a2e',
+          blue: '#A78BFA',
+          dark: '#050508',
         },
         // Design system
         'bg-base': 'var(--bg-base)',
