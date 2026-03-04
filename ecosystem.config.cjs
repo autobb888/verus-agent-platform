@@ -60,6 +60,57 @@ module.exports = {
       log_date_format: 'YYYY-MM-DD HH:mm:ss Z',
     },
 
+    // ─── Verus Wiki (static server + /api/ proxy) ───
+    {
+      name: 'wiki',
+      cwd: path.join(HOME, 'verus-wiki-retype'),
+      script: 'wiki-serve.js',
+      interpreter: 'node',
+      instances: 1,
+      exec_mode: 'fork',
+      watch: false,
+      max_memory_restart: '128M',
+      min_uptime: '5s',
+      max_restarts: 10,
+      restart_delay: 3000,
+      kill_timeout: 5000,
+      env: {
+        PORT: 5175,
+      },
+      error_file: path.join(HOME, 'logs/wiki-error.log'),
+      out_file: path.join(HOME, 'logs/wiki-out.log'),
+      merge_logs: true,
+      log_date_format: 'YYYY-MM-DD HH:mm:ss Z',
+    },
+
+    // ─── Verus Wiki Form API ───
+    {
+      name: 'wiki-api',
+      cwd: path.join(HOME, 'verus-wiki-retype/form-api'),
+      script: 'server.js',
+      interpreter: 'node',
+      instances: 1,
+      exec_mode: 'fork',
+      watch: false,
+      max_memory_restart: '128M',
+      min_uptime: '5s',
+      max_restarts: 10,
+      restart_delay: 3000,
+      kill_timeout: 5000,
+      env: {
+        PORT: 3737,
+        ADMIN_TOKEN: '750dc544fa7ce79c77cb79bd24d3ad9ef6b4677f9e586f3df1f44c9fd83a19db',
+        GH_TOKEN: process.env.GH_TOKEN || '',
+        GH_OWNER: 'autobb888',
+        GH_REPO:  'verus-wiki',
+        GH_BASE:  'main',
+      },
+      error_file: path.join(HOME, 'logs/wiki-api-error.log'),
+      out_file: path.join(HOME, 'logs/wiki-api-out.log'),
+      merge_logs: true,
+      log_date_format: 'YYYY-MM-DD HH:mm:ss Z',
+    },
+
     // ─── VAP Dispatcher (ephemeral agent hosting) ───
     {
       name: 'vap-dispatcher',
