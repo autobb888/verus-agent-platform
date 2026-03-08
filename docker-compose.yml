@@ -1,0 +1,44 @@
+services:
+  api:
+    build:
+      context: .
+      target: api
+    container_name: verus-agent-platform
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:3001:3000"
+    networks:
+      - default
+      - verus-net
+    env_file:
+      - .env
+    volumes:
+      - ./data:/app/data
+    security_opt:
+      - no-new-privileges:true
+    tmpfs:
+      - /tmp
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/v1/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+
+  dashboard:
+    build:
+      context: .
+      target: dashboard
+    container_name: vap-dashboard
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:5173:5173"
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /tmp
+
+networks:
+  verus-net:
+    external: true

@@ -282,36 +282,40 @@ export async function jobRoutes(fastify: FastifyInstance): Promise<void> {
 
   /**
    * GET /v1/jobs/:id
-   * Get a job by ID (public)
+   * Get a job by ID — public callers get redacted view, participants get full details
    */
   fastify.get('/v1/jobs/:id', async (request, reply) => {
     const { id } = request.params as { id: string };
     const job = jobQueries.getById(id);
-    
+
     if (!job) {
       return reply.code(404).send({
         error: { code: 'NOT_FOUND', message: 'Job not found' },
       });
     }
 
-    return { data: formatJob(job) };
+    const session = getSessionFromRequest(request);
+    const isParticipant = session && (session.verusId === job.buyer_verus_id || session.verusId === job.seller_verus_id);
+    return { data: isParticipant ? formatJob(job) : formatJobPublic(job) };
   });
 
   /**
    * GET /v1/jobs/hash/:hash
-   * Get a job by hash (public)
+   * Get a job by hash — public callers get redacted view, participants get full details
    */
   fastify.get('/v1/jobs/hash/:hash', async (request, reply) => {
     const { hash } = request.params as { hash: string };
     const job = jobQueries.getByHash(hash);
-    
+
     if (!job) {
       return reply.code(404).send({
         error: { code: 'NOT_FOUND', message: 'Job not found' },
       });
     }
 
-    return { data: formatJob(job) };
+    const session = getSessionFromRequest(request);
+    const isParticipant = session && (session.verusId === job.buyer_verus_id || session.verusId === job.seller_verus_id);
+    return { data: isParticipant ? formatJob(job) : formatJobPublic(job) };
   });
 
   /**
@@ -1425,8 +1429,14 @@ export async function jobRoutes(fastify: FastifyInstance): Promise<void> {
       verificationNote = 'Could not verify transaction on-chain';
     }
 
-    // P2-LIVE-2: Wrap payment + status transition in transaction
+    // Check for txid reuse across jobs
     const db = getDatabase();
+    const existingPayment = db.prepare('SELECT id FROM jobs WHERE payment_txid = ? AND id != ?').get(txid, id) as any;
+    if (existingPayment) {
+      return reply.code(409).send({ error: { code: 'TXID_ALREADY_USED', message: 'This transaction ID is already used by another job' } });
+    }
+
+    // P2-LIVE-2: Wrap payment + status transition in transaction
     db.transaction(() => {
       jobQueries.setPayment(id, txid, paymentVerified);
       // Only transition to in_progress if both payments are done
@@ -1530,6 +1540,12 @@ export async function jobRoutes(fastify: FastifyInstance): Promise<void> {
     } catch (err: any) {
       fastify.log.warn({ jobId: id, txid, error: err?.message }, 'Platform fee verification failed');
       verificationNote = 'Could not verify transaction on-chain';
+    }
+
+    // Check for txid reuse across jobs
+    const existingFee = db.prepare('SELECT id FROM jobs WHERE platform_fee_txid = ? AND id != ?').get(txid, id) as any;
+    if (existingFee) {
+      return reply.code(409).send({ error: { code: 'TXID_ALREADY_USED', message: 'This transaction ID is already used by another job' } });
     }
 
     // Record fee and check if both payments are done
@@ -1843,6 +1859,23 @@ function formatJob(job: any) {
       accepted: ensureUtc(job.accepted_at),
       delivered: ensureUtc(job.delivered_at),
       completed: ensureUtc(job.completed_at),
+      created: ensureUtc(job.created_at),
+      updated: ensureUtc(job.updated_at),
+    },
+  };
+}
+
+/** Redacted view for unauthenticated / non-participant callers */
+function formatJobPublic(job: any) {
+  return {
+    id: job.id,
+    jobHash: job.job_hash,
+    sellerVerusId: job.seller_verus_id,
+    description: job.description,
+    amount: job.amount,
+    currency: job.currency,
+    status: job.status,
+    timestamps: {
       created: ensureUtc(job.created_at),
       updated: ensureUtc(job.updated_at),
     },

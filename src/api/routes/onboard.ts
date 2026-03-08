@@ -489,6 +489,11 @@ export async function onboardRoutes(fastify: FastifyInstance): Promise<void> {
       return reply.code(400).send({ error: { code: 'NO_COMMITMENT', message: 'No commitment TX to resume from. Start a new registration.' } });
     }
 
+    // Only allow retry from the same IP that initiated the request
+    if (row.ip_address && row.ip_address !== request.ip) {
+      return reply.code(403).send({ error: { code: 'FORBIDDEN', message: 'Retry must come from the original IP address' } });
+    }
+
     // Reject retries for registrations older than 7 days
     const ageMs = Date.now() - new Date(row.created_at).getTime();
     if (ageMs > 7 * 24 * 60 * 60 * 1000) {

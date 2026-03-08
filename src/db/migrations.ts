@@ -273,6 +273,8 @@ export function runMigrations(db: Database.Database): void {
     CREATE INDEX IF NOT EXISTS idx_jobs_status ON jobs(status);
     CREATE INDEX IF NOT EXISTS idx_jobs_hash ON jobs(job_hash);
     CREATE INDEX IF NOT EXISTS idx_jobs_service ON jobs(service_id);
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_jobs_payment_txid ON jobs(payment_txid) WHERE payment_txid IS NOT NULL;
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_jobs_fee_txid ON jobs(platform_fee_txid) WHERE platform_fee_txid IS NOT NULL;
   `);
 
   // Phase 4b: Job messages table

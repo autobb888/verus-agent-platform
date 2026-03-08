@@ -5,14 +5,15 @@
 // Monitor:    pm2 monit
 
 const path = require('path');
-const HOME = process.env.HOME || '/home/cluster';
+const HOME = process.env.HOME || '/home/bigbox';
+const CODE = `${HOME}/code`;
 
 module.exports = {
   apps: [
     // ─── Verus Agent Platform (main API + dashboard) ───
     {
       name: 'vap',
-      cwd: path.join(HOME, 'verus-platform'),
+      cwd: path.join(CODE, 'verus-agent-platform'),
       script: 'dist/index.js',
       interpreter: 'node',
       node_args: '--max-old-space-size=512',
@@ -29,8 +30,8 @@ module.exports = {
         API_PORT: 3000,
         API_HOST: '127.0.0.1',  // Behind nginx
       },
-      error_file: path.join(HOME, 'logs/vap-error.log'),
-      out_file: path.join(HOME, 'logs/vap-out.log'),
+      error_file: path.join(CODE, 'verus-agent-platform/logs/vap-error.log'),
+      out_file: path.join(CODE, 'verus-agent-platform/logs/vap-out.log'),
       merge_logs: true,
       log_date_format: 'YYYY-MM-DD HH:mm:ss Z',
     },
@@ -38,7 +39,7 @@ module.exports = {
     // ─── SafeChat Engine (prompt injection scanner) ───
     {
       name: 'safechat',
-      cwd: path.join(HOME, 'safechat'),
+      cwd: path.join(CODE, 'safechat'),
       script: 'dist/server.js',
       interpreter: 'node',
       instances: 1,
@@ -54,8 +55,8 @@ module.exports = {
         SAFECHAT_PORT: 3100,
         SAFECHAT_HOST: '127.0.0.1',
       },
-      error_file: path.join(HOME, 'logs/safechat-error.log'),
-      out_file: path.join(HOME, 'logs/safechat-out.log'),
+      error_file: path.join(CODE, 'verus-agent-platform/logs/safechat-error.log'),
+      out_file: path.join(CODE, 'verus-agent-platform/logs/safechat-out.log'),
       merge_logs: true,
       log_date_format: 'YYYY-MM-DD HH:mm:ss Z',
     },
@@ -63,7 +64,7 @@ module.exports = {
     // ─── Verus Wiki (static server + /api/ proxy) ───
     {
       name: 'wiki',
-      cwd: path.join(HOME, 'verus-wiki-retype'),
+      cwd: path.join(CODE, 'verus-wiki-retype'),
       script: 'wiki-serve.js',
       interpreter: 'node',
       instances: 1,
@@ -77,8 +78,8 @@ module.exports = {
       env: {
         PORT: 5175,
       },
-      error_file: path.join(HOME, 'logs/wiki-error.log'),
-      out_file: path.join(HOME, 'logs/wiki-out.log'),
+      error_file: path.join(CODE, 'verus-agent-platform/logs/wiki-error.log'),
+      out_file: path.join(CODE, 'verus-agent-platform/logs/wiki-out.log'),
       merge_logs: true,
       log_date_format: 'YYYY-MM-DD HH:mm:ss Z',
     },
@@ -105,8 +106,8 @@ module.exports = {
         GH_REPO:  'verus-wiki',
         GH_BASE:  'main',
       },
-      error_file: path.join(HOME, 'logs/wiki-api-error.log'),
-      out_file: path.join(HOME, 'logs/wiki-api-out.log'),
+      error_file: path.join(CODE, 'verus-agent-platform/logs/wiki-api-error.log'),
+      out_file: path.join(CODE, 'verus-agent-platform/logs/wiki-api-out.log'),
       merge_logs: true,
       log_date_format: 'YYYY-MM-DD HH:mm:ss Z',
     },
@@ -114,7 +115,7 @@ module.exports = {
     // ─── VAP Dispatcher (ephemeral agent hosting) ───
     {
       name: 'vap-dispatcher',
-      cwd: path.join(HOME, 'vap-dispatcher'),
+      cwd: path.join(CODE, 'vap-dispatcher'),
       script: 'src/cli-v2.js',
       args: 'start',
       interpreter: 'node',
@@ -129,8 +130,8 @@ module.exports = {
       env: {
         NODE_ENV: 'production',
       },
-      error_file: path.join(HOME, 'logs/dispatcher-error.log'),
-      out_file: path.join(HOME, 'logs/dispatcher-out.log'),
+      error_file: path.join(CODE, 'verus-agent-platform/logs/dispatcher-error.log'),
+      out_file: path.join(CODE, 'verus-agent-platform/logs/dispatcher-out.log'),
       merge_logs: true,
       log_date_format: 'YYYY-MM-DD HH:mm:ss Z',
     },

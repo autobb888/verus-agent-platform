@@ -107,20 +107,76 @@ export function rejectMessage(holdId: string): boolean {
 }
 
 /**
- * Auto-release messages past SLA deadline.
+ * Release a held message and deliver it to the job chat.
+ * Shared by HTTP release route and auto-release cron.
+ */
+export function releaseAndDeliver(held: HeldMessage, autoReleased: boolean = false): string {
+  const db = getDatabase();
+  const messageId = randomUUID();
+  const now = new Date().toISOString();
+
+  // Insert into job_messages so it appears in chat history
+  db.prepare(`
+    INSERT INTO job_messages (id, job_id, sender_verus_id, content, signed, signature, safety_score, created_at)
+    VALUES (?, ?, ?, ?, 0, NULL, ?, ?)
+  `).run(messageId, held.job_id, held.sender_verus_id, held.content, held.safety_score, now);
+
+  // Broadcast via Socket.IO if available (lazy import to avoid circular deps)
+  try {
+    const { getIO } = require('./ws-server.js');
+    const io = getIO();
+    if (io) {
+      io.to(`job:${held.job_id}`).emit('message', {
+        id: messageId,
+        jobId: held.job_id,
+        senderVerusId: held.sender_verus_id,
+        content: held.content,
+        safetyScore: held.safety_score,
+        releasedFromHold: true,
+        autoReleased,
+        createdAt: now,
+      });
+    }
+  } catch {
+    // ws-server not yet initialized — message is still in DB for polling
+  }
+
+  return messageId;
+}
+
+/**
+ * Auto-release messages past SLA deadline and deliver them.
  * Shield: If platform can't review in time, release with warning flag.
  */
 export function autoReleaseExpired(slaHours: number = 24): number {
   const db = getDatabase();
   const cutoff = new Date(Date.now() - slaHours * 60 * 60 * 1000).toISOString();
-  
-  const result = db.prepare(`
-    UPDATE message_hold_queue 
+
+  // Get held messages before updating status
+  const expired = db.prepare(`
+    SELECT * FROM message_hold_queue
+    WHERE status = 'held' AND created_at < ?
+  `).all(cutoff) as HeldMessage[];
+
+  if (expired.length === 0) return 0;
+
+  // Update status
+  db.prepare(`
+    UPDATE message_hold_queue
     SET status = 'released', reviewed_at = datetime('now')
     WHERE status = 'held' AND created_at < ?
   `).run(cutoff);
 
-  return result.changes;
+  // Deliver each released message
+  for (const held of expired) {
+    try {
+      releaseAndDeliver(held, true);
+    } catch (err) {
+      console.error(`[HoldQueue] Failed to deliver auto-released message ${held.id}:`, err);
+    }
+  }
+
+  return expired.length;
 }
 
 /**

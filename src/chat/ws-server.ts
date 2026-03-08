@@ -17,6 +17,7 @@ import { safeJsonParse } from '../utils/safe-json.js';
 // Types
 interface AuthenticatedSocket extends Socket {
   verusId: string;
+  connectedAt: number;
   sessionValidatedAt: number;
   authMode: 'cookie' | 'token';
   sessionId?: string;
@@ -57,6 +58,7 @@ const userConnections = new Map<string, number>();
 const MAX_CONNECTIONS_PER_IP = 10;
 const MAX_CONNECTIONS_PER_USER = 5;
 const SESSION_REVALIDATION_MS = 60 * 1000;
+const ABSOLUTE_MAX_SESSION_MS = 24 * 60 * 60 * 1000; // 24 hours
 const MAX_MESSAGE_SIZE = 16 * 1024; // 16KB
 
 // Circuit breaker: agent-to-agent flood detection
@@ -235,6 +237,7 @@ export function initSocketServer(httpServer: HttpServer): SocketIOServer {
 
     const authSocket = socket as AuthenticatedSocket;
     authSocket.verusId = session.verusId;
+    authSocket.connectedAt = Date.now();
     authSocket.sessionValidatedAt = Date.now();
     authSocket.authMode = cookieSession ? 'cookie' : 'token';
     if (cookieSession && 'sessionId' in cookieSession) authSocket.sessionId = cookieSession.sessionId;
@@ -269,11 +272,16 @@ export function initSocketServer(httpServer: HttpServer): SocketIOServer {
         valid = false;
       }
 
+      // Enforce absolute max session lifetime (24h)
+      if (Date.now() - socket.connectedAt > ABSOLUTE_MAX_SESSION_MS) {
+        socket.emit('error', { message: 'Session exceeded maximum lifetime' });
+        socket.disconnect(true);
+        return;
+      }
+
       if (!valid) {
         socket.emit('error', { message: 'Session expired' });
         socket.disconnect(true);
-      } else {
-        socket.sessionValidatedAt = Date.now();
       }
     }, SESSION_REVALIDATION_MS);
     revalidateInterval.unref();

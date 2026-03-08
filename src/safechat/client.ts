@@ -85,7 +85,8 @@ export class SafeChatHttpClient implements SafeChatProvider {
       const timer = setTimeout(() => controller.abort(), this.timeoutMs);
 
       try {
-        const response = await fetch(`${this.apiUrl}/v1/scan`, {
+        const scanPath = (await import('../config/index.js')).config.safechat.scanPath;
+        const response = await fetch(`${this.apiUrl}${scanPath}`, {
           method: 'POST',
           headers,
           body: requestBody,

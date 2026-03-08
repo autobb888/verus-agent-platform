@@ -11,16 +11,15 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { z } from 'zod';
 import { getSessionFromRequest } from './auth.js';
-import { jobQueries, jobMessageQueries, getDatabase } from '../../db/index.js';
+import { jobQueries } from '../../db/index.js';
 import {
   getHeldMessages,
   appealMessage,
   releaseMessage,
+  releaseAndDeliver,
   rejectMessage,
   getHoldQueueStats,
 } from '../../chat/hold-queue.js';
-import { getIO } from '../../chat/ws-server.js';
-import { randomUUID } from 'crypto';
 
 async function requireAuth(request: FastifyRequest, reply: FastifyReply) {
   const session = getSessionFromRequest(request);
@@ -108,29 +107,8 @@ export async function holdQueueRoutes(fastify: FastifyInstance): Promise<void> {
       return reply.code(404).send({ error: { code: 'NOT_FOUND', message: 'Held message not found or already reviewed' } });
     }
 
-    // T2-5 Fix: Insert released message into job_messages and broadcast via Socket.IO
-    const messageId = randomUUID();
-    const now = new Date().toISOString();
-    const db = getDatabase();
-    db.prepare(`
-      INSERT INTO job_messages (id, job_id, sender_verus_id, content, signed, signature, safety_score, created_at)
-      VALUES (?, ?, ?, ?, 0, NULL, ?, ?)
-    `).run(messageId, jobId, released.sender_verus_id, released.content, released.safety_score, now);
-
-    // Broadcast to job room via Socket.IO
-    const io = getIO();
-    if (io) {
-      io.to(`job:${jobId}`).emit('message', {
-        id: messageId,
-        jobId,
-        senderVerusId: released.sender_verus_id,
-        content: released.content,
-        safetyScore: released.safety_score,
-        releasedFromHold: true,
-        createdAt: now,
-      });
-    }
-
+    // Deliver released message to job chat
+    const messageId = releaseAndDeliver(released);
     return { data: { status: 'released', messageId } };
   });
 

@@ -36,5 +36,5 @@ check_service() {
 }
 
 # Check each service
-check_service "vap" "http://127.0.0.1:3000/v1/health"
+check_service "vap" "http://127.0.0.1:3001/v1/health"
 check_service "safechat" "http://127.0.0.1:3100/health"

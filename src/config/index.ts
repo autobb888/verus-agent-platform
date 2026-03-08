@@ -41,6 +41,7 @@ export const config = {
     apiKey: process.env.SAFECHAT_API_KEY || '',
     encryptionKey: process.env.SAFECHAT_ENCRYPTION_KEY || '',
     path: process.env.SAFECHAT_PATH || '',
+    scanPath: process.env.SAFECHAT_SCAN_PATH || '/v1/scan',
     timeoutMs: safeInt(process.env.SAFECHAT_TIMEOUT_MS, 200, 50),
   },
   indexer: {

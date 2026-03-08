@@ -1083,12 +1083,12 @@ export const chatTokenQueries = {
   consume: (id: string): ChatToken | undefined => {
     const db = getDatabase();
     const now = new Date().toISOString();
-    // Allow token reuse within 60s grace period for WebSocket reconnection
+    // Allow token reuse until expires_at for WebSocket reconnection after network blips
     const result = db.prepare(`
       UPDATE chat_tokens SET used = 1, used_at = ?
       WHERE id = ? AND expires_at > ?
-        AND (used = 0 OR (used = 1 AND used_at > datetime(?, '-60 seconds')))
-    `).run(now, id, now, now);
+        AND (used = 0 OR used = 1)
+    `).run(now, id, now);
     if (result.changes === 0) return undefined;
     return db.prepare(`SELECT * FROM chat_tokens WHERE id = ?`).get(id) as ChatToken | undefined;
   },
@@ -1096,8 +1096,8 @@ export const chatTokenQueries = {
   cleanup: () => {
     const db = getDatabase();
     const now = new Date().toISOString();
-    // Keep used tokens for 60s grace period, then clean up
-    db.prepare(`DELETE FROM chat_tokens WHERE expires_at < ? OR (used = 1 AND used_at < datetime(?, '-60 seconds'))`).run(now, now);
+    // Clean up expired tokens (both used and unused)
+    db.prepare(`DELETE FROM chat_tokens WHERE expires_at < ?`).run(now);
   },
 };
 
