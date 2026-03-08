@@ -1,9 +1,13 @@
-// AgentPlatform Schema Keys (VerusID-based, VRSCTEST)
-// Each key is a DefinedKey registered under agentplatform@
-// Their i-addresses are used as contentmultimap keys on-chain
+// AgentPlatform Schema Keys (VerusID-based)
+// Keys are discovered dynamically from the agentplatform@ identity on-chain.
+// The contentmultimap of agentplatform@ maps each VDXF i-address to its
+// human-readable key name (e.g. "agentplatform::agent.v1.name").
+// Hardcoded defaults are used as fallback if the chain is unreachable at startup.
 
-// Agent schema keys (agentplatform::agent.v1.{field})
-const AGENT_KEYS: Record<string, string> = {
+// --- Schema key maps (field name -> i-address) ---
+// These are populated by loadSchemaFromChain() or fall back to defaults.
+
+let AGENT_KEYS: Record<string, string> = {
   'version': 'iBShCc1dESnTq25WkxzrKGjHvHwZFSoq6b',
   'type': 'i9YN6ovGcotCnFdNyUtNh72Nw11WcBuD8y',
   'name': 'i3oa8uNjgZjmC1RS8rg1od8czBP8bsh5A8',
@@ -14,10 +18,13 @@ const AGENT_KEYS: Record<string, string> = {
   'protocols': 'iFQzXU4V6am1M9q6LGBfR4uyNAtjhJiW2d',
   'owner': 'i5uUotnF2LzPci3mkz9QaozBtFjeFtAw45',
   'services': 'iGVUNBQSNeGzdwjA4km5z6R9h7T2jao9Lz',
+  'tags': 'iJ3Vh2auC5VRbTKtjvKr9tWg515xAHKzN7',
+  'website': 'iMGHWAQgGM4VSDfsRTHwBipbwMemt9WdP8',
+  'avatar': 'iR5a34uDHJLquQgvffXWZ7pSU8spiFEgzh',
+  'category': 'iGzkSnpGYjTy3eG2FakUDQrXgFMGyCvTGi',
 };
 
-// Service schema keys (agentplatform::svc.v1.{field})
-const SERVICE_KEYS: Record<string, string> = {
+let SERVICE_KEYS: Record<string, string> = {
   'name': 'iNTrSV1bqDAoaGRcpR51BeoS5wQvQ4P9Qj',
   'description': 'i7ZUWAqwLu9b4E8oXZq4uX6X5W6BJnkuHz',
   'price': 'iLjLxTk1bkEd7SAAWT27VQ7ECFuLtTnuKv',
@@ -27,8 +34,7 @@ const SERVICE_KEYS: Record<string, string> = {
   'status': 'iNbPugdyVSCv54zsZs68vAfvifcf14btX2',
 };
 
-// Review schema keys (agentplatform::review.v1.{field})
-const REVIEW_KEYS: Record<string, string> = {
+let REVIEW_KEYS: Record<string, string> = {
   'buyer': 'iPbx6NP7ZVLySKJU5Rfbt3saxNLaxHHV85',
   'jobHash': 'iFgEMF3Fbj1EFU7bAPjmrvMKUU9QfZumNP',
   'message': 'iKokqh2YmULa4HkSWRRJaywNMvGzRv7JTt',
@@ -37,110 +43,189 @@ const REVIEW_KEYS: Record<string, string> = {
   'timestamp': 'iL13pKpKAQZ4hm2vECGQ5EmFBqRzEneJrq',
 };
 
-// Platform-level keys (agentplatform::platform.v1.{field})
-const PLATFORM_KEYS: Record<string, string> = {
+let PLATFORM_KEYS: Record<string, string> = {
   'datapolicy': 'i6y4XPg5m9YeeP1Rk2iqJGiZwtWWK8pBoC',
   'trustlevel': 'iDDiY2y6Juo9vUprbB69utX55pzcpkNKoW',
   'disputeresolution': 'iJjCHbDoE6r4PqWe2i7SXGuPCn4Fw48Krw',
 };
 
-// Session parameter keys (agentplatform::session.v1.{field})
-const SESSION_KEYS: Record<string, string> = {
-  'duration':        'iEfV7FSNNorTcoukVXpUadneaCB44GJXRt',  // seconds (e.g. 900, 3600)
-  'tokenLimit':      'iK7AVbtFj9hKxy7XaCyzc4iPo8jfpeENQG',  // max LLM tokens per session
-  'imageLimit':      'i733ccahSD96tjGLvypVFozZ5i15xPSzZu',  // max images per session
-  'messageLimit':    'iLrDehY12RhJJ5XGi49QTfZsasY1L7RKWz',  // max messages per session
-  'maxFileSize':     'i6iGYRcbtaPHyagDsv77Sja66HNFcA73Fw',  // max file size in bytes
-  'allowedFileTypes':'i4WmLAEe78myVEPKdWSfRBTEb5sRoWhwjR',  // comma-separated MIME types
+let SESSION_KEYS: Record<string, string> = {
+  'duration': 'iEfV7FSNNorTcoukVXpUadneaCB44GJXRt',
+  'tokenLimit': 'iK7AVbtFj9hKxy7XaCyzc4iPo8jfpeENQG',
+  'imageLimit': 'i733ccahSD96tjGLvypVFozZ5i15xPSzZu',
+  'messageLimit': 'iLrDehY12RhJJ5XGi49QTfZsasY1L7RKWz',
+  'maxFileSize': 'i6iGYRcbtaPHyagDsv77Sja66HNFcA73Fw',
+  'allowedFileTypes': 'i4WmLAEe78myVEPKdWSfRBTEb5sRoWhwjR',
 };
 
-// Backward compatibility aliases
-const ARI_AGENT_KEYS = AGENT_KEYS;
-const ARI_SERVICE_KEYS = SERVICE_KEYS;
-const ARI_REVIEW_KEYS = REVIEW_KEYS;
-const ARI_NAMESPACE_KEYS = AGENT_KEYS;
+// --- Derived lookups (rebuilt after schema load) ---
 
-// Reverse lookups: i-address to field name
-const AGENT_I_ADDRESS_TO_FIELD: Record<string, string> = Object.fromEntries(
-  Object.entries(AGENT_KEYS).map(([k, v]) => [v, k])
-);
-const SERVICE_I_ADDRESS_TO_FIELD: Record<string, string> = Object.fromEntries(
-  Object.entries(SERVICE_KEYS).map(([k, v]) => [v, k])
-);
-const REVIEW_I_ADDRESS_TO_FIELD: Record<string, string> = Object.fromEntries(
-  Object.entries(REVIEW_KEYS).map(([k, v]) => [v, k])
-);
-const PLATFORM_I_ADDRESS_TO_FIELD: Record<string, string> = Object.fromEntries(
-  Object.entries(PLATFORM_KEYS).map(([k, v]) => [v, k])
-);
-const SESSION_I_ADDRESS_TO_FIELD: Record<string, string> = Object.fromEntries(
-  Object.entries(SESSION_KEYS).map(([k, v]) => [v, k])
-);
+let AGENT_I_ADDRESS_TO_FIELD: Record<string, string> = {};
+let SERVICE_I_ADDRESS_TO_FIELD: Record<string, string> = {};
+let REVIEW_I_ADDRESS_TO_FIELD: Record<string, string> = {};
+let PLATFORM_I_ADDRESS_TO_FIELD: Record<string, string> = {};
+let SESSION_I_ADDRESS_TO_FIELD: Record<string, string> = {};
 
-// Backward compat
-const I_ADDRESS_TO_FIELD = AGENT_I_ADDRESS_TO_FIELD;
+let AGENT_VDXF_ADDRESSES_SET: Set<string> = new Set();
+let SERVICE_VDXF_ADDRESSES_SET: Set<string> = new Set();
+let REVIEW_VDXF_ADDRESSES_SET: Set<string> = new Set();
+let PLATFORM_VDXF_ADDRESSES_SET: Set<string> = new Set();
+let SESSION_VDXF_ADDRESSES_SET: Set<string> = new Set();
 
-// All known VDXF i-addresses by type
-export const AGENT_VDXF_ADDRESSES = new Set(Object.values(AGENT_KEYS));
-export const SERVICE_VDXF_ADDRESSES = new Set(Object.values(SERVICE_KEYS));
-export const REVIEW_VDXF_ADDRESSES = new Set(Object.values(REVIEW_KEYS));
-export const PLATFORM_VDXF_ADDRESSES = new Set(Object.values(PLATFORM_KEYS));
-export const SESSION_VDXF_ADDRESSES = new Set(Object.values(SESSION_KEYS));
+function rebuildLookups(): void {
+  AGENT_I_ADDRESS_TO_FIELD = Object.fromEntries(Object.entries(AGENT_KEYS).map(([k, v]) => [v, k]));
+  SERVICE_I_ADDRESS_TO_FIELD = Object.fromEntries(Object.entries(SERVICE_KEYS).map(([k, v]) => [v, k]));
+  REVIEW_I_ADDRESS_TO_FIELD = Object.fromEntries(Object.entries(REVIEW_KEYS).map(([k, v]) => [v, k]));
+  PLATFORM_I_ADDRESS_TO_FIELD = Object.fromEntries(Object.entries(PLATFORM_KEYS).map(([k, v]) => [v, k]));
+  SESSION_I_ADDRESS_TO_FIELD = Object.fromEntries(Object.entries(SESSION_KEYS).map(([k, v]) => [v, k]));
 
-// Export key maps for indexer use
+  AGENT_VDXF_ADDRESSES_SET = new Set(Object.values(AGENT_KEYS));
+  SERVICE_VDXF_ADDRESSES_SET = new Set(Object.values(SERVICE_KEYS));
+  REVIEW_VDXF_ADDRESSES_SET = new Set(Object.values(REVIEW_KEYS));
+  PLATFORM_VDXF_ADDRESSES_SET = new Set(Object.values(PLATFORM_KEYS));
+  SESSION_VDXF_ADDRESSES_SET = new Set(Object.values(SESSION_KEYS));
+}
+
+// Initialize with defaults
+rebuildLookups();
+
+// --- Schema prefix patterns for categorizing keys ---
+const SCHEMA_PREFIXES: Record<string, { target: Record<string, string>; prefix: string }> = {
+  'agent': { target: AGENT_KEYS, prefix: '::agent.v1.' },
+  'service': { target: SERVICE_KEYS, prefix: '::svc.v1.' },
+  'review': { target: REVIEW_KEYS, prefix: '::review.v1.' },
+  'platform': { target: PLATFORM_KEYS, prefix: '::platform.v1.' },
+  'session': { target: SESSION_KEYS, prefix: '::session.v1.' },
+};
+
+/**
+ * Load VDXF schema keys from the agentplatform@ identity on-chain.
+ * Call this at startup before the indexer begins processing blocks.
+ * Falls back to hardcoded defaults if the chain is unreachable.
+ */
+export async function loadSchemaFromChain(rpcCall: (method: string, params: unknown[]) => Promise<unknown>): Promise<void> {
+  const platformId = process.env.PLATFORM_SIGNING_ID || 'agentplatform@';
+  try {
+    const result = await rpcCall('getidentity', [platformId]) as {
+      identity: { contentmultimap?: Record<string, string[]> };
+    };
+
+    const cmm = result?.identity?.contentmultimap;
+    if (!cmm || Object.keys(cmm).length === 0) {
+      console.log('[VDXF] No schema found on-chain, using hardcoded defaults');
+      return;
+    }
+
+    // Reset key maps before populating from chain
+    const newAgent: Record<string, string> = {};
+    const newService: Record<string, string> = {};
+    const newReview: Record<string, string> = {};
+    const newPlatform: Record<string, string> = {};
+    const newSession: Record<string, string> = {};
+
+    let loadedCount = 0;
+
+    for (const [iAddress, values] of Object.entries(cmm)) {
+      if (!values || values.length === 0) continue;
+
+      // Decode the hex value to get the key name string
+      let keyName: string;
+      try {
+        keyName = Buffer.from(values[0], 'hex').toString('utf-8');
+      } catch {
+        continue;
+      }
+
+      // Categorize by prefix pattern (e.g. "agentplatform::agent.v1.name" -> agent/name)
+      let matched = false;
+      for (const { target, prefix } of Object.values(SCHEMA_PREFIXES)) {
+        const prefixIdx = keyName.indexOf(prefix);
+        if (prefixIdx >= 0) {
+          const fieldName = keyName.substring(prefixIdx + prefix.length);
+          if (fieldName) {
+            // Route to the correct target map
+            if (prefix === '::agent.v1.') newAgent[fieldName] = iAddress;
+            else if (prefix === '::svc.v1.') newService[fieldName] = iAddress;
+            else if (prefix === '::review.v1.') newReview[fieldName] = iAddress;
+            else if (prefix === '::platform.v1.') newPlatform[fieldName] = iAddress;
+            else if (prefix === '::session.v1.') newSession[fieldName] = iAddress;
+            loadedCount++;
+            matched = true;
+            break;
+          }
+        }
+      }
+
+      if (!matched) {
+        console.log(`[VDXF] Unknown schema key: ${keyName} (${iAddress})`);
+      }
+    }
+
+    if (loadedCount === 0) {
+      console.log('[VDXF] No valid schema keys parsed from chain, using hardcoded defaults');
+      return;
+    }
+
+    // Apply loaded keys (only replace categories that had keys on chain)
+    if (Object.keys(newAgent).length > 0) AGENT_KEYS = newAgent;
+    if (Object.keys(newService).length > 0) SERVICE_KEYS = newService;
+    if (Object.keys(newReview).length > 0) REVIEW_KEYS = newReview;
+    if (Object.keys(newPlatform).length > 0) PLATFORM_KEYS = newPlatform;
+    if (Object.keys(newSession).length > 0) SESSION_KEYS = newSession;
+
+    // Update SCHEMA_PREFIXES targets (they hold references to old objects)
+    SCHEMA_PREFIXES['agent'].target = AGENT_KEYS;
+    SCHEMA_PREFIXES['service'].target = SERVICE_KEYS;
+    SCHEMA_PREFIXES['review'].target = REVIEW_KEYS;
+    SCHEMA_PREFIXES['platform'].target = PLATFORM_KEYS;
+    SCHEMA_PREFIXES['session'].target = SESSION_KEYS;
+
+    rebuildLookups();
+
+    console.log(`[VDXF] Loaded ${loadedCount} schema keys from ${platformId} on-chain`);
+    console.log(`[VDXF]   agent: ${Object.keys(AGENT_KEYS).length}, service: ${Object.keys(SERVICE_KEYS).length}, review: ${Object.keys(REVIEW_KEYS).length}, platform: ${Object.keys(PLATFORM_KEYS).length}, session: ${Object.keys(SESSION_KEYS).length}`);
+  } catch (err) {
+    console.warn(`[VDXF] Failed to load schema from chain, using hardcoded defaults:`, err instanceof Error ? err.message : err);
+  }
+}
+
+// --- Public API (same interface as before) ---
+
+// Sets are used internally by the isXxxVdxfKey() functions above.
+// They are rebuilt by rebuildLookups() after schema load.
+
 export const VDXF_KEYS = {
-  agent: AGENT_KEYS,
-  service: SERVICE_KEYS,
-  review: REVIEW_KEYS,
-  platform: PLATFORM_KEYS,
-  session: SESSION_KEYS,
+  get agent() { return AGENT_KEYS; },
+  get service() { return SERVICE_KEYS; },
+  get review() { return REVIEW_KEYS; },
+  get platform() { return PLATFORM_KEYS; },
+  get session() { return SESSION_KEYS; },
 };
 
-/**
- * Check if an i-address is a known agent VDXF key
- */
 export function isAgentVdxfKey(iAddress: string): boolean {
-  return AGENT_VDXF_ADDRESSES.has(iAddress);
+  return AGENT_VDXF_ADDRESSES_SET.has(iAddress);
 }
 
-/**
- * Check if an i-address is a known service VDXF key
- */
 export function isServiceVdxfKey(iAddress: string): boolean {
-  return SERVICE_VDXF_ADDRESSES.has(iAddress);
+  return SERVICE_VDXF_ADDRESSES_SET.has(iAddress);
 }
 
-/**
- * Check if an i-address is a known review VDXF key
- */
 export function isReviewVdxfKey(iAddress: string): boolean {
-  return REVIEW_VDXF_ADDRESSES.has(iAddress);
+  return REVIEW_VDXF_ADDRESSES_SET.has(iAddress);
 }
 
-/**
- * Check if an i-address is a known platform VDXF key
- */
 export function isPlatformVdxfKey(iAddress: string): boolean {
-  return PLATFORM_VDXF_ADDRESSES.has(iAddress);
+  return PLATFORM_VDXF_ADDRESSES_SET.has(iAddress);
 }
 
-/**
- * Check if an i-address is a known session VDXF key
- */
 export function isSessionVdxfKey(iAddress: string): boolean {
-  return SESSION_VDXF_ADDRESSES.has(iAddress);
+  return SESSION_VDXF_ADDRESSES_SET.has(iAddress);
 }
 
-/**
- * Get the field name for a VDXF i-address
- */
 export function getFieldName(iAddress: string): string | undefined {
-  return I_ADDRESS_TO_FIELD[iAddress];
+  return AGENT_I_ADDRESS_TO_FIELD[iAddress];
 }
 
-/**
- * Get field name for any VDXF schema type
- */
 export function getFieldNameByType(iAddress: string, type: 'agent' | 'service' | 'review' | 'platform' | 'session'): string | undefined {
   switch (type) {
     case 'agent': return AGENT_I_ADDRESS_TO_FIELD[iAddress];
@@ -151,45 +236,28 @@ export function getFieldNameByType(iAddress: string, type: 'agent' | 'service' |
   }
 }
 
-/**
- * Check if an identity's contentmap/contentmultimap has any agent VDXF keys
- */
 export function hasAgentData(contentmap: Record<string, unknown> | undefined, contentmultimap: Record<string, unknown[]> | undefined): boolean {
   return hasDataOfType(contentmap, contentmultimap, isAgentVdxfKey);
 }
 
-/**
- * Check if an identity has service data
- * Supports both individual service keys AND services stored as JSON array under services key
- */
 export function hasServiceData(contentmap: Record<string, unknown> | undefined, contentmultimap: Record<string, unknown[]> | undefined): boolean {
-  // Check for individual service keys
   if (hasDataOfType(contentmap, contentmultimap, isServiceVdxfKey)) return true;
-  
-  // Check for services stored as JSON array under services key
   const servicesKey = AGENT_KEYS['services'];
   if (contentmultimap && contentmultimap[servicesKey]) return true;
   if (contentmap && contentmap[servicesKey]) return true;
-  
   return false;
 }
 
-/**
- * Check if an identity has review data
- */
 export function hasReviewData(contentmap: Record<string, unknown> | undefined, contentmultimap: Record<string, unknown[]> | undefined): boolean {
   return hasDataOfType(contentmap, contentmultimap, isReviewVdxfKey);
 }
 
-/**
- * Check if an identity has session parameter data
- */
 export function hasSessionData(contentmap: Record<string, unknown> | undefined, contentmultimap: Record<string, unknown[]> | undefined): boolean {
   return hasDataOfType(contentmap, contentmultimap, isSessionVdxfKey);
 }
 
 function hasDataOfType(
-  contentmap: Record<string, unknown> | undefined, 
+  contentmap: Record<string, unknown> | undefined,
   contentmultimap: Record<string, unknown[]> | undefined,
   checker: (key: string) => boolean
 ): boolean {
@@ -206,9 +274,6 @@ function hasDataOfType(
   return false;
 }
 
-/**
- * Extract agent data from identity contentmap/contentmultimap
- */
 export function extractAgentData(
   contentmap: Record<string, string> | undefined,
   contentmultimap: Record<string, string[]> | undefined
@@ -216,40 +281,33 @@ export function extractAgentData(
   return extractDataOfType(contentmap, contentmultimap, 'agent');
 }
 
-/**
- * Extract service data from identity contentmap/contentmultimap
- * Returns first service found (for backward compatibility)
- */
 export function extractServiceData(
   contentmap: Record<string, string> | undefined,
   contentmultimap: Record<string, string[]> | undefined
 ): Record<string, unknown> {
-  // First try extracting from individual service keys
   const data = extractDataOfType(contentmap, contentmultimap, 'service');
   if (Object.keys(data).length > 0) return data;
-  
-  // Otherwise extract from JSON array format
   const services = extractServicesArray(contentmap, contentmultimap);
   return services.length > 0 ? services[0] : {};
 }
 
-/**
- * Extract all services from identity contentmap/contentmultimap
- * Handles services stored as JSON array under services key
- */
 export function extractServicesArray(
   contentmap: Record<string, string> | undefined,
   contentmultimap: Record<string, string[]> | undefined
 ): Array<Record<string, unknown>> {
   const servicesKey = AGENT_KEYS['services'];
   const services: Array<Record<string, unknown>> = [];
-  
-  // Check contentmultimap (array of hex-encoded JSON objects)
+
+  // Check contentmultimap (array of hex-encoded JSON objects or JSON arrays)
   if (contentmultimap && contentmultimap[servicesKey]) {
     for (const hexValue of contentmultimap[servicesKey]) {
       try {
         const parsed = parseVdxfValue(hexValue);
-        if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+        if (Array.isArray(parsed)) {
+          for (const item of (parsed as Array<Record<string, unknown>>).slice(0, 100)) {
+            if (item && typeof item === 'object') services.push(item);
+          }
+        } else if (parsed && typeof parsed === 'object') {
           services.push(parsed as Record<string, unknown>);
         }
       } catch {
@@ -257,13 +315,12 @@ export function extractServicesArray(
       }
     }
   }
-  
-  // Check contentmap (single hex value - shouldn't happen but handle it)
+
+  // Check contentmap
   if (contentmap && contentmap[servicesKey]) {
     try {
       const parsed = parseVdxfValue(contentmap[servicesKey]);
       if (Array.isArray(parsed)) {
-        // Cap to prevent DoS from oversized on-chain arrays
         for (const item of (parsed as Array<Record<string, unknown>>).slice(0, 100)) {
           services.push(item);
         }
@@ -275,24 +332,19 @@ export function extractServicesArray(
     }
   }
 
-  // Hard cap: max 100 services per identity
   return services.slice(0, 100);
 }
 
-/**
- * Extract all reviews from identity contentmultimap
- */
 export function extractReviews(
   contentmultimap: Record<string, string[]> | undefined
 ): Array<Record<string, unknown>> {
   if (!contentmultimap) return [];
-  
+
   const buyerKey = REVIEW_KEYS['buyer'];
   const reviews: Array<Record<string, unknown>> = [];
-  
+
   if (!contentmultimap[buyerKey]) return [];
 
-  // Cap review count to prevent DoS from oversized on-chain arrays
   const reviewCount = Math.min(contentmultimap[buyerKey]?.length || 0, 100);
 
   for (let i = 0; i < reviewCount; i++) {
@@ -307,13 +359,10 @@ export function extractReviews(
       reviews.push(review);
     }
   }
-  
+
   return reviews;
 }
 
-/**
- * Extract session parameter data from identity contentmap/contentmultimap
- */
 export function extractSessionData(
   contentmap: Record<string, string> | undefined,
   contentmultimap: Record<string, string[]> | undefined
@@ -337,11 +386,18 @@ function extractDataOfType(
     }
   }
 
+  // Fields that should collect all multimap values into an array
+  const ARRAY_FIELDS = new Set(['capabilities', 'endpoints', 'protocols']);
+
   if (contentmultimap) {
     for (const [iAddress, values] of Object.entries(contentmultimap)) {
       const fieldName = getFieldNameByType(iAddress, type);
       if (fieldName && values.length > 0) {
-        data[fieldName] = parseVdxfValue(values[0]);
+        if (ARRAY_FIELDS.has(fieldName)) {
+          data[fieldName] = values.map(v => parseVdxfValue(v));
+        } else {
+          data[fieldName] = parseVdxfValue(values[0]);
+        }
       }
     }
   }
@@ -349,12 +405,8 @@ function extractDataOfType(
   return data;
 }
 
-/**
- * Parse a VDXF value (hex-encoded JSON or string)
- */
 export function parseVdxfValue(hexValue: string): unknown {
   try {
-    // Guard against oversized hex values (max 20KB hex = 10KB decoded)
     if (hexValue.length > 20480) {
       return hexValue.substring(0, 100) + '...[truncated]';
     }
@@ -369,9 +421,6 @@ export function parseVdxfValue(hexValue: string): unknown {
   }
 }
 
-/**
- * Encode a value to VDXF hex format
- */
 export function encodeVdxfValue(value: unknown): string {
   const json = JSON.stringify(value);
   return Buffer.from(json).toString('hex');

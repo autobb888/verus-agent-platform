@@ -4,10 +4,10 @@ export interface Agent {
   id: string;
   verus_id: string;
   name: string;
-  type: 'autonomous' | 'assisted' | 'hybrid' | 'tool';
+  type: string;
   description: string | null;
   owner: string;
-  status: 'active' | 'inactive' | 'deprecated';
+  status: string;
   revoked: number;  // SQLite INTEGER: 0 = false, 1 = true
   privacy_tier?: 'standard' | 'private' | 'sovereign';
   privacy_tier_verified?: number;  // 0 = self-declared, 1 = platform-verified
@@ -29,7 +29,7 @@ export interface AgentCapability {
   capability_id: string;
   name: string;
   description: string | null;
-  protocol: string;
+  protocol: string | null;
   endpoint: string | null;
   public: number;  // SQLite INTEGER: 0 = false, 1 = true
   pricing_model: string | null;
@@ -41,7 +41,7 @@ export interface AgentEndpoint {
   id: string;
   agent_id: string;
   url: string;
-  protocol: string;
+  protocol: string | null;
   public: number;  // SQLite INTEGER: 0 = false, 1 = true
 }
 

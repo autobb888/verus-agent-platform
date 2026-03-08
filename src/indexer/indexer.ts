@@ -261,29 +261,53 @@ async function indexAgentIdentity(
       // Update capabilities
       capabilityQueries.deleteByAgentId(existing.id);
       for (const cap of data.capabilities) {
-        capabilityQueries.insert({
-          agent_id: existing.id,
-          capability_id: cap.id,
-          name: cap.name,
-          description: cap.description || null,
-          protocol: cap.protocol,
-          endpoint: cap.endpoint || null,
-          public: cap.public ? 1 : 0,  // Convert boolean to INTEGER
-          pricing_model: cap.pricing?.model || null,
-          pricing_amount: cap.pricing?.amount && Number.isFinite(parseFloat(cap.pricing.amount)) ? parseFloat(cap.pricing.amount) : null,
-          pricing_currency: cap.pricing?.currency || null,
-        });
+        if (typeof cap === 'string') {
+          capabilityQueries.insert({
+            agent_id: existing.id,
+            capability_id: cap,
+            name: cap,
+            description: null,
+            protocol: null,
+            endpoint: null,
+            public: 1,
+            pricing_model: null,
+            pricing_amount: null,
+            pricing_currency: null,
+          });
+        } else {
+          capabilityQueries.insert({
+            agent_id: existing.id,
+            capability_id: cap.id,
+            name: cap.name,
+            description: cap.description || null,
+            protocol: cap.protocol || null,
+            endpoint: cap.endpoint || null,
+            public: cap.public ? 1 : 0,
+            pricing_model: cap.pricing?.model || null,
+            pricing_amount: cap.pricing?.amount && Number.isFinite(parseFloat(cap.pricing.amount)) ? parseFloat(cap.pricing.amount) : null,
+            pricing_currency: cap.pricing?.currency || null,
+          });
+        }
       }
-      
+
       // Update endpoints
       endpointQueries.deleteByAgentId(existing.id);
       for (const ep of data.endpoints) {
-        endpointQueries.insert({
-          agent_id: existing.id,
-          url: ep.url,
-          protocol: ep.protocol,
-          public: ep.public ? 1 : 0,  // Convert boolean to INTEGER
-        });
+        if (typeof ep === 'string') {
+          endpointQueries.insert({
+            agent_id: existing.id,
+            url: ep,
+            protocol: null,
+            public: 1,
+          });
+        } else {
+          endpointQueries.insert({
+            agent_id: existing.id,
+            url: ep.url,
+            protocol: ep.protocol || null,
+            public: ep.public ? 1 : 0,
+          });
+        }
       }
     } else {
       // Insert new agent
@@ -308,28 +332,52 @@ async function indexAgentIdentity(
       
       // Insert capabilities
       for (const cap of data.capabilities) {
-        capabilityQueries.insert({
-          agent_id: agentId,
-          capability_id: cap.id,
-          name: cap.name,
-          description: cap.description || null,
-          protocol: cap.protocol,
-          endpoint: cap.endpoint || null,
-          public: cap.public ? 1 : 0,  // Convert boolean to INTEGER
-          pricing_model: cap.pricing?.model || null,
-          pricing_amount: cap.pricing?.amount && Number.isFinite(parseFloat(cap.pricing.amount)) ? parseFloat(cap.pricing.amount) : null,
-          pricing_currency: cap.pricing?.currency || null,
-        });
+        if (typeof cap === 'string') {
+          capabilityQueries.insert({
+            agent_id: agentId,
+            capability_id: cap,
+            name: cap,
+            description: null,
+            protocol: null,
+            endpoint: null,
+            public: 1,
+            pricing_model: null,
+            pricing_amount: null,
+            pricing_currency: null,
+          });
+        } else {
+          capabilityQueries.insert({
+            agent_id: agentId,
+            capability_id: cap.id,
+            name: cap.name,
+            description: cap.description || null,
+            protocol: cap.protocol || null,
+            endpoint: cap.endpoint || null,
+            public: cap.public ? 1 : 0,
+            pricing_model: cap.pricing?.model || null,
+            pricing_amount: cap.pricing?.amount && Number.isFinite(parseFloat(cap.pricing.amount)) ? parseFloat(cap.pricing.amount) : null,
+            pricing_currency: cap.pricing?.currency || null,
+          });
+        }
       }
-      
+
       // Insert endpoints
       for (const ep of data.endpoints) {
-        endpointQueries.insert({
-          agent_id: agentId,
-          url: ep.url,
-          protocol: ep.protocol,
-          public: ep.public ? 1 : 0,  // Convert boolean to INTEGER
-        });
+        if (typeof ep === 'string') {
+          endpointQueries.insert({
+            agent_id: agentId,
+            url: ep,
+            protocol: null,
+            public: 1,
+          });
+        } else {
+          endpointQueries.insert({
+            agent_id: agentId,
+            url: ep.url,
+            protocol: ep.protocol || null,
+            public: ep.public ? 1 : 0,
+          });
+        }
       }
     }
   });

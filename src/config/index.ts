@@ -15,7 +15,7 @@ export const config = {
   },
   vdxf: {
     // Namespace root for agent VDXF keys (e.g., "ari" -> "ari::agent.v1.*")
-    namespaceRoot: process.env.VDXF_NAMESPACE_ROOT || 'ari',
+    namespaceRoot: process.env.VDXF_NAMESPACE_ROOT || 'agentplatform',
   },
   api: {
     port: safeInt(process.env.API_PORT, 3000, 1),

@@ -36,6 +36,7 @@ secp256k1.hashes.sha256 = (...msgs: Uint8Array[]) => {
   for (const msg of msgs) h.update(msg);
   return h.digest();
 };
+import * as bitcoinMessage from 'bitcoinjs-message';
 import { getDatabase } from '../../db/index.js';
 import { getRpcClient } from '../../indexer/rpc-client.js';
 import { isReservedName } from '../../utils/reserved-names.js';
@@ -100,7 +101,17 @@ async function verifyOnboardSignatureViaRPC(address: string, challenge: string, 
     // RPC unavailable or error — fall through to local verification
   }
 
-  // Fall back to local verification for SDK-generated signatures
+  // Fall back to bitcoinjs-message verification (same as auth.ts login fallback)
+  try {
+    if (bitcoinMessage.verify(challenge, address, signature, '\x15Verus signed data:\n')) {
+      console.log('[Onboard] bitcoinjs-message verification matched for', address);
+      return true;
+    }
+  } catch {
+    // signature format mismatch — try next fallback
+  }
+
+  // Fall back to raw secp256k1 verification for SDK-generated signatures
   if (pubkey) {
     try {
       return verifySignatureLocally(address, challenge, signature, pubkey);

@@ -11,16 +11,16 @@ export function getVdxfPrefix(): string {
 // Legacy constant for backwards compatibility
 export const VDXF_PREFIX = getVdxfPrefix();
 
-// Agent types
-export const AgentType = z.enum(['autonomous', 'assisted', 'hybrid', 'tool']);
+// Agent types — accept both strict enum and free-form strings from on-chain data
+export const AgentType = z.string().min(1).max(50);
 export type AgentTypeValue = z.infer<typeof AgentType>;
 
 // Agent status
-export const AgentStatus = z.enum(['active', 'inactive', 'deprecated']);
+export const AgentStatus = z.string().min(1).max(50).default('active');
 export type AgentStatusValue = z.infer<typeof AgentStatus>;
 
-// Protocols
-export const Protocol = z.enum(['MCP', 'A2A', 'REST', 'WebSocket', 'gRPC']);
+// Protocols — accept any string
+export const Protocol = z.string().min(1).max(50);
 
 // Pricing model
 export const PricingModel = z.enum(['free', 'per-call', 'subscription', 'usage-based']);
@@ -32,33 +32,38 @@ export const CapabilityPricing = z.object({
   currency: z.string().max(20).optional(),
 }).optional();
 
-// Capability object
-export const Capability = z.object({
-  id: z.string().min(1).max(100),
-  name: z.string().min(1).max(100),
-  description: z.string().max(500).optional(),
-  protocol: Protocol,
-  endpoint: z.string().url().optional(),
-  public: z.boolean().default(true),
-  pricing: CapabilityPricing,
-  rateLimit: z.string().max(50).optional(),
-});
+// Capability — accept either structured object or plain string
+export const Capability = z.union([
+  z.object({
+    id: z.string().min(1).max(100),
+    name: z.string().min(1).max(100),
+    description: z.string().max(500).optional(),
+    protocol: Protocol.optional(),
+    endpoint: z.string().url().optional(),
+    public: z.boolean().default(true),
+    pricing: CapabilityPricing,
+    rateLimit: z.string().max(50).optional(),
+  }),
+  z.string().min(1).max(200),
+]);
 export type CapabilityValue = z.infer<typeof Capability>;
 
-// Endpoint object
-export const Endpoint = z.object({
-  url: z.string().url(),
-  protocol: Protocol,
-  public: z.boolean().default(true),
-});
+// Endpoint — accept either structured object or plain string
+export const Endpoint = z.union([
+  z.object({
+    url: z.string().url(),
+    protocol: Protocol.optional(),
+    public: z.boolean().default(true),
+  }),
+  z.string().min(1).max(500),
+]);
 export type EndpointValue = z.infer<typeof Endpoint>;
 
 // Name validation with security checks
 export const AgentName = z
   .string()
-  .min(3, 'Name must be at least 3 characters')
+  .min(1, 'Name must be at least 1 character')
   .max(64, 'Name must be at most 64 characters')
-  .regex(/^[a-zA-Z0-9._-]+$/, 'Name can only contain alphanumeric characters, dots, underscores, and hyphens')
   .refine((name) => !isReservedName(name), {
     message: 'This name is reserved and cannot be used',
   })
@@ -77,22 +82,22 @@ export const SessionParams = z.object({
 }).optional();
 export type SessionParamsValue = z.infer<typeof SessionParams>;
 
-// Full agent identity schema
+// Full agent identity schema — loosened to accept on-chain data formats
 export const AgentIdentity = z.object({
-  version: z.literal('1').default('1'),
+  version: z.union([z.string(), z.number()]).transform(v => String(v)).default('1'),
   type: AgentType,
   name: AgentName,
   description: z.string().max(1000).optional(),
-  capabilities: z.array(Capability).max(50).default([]),
-  endpoints: z.array(Endpoint).max(10).default([]),
-  protocols: z.array(Protocol).default([]),
+  capabilities: z.union([z.array(Capability), z.array(z.string())]).default([]),
+  endpoints: z.union([z.array(Endpoint), z.array(z.string())]).default([]),
+  protocols: z.union([z.array(Protocol), z.array(z.string())]).default([]),
   owner: z.string().min(1),
   signature: z.string().optional(),
   status: AgentStatus.default('active'),
   revoked: z.boolean().default(false),
   contentHash: z.string().optional(),
-  created: z.string().datetime().optional(),
-  updated: z.string().datetime().optional(),
+  created: z.string().optional(),
+  updated: z.string().optional(),
 });
 export type AgentIdentityValue = z.infer<typeof AgentIdentity>;
 
@@ -101,7 +106,7 @@ export function parseAgentData(rawData: unknown): { success: true; data: AgentId
   try {
     // Defensive checks for memory exhaustion
     const jsonStr = typeof rawData === 'string' ? rawData : JSON.stringify(rawData);
-    
+
     // Max size check (10KB)
     if (jsonStr.length > 10240) {
       return { success: false, error: 'Agent data exceeds maximum size (10KB)' };
@@ -109,10 +114,10 @@ export function parseAgentData(rawData: unknown): { success: true; data: AgentId
 
     // Parse with depth limit (handled by JSON.parse naturally for reasonable depths)
     const parsed = typeof rawData === 'string' ? JSON.parse(rawData) : rawData;
-    
+
     // Validate against schema
     const result = AgentIdentity.safeParse(parsed);
-    
+
     if (result.success) {
       return { success: true, data: result.data };
     } else {

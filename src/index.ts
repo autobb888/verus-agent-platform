@@ -42,6 +42,12 @@ async function main() {
   // Start API server
   const server = await startServer();
 
+  // Load VDXF schema from chain before indexer starts
+  const { loadSchemaFromChain } = await import('./validation/vdxf-keys.js');
+  const { getRpcClient } = await import('./indexer/rpc-client.js');
+  const rpc = getRpcClient();
+  await loadSchemaFromChain((method, params) => rpc.rpcCall(method, params));
+
   // Start indexer
   console.log('[Indexer] Starting blockchain indexer...');
   await startIndexer();
