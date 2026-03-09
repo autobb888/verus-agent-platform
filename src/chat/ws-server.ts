@@ -13,6 +13,7 @@ import { jobQueries, jobMessageQueries, chatTokenQueries, readReceiptQueries, se
 import { parse as parseCookie } from 'cookie';
 import { unsign } from 'cookie-signature';
 import { safeJsonParse } from '../utils/safe-json.js';
+import { logger } from '../utils/logger.js';
 
 // Types
 interface AuthenticatedSocket extends Socket {
@@ -479,7 +480,7 @@ export function initSocketServer(httpServer: HttpServer): SocketIOServer {
           const sessionKey = `${socket.verusId}:${jobId}`;
           const escalation = sessionScorer.record(sessionKey, result.score);
           if (escalation.escalated) {
-            console.log(`[SafeChat] Crescendo escalation detected: session=${sessionKey} rollingSum=${escalation.rollingSum} flagged=${escalation.flaggedCount}`);
+            logger.info({ sessionKey, rollingSum: escalation.rollingSum, flaggedCount: escalation.flaggedCount }, 'SafeChat crescendo escalation detected');
             socket.emit('error', { message: 'Messages blocked: unusual pattern detected. Please contact support.' });
             return;
           }
@@ -516,7 +517,7 @@ export function initSocketServer(httpServer: HttpServer): SocketIOServer {
               
               for (const { token } of canaryCheck) {
                 if (sanitized.includes(token)) {
-                  console.warn(`[Canary] LEAK DETECTED for ${socket.verusId} in job ${jobId}`);
+                  logger.warn({ verusId: socket.verusId, jobId }, 'Canary leak detected');
                   outResult.score = 1.0;
                   const canaryFlag = { type: 'canary_leak', severity: 'critical', detail: 'Registered canary token found in outbound message', action: 'hold' };
                   if (Array.isArray(outResult.flags)) {
@@ -529,7 +530,7 @@ export function initSocketServer(httpServer: HttpServer): SocketIOServer {
               }
             } catch (canaryErr) {
               // Don't block message if canary check fails
-              console.error('[Canary] Lookup error:', canaryErr);
+              logger.error({ err: canaryErr }, 'Canary lookup error');
             }
             // Use output score if higher than inbound score
             if (outResult.score > (safetyScore || 0)) {
@@ -623,7 +624,7 @@ export function initSocketServer(httpServer: HttpServer): SocketIOServer {
           createNotification({ recipientVerusId: recipient, type: 'message.new', title: 'New Message', body: sanitized.slice(0, 100), jobId });
         }
       } catch (webhookErr) {
-        console.error('[WS] Webhook/notification error:', webhookErr instanceof Error ? webhookErr.message : 'unknown');
+        logger.error({ err: webhookErr instanceof Error ? webhookErr.message : 'unknown' }, 'WS webhook/notification error');
       }
     });
 

@@ -15,6 +15,7 @@ import {
 } from './verification.js';
 import { jobFileQueries } from '../db/index.js';
 import { deleteFile as deleteStoredFile } from '../files/storage.js';
+import { logger } from '../utils/logger.js';
 
 const POLL_INTERVAL = 30 * 1000; // 30 seconds
 const CHALLENGE_VERIFY_DELAY = 5 * 60 * 1000; // 5 minutes
@@ -28,7 +29,7 @@ let running = false;
  * Process a single challenge-send job
  */
 async function processChallengeSend(job: VerificationJob): Promise<void> {
-  console.log(`[Worker] Processing challenge for ${job.url}`);
+  logger.info({ url: job.url }, 'Processing challenge');
   
   const result = await sendChallenge(job);
   
@@ -45,7 +46,7 @@ async function processChallengeSend(job: VerificationJob): Promise<void> {
  * Process a single verification check
  */
 async function processVerification(job: VerificationJob): Promise<void> {
-  console.log(`[Worker] Verifying ${job.url}`);
+  logger.info({ url: job.url }, 'Verifying endpoint');
   await verifyChallenge(job);
 }
 
@@ -86,10 +87,10 @@ async function workerLoop(): Promise<void> {
           await deleteStoredFile(file.storage_path);
           jobFileQueries.delete(file.id);
         }
-        console.log(`[Worker] Cleaned up ${expiredFiles.length} expired job files`);
+        logger.info({ count: expiredFiles.length }, 'Cleaned up expired job files');
       }
     } catch (err) {
-      console.error('[Worker] File cleanup error:', err);
+      logger.error({ err }, 'File cleanup error');
     }
 
     // 5. Cleanup old notifications (Phase 6d)
@@ -102,20 +103,35 @@ async function workerLoop(): Promise<void> {
           OR created_at < datetime('now', '-30 days')
       `).run();
       if (result.changes > 0) {
-        console.log(`[Worker] Cleaned up ${result.changes} old notifications`);
+        logger.info({ count: result.changes }, 'Cleaned up old notifications');
       }
     } catch (err) {
-      console.error('[Worker] Notification cleanup error:', err);
+      logger.error({ err }, 'Notification cleanup error');
     }
 
     // 6. Mark stale verifications
     const staleCount = markStaleVerifications();
     if (staleCount > 0) {
-      console.log(`[Worker] Marked ${staleCount} verifications as stale`);
+      logger.info({ count: staleCount }, 'Marked verifications as stale');
+    }
+
+    // 7. Cleanup expired auth challenges and QR challenges
+    try {
+      const { getDatabase } = await import('../db/index.js');
+      const db = getDatabase();
+      const nowMs = Date.now();
+      const authResult = db.prepare(`DELETE FROM auth_challenges WHERE expires_at < ?`).run(nowMs);
+      const qrResult = db.prepare(`DELETE FROM qr_challenges WHERE expires_at < datetime('now')`).run();
+      const total = (authResult.changes || 0) + (qrResult.changes || 0);
+      if (total > 0) {
+        logger.info({ authChallenges: authResult.changes, qrChallenges: qrResult.changes }, 'Cleaned up expired challenges');
+      }
+    } catch (err) {
+      logger.error({ err }, 'Challenge cleanup error');
     }
     
   } catch (error) {
-    console.error('[Worker] Error in worker loop:', error);
+    logger.error({ err: error }, 'Error in worker loop');
   }
   
   // Schedule next iteration
@@ -127,12 +143,12 @@ async function workerLoop(): Promise<void> {
  */
 export function startWorker(): void {
   if (running) {
-    console.log('[Worker] Already running');
+    logger.warn('Worker already running');
     return;
   }
   
   running = true;
-  console.log('[Worker] Starting verification worker...');
+  logger.info('Starting verification worker');
   workerLoop();
 }
 
@@ -142,7 +158,7 @@ export function startWorker(): void {
 export function stopWorker(): void {
   running = false;
   pendingChallenges.clear();
-  console.log('[Worker] Stopped');
+  logger.info('Worker stopped');
 }
 
 /**

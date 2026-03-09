@@ -8,6 +8,7 @@
 import { randomBytes } from 'crypto';
 import { getRpcClient } from '../indexer/rpc-client.js';
 import * as primitives from 'verus-typescript-primitives';
+import { logger } from '../utils/logger.js';
 
 const {
   LoginConsentChallenge,
@@ -173,7 +174,7 @@ export async function verifyLoginConsentResponse(
       challengeId,
     };
   } catch (error) {
-    console.error('Login response verification failed:', error);
+    logger.error({ err: error }, 'Login response verification failed');
     return { 
       valid: false, 
       error: error instanceof Error ? error.message : 'Verification failed' 

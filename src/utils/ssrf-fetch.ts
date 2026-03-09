@@ -7,6 +7,7 @@
 
 import { resolve4 } from 'dns/promises';
 import { URL } from 'url';
+import { logger } from './logger.js';
 
 // Blocked IP ranges (private, loopback, link-local)
 const BLOCKED_RANGES = [
@@ -60,7 +61,7 @@ function isBlockedIP(ip: string): boolean {
   if (process.env.NODE_ENV !== 'production' && 
       process.env.SSRF_ALLOW_LOCALHOST === 'true' && 
       ip === '127.0.0.1') {
-    console.warn('[SSRF] ⚠️ Localhost allowed (test mode only)');
+    logger.warn('Localhost allowed (test mode only)');
     return false;
   }
   

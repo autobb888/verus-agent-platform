@@ -15,6 +15,7 @@
 import { randomBytes, timingSafeEqual } from 'crypto';
 import { getDatabase } from '../db/index.js';
 import { ssrfSafeFetch } from '../utils/ssrf-fetch.js';
+import { logger } from '../utils/logger.js';
 
 // Backoff delays in seconds (Shield AUTH-7)
 const BACKOFF_DELAYS = [60, 300, 1800]; // 1min, 5min, 30min
@@ -85,7 +86,7 @@ export async function sendChallenge(job: VerificationJob): Promise<VerificationR
     expiresAt: Math.floor(Date.now() / 1000) + 3600, // 1 hour expiry
   });
   
-  console.log(`[Verification] Sending challenge to ${challengeUrl}`);
+  logger.info({ url: challengeUrl }, 'Sending verification challenge');
   
   const result = await ssrfSafeFetch(challengeUrl, {
     method: 'POST',
@@ -124,11 +125,11 @@ export async function sendChallenge(job: VerificationJob): Promise<VerificationR
       WHERE id = ?
     `).run(result.error, job.verificationId);
     
-    console.log(`[Verification] Challenge failed, retry in ${delaySeconds}s: ${result.error}`);
+    logger.info({ delaySec: delaySeconds, error: result.error }, 'Verification challenge failed, scheduling retry');
     return { success: false, error: `Will retry in ${delaySeconds}s: ${result.error}` };
   }
   
-  console.log('[Verification] Challenge sent successfully');
+  logger.info('Verification challenge sent successfully');
   return { success: true };
 }
 
@@ -150,7 +151,7 @@ export async function verifyChallenge(job: VerificationJob): Promise<Verificatio
   // Construct verification URL
   const verifyUrl = new URL('/.well-known/verus-agent', job.url).toString();
   
-  console.log(`[Verification] Checking ${verifyUrl}`);
+  logger.info({ url: verifyUrl }, 'Checking verification response');
   
   const result = await ssrfSafeFetch(verifyUrl, {
     method: 'GET',
@@ -236,7 +237,7 @@ export async function verifyChallenge(job: VerificationJob): Promise<Verificatio
     `).run(job.endpointId);
   })();
   
-  console.log(`[Verification] SUCCESS: ${job.url} verified for ${job.verusId}`);
+  logger.info({ url: job.url, verusId: job.verusId }, 'Endpoint verification successful');
   return { success: true };
 }
 

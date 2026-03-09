@@ -6,6 +6,7 @@
 import { encryptPayload, decryptPayload } from './crypto.js';
 import * as fallback from './fallback.js';
 import type { SafeChatProvider } from './index.js';
+import { logger } from '../utils/logger.js';
 
 interface SafeChatClientConfig {
   apiUrl: string;
@@ -123,7 +124,7 @@ export class SafeChatHttpClient implements SafeChatProvider {
     } catch (err) {
       this.recordFailure();
       const reason = err instanceof Error ? err.name === 'AbortError' ? 'timeout' : err.message : 'unknown';
-      console.warn(`[SafeChat] HTTP scan failed (${reason}), using fallback`);
+      logger.warn({ reason }, 'SafeChat HTTP scan failed, using fallback');
       return fallback.scan(message);
     }
   }
@@ -186,7 +187,7 @@ export class SafeChatHttpClient implements SafeChatProvider {
 
     if (this.circuit.failures.length >= CIRCUIT_FAILURE_THRESHOLD) {
       this.circuit.openUntil = now + CIRCUIT_OPEN_DURATION_MS;
-      console.warn(`[SafeChat] Circuit breaker OPEN — ${CIRCUIT_FAILURE_THRESHOLD} failures in ${CIRCUIT_FAILURE_WINDOW_MS / 1000}s, fallback for ${CIRCUIT_OPEN_DURATION_MS / 1000}s`);
+      logger.warn({ failures: CIRCUIT_FAILURE_THRESHOLD, windowSec: CIRCUIT_FAILURE_WINDOW_MS / 1000, fallbackSec: CIRCUIT_OPEN_DURATION_MS / 1000 }, 'SafeChat circuit breaker OPEN');
     }
   }
 

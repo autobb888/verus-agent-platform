@@ -79,7 +79,21 @@ async function main() {
     stopWebhookEngine();
     stopAuthCleanup();
     shutdownNonceStore();
-    await server.close();
+
+    // Close server with 30s timeout to avoid hanging on stuck connections
+    await Promise.race([
+      server.close(),
+      new Promise(resolve => setTimeout(resolve, 30_000)),
+    ]);
+
+    // Close database connection (ensures WAL checkpoint completes)
+    try {
+      const { getDatabase } = await import('./db/index.js');
+      getDatabase().close();
+      logger.info('Database closed');
+    } catch {
+      // DB may not be initialized if shutdown during startup
+    }
 
     logger.info('Goodbye!');
     process.exit(0);
@@ -94,7 +108,9 @@ process.on('uncaughtException', (err) => {
   process.exit(1);
 });
 process.on('unhandledRejection', (reason) => {
-  logger.error({ reason }, 'Unhandled rejection');
+  logger.fatal({ reason }, 'Unhandled rejection — exiting');
+  // Allow time for log flush, then exit
+  setTimeout(() => process.exit(1), 1000).unref();
 });
 
 main().catch((err) => {

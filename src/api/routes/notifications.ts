@@ -15,6 +15,7 @@ import { getSessionFromRequest } from './auth.js';
 import { getDatabase } from '../../db/index.js';
 import { z } from 'zod';
 import { randomUUID } from 'crypto';
+import { logger } from '../../utils/logger.js';
 
 async function requireAuth(request: FastifyRequest, reply: FastifyReply) {
   const session = getSessionFromRequest(request);
@@ -34,7 +35,7 @@ export async function notificationRoutes(fastify: FastifyInstance): Promise<void
   const notifCleanupInterval = setInterval(() => {
     try {
       const deleted = cleanupOldNotifications();
-      if (deleted > 0) console.log(`[Notifications] Cleaned up ${deleted} old notifications`);
+      if (deleted > 0) logger.debug({ deleted }, 'Cleaned up old notifications');
     } catch {}
   }, 6 * 60 * 60 * 1000);
   notifCleanupInterval.unref();

@@ -20,6 +20,7 @@ import { createNotification } from './notifications.js';
 import { getRpcClient } from '../../indexer/rpc-client.js';
 import { getSessionFromRequest } from './auth.js';
 import { getIO } from '../../chat/ws-server.js';
+import { logger } from '../../utils/logger.js';
 
 import { RateLimiter } from '../../utils/rate-limiter.js';
 
@@ -241,7 +242,7 @@ async function verifySignatureForIdentity(rpc: any, identityOrAddress: string, m
     try {
       localOk = bitcoinMessage.verify(message, target, signature, '\x15Verus signed data:\n');
       if (localOk) {
-        console.warn('[Jobs] Local bitcoinjs-message fallback matched', { target });
+        logger.warn({ target }, 'Jobs: local bitcoinjs-message fallback matched');
         return true;
       }
     } catch (err: any) {
@@ -252,14 +253,14 @@ async function verifySignatureForIdentity(rpc: any, identityOrAddress: string, m
     debugAttempts.push({ target, rpc: rpcOk, local: localOk, rpcErr, localErr });
   }
 
-  console.warn('[Jobs] Signature verification failed for all candidates', JSON.stringify({
+  logger.warn({
     identityOrAddress,
     signaturePreview: signature.slice(0, 40),
     signatureLength: signature.length,
     message,
     candidateCount: [...new Set(candidates.filter(Boolean))].length,
     attempts: debugAttempts,
-  }, null, 2));
+  }, 'Jobs: signature verification failed for all candidates');
   return false;
 }
 

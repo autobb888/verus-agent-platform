@@ -12,6 +12,7 @@ import { createHash } from 'crypto';
 import * as bitcoinMessage from 'bitcoinjs-message';
 import { getRpcClient } from '../indexer/rpc-client.js';
 import { hasNonce, claimNonce } from './nonce-store.js';
+import { logger } from '../utils/logger.js';
 
 // Timestamp window: 5 minutes
 const TIMESTAMP_WINDOW_SEC = 300;
@@ -125,7 +126,7 @@ export async function verifySignedPayload<T>(
       try {
         if (bitcoinMessage.verify(message, target, signature, '\x15Verus signed data:\n')) {
           valid = true;
-          console.warn('[Auth] Local bitcoinjs-message fallback used', { verusId, target });
+          logger.warn({ verusId, target }, 'Local bitcoinjs-message fallback used');
           break;
         }
       } catch {
@@ -158,7 +159,7 @@ export async function verifySignedPayload<T>(
     };
     
   } catch (error) {
-    console.error('[Auth] Signature verification error:', error);
+    logger.error({ err: error }, 'Signature verification error');
     return {
       valid: false,
       error: 'Signature verification failed',

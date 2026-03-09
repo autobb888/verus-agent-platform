@@ -4,6 +4,8 @@
 // human-readable key name (e.g. "agentplatform::agent.v1.name").
 // Hardcoded defaults are used as fallback if the chain is unreachable at startup.
 
+import { logger } from '../utils/logger.js';
+
 // --- Schema key maps (field name -> i-address) ---
 // These are populated by loadSchemaFromChain() or fall back to defaults.
 
@@ -112,7 +114,7 @@ export async function loadSchemaFromChain(rpcCall: (method: string, params: unkn
 
     const cmm = result?.identity?.contentmultimap;
     if (!cmm || Object.keys(cmm).length === 0) {
-      console.log('[VDXF] No schema found on-chain, using hardcoded defaults');
+      logger.info('No VDXF schema found on-chain, using hardcoded defaults');
       return;
     }
 
@@ -157,12 +159,12 @@ export async function loadSchemaFromChain(rpcCall: (method: string, params: unkn
       }
 
       if (!matched) {
-        console.log(`[VDXF] Unknown schema key: ${keyName} (${iAddress})`);
+        logger.debug({ keyName, iAddress }, 'Unknown VDXF schema key');
       }
     }
 
     if (loadedCount === 0) {
-      console.log('[VDXF] No valid schema keys parsed from chain, using hardcoded defaults');
+      logger.info('No valid VDXF schema keys parsed from chain, using hardcoded defaults');
       return;
     }
 
@@ -182,10 +184,9 @@ export async function loadSchemaFromChain(rpcCall: (method: string, params: unkn
 
     rebuildLookups();
 
-    console.log(`[VDXF] Loaded ${loadedCount} schema keys from ${platformId} on-chain`);
-    console.log(`[VDXF]   agent: ${Object.keys(AGENT_KEYS).length}, service: ${Object.keys(SERVICE_KEYS).length}, review: ${Object.keys(REVIEW_KEYS).length}, platform: ${Object.keys(PLATFORM_KEYS).length}, session: ${Object.keys(SESSION_KEYS).length}`);
+    logger.info({ loadedCount, platformId, agent: Object.keys(AGENT_KEYS).length, service: Object.keys(SERVICE_KEYS).length, review: Object.keys(REVIEW_KEYS).length, platform: Object.keys(PLATFORM_KEYS).length, session: Object.keys(SESSION_KEYS).length }, 'Loaded VDXF schema keys from chain');
   } catch (err) {
-    console.warn(`[VDXF] Failed to load schema from chain, using hardcoded defaults:`, err instanceof Error ? err.message : err);
+    logger.warn({ err: err instanceof Error ? err.message : err }, 'Failed to load VDXF schema from chain, using hardcoded defaults');
   }
 }
 

@@ -8,6 +8,7 @@
  */
 
 import { getDatabase } from '../db/index.js';
+import { logger } from '../utils/logger.js';
 
 interface NonceEntry {
   nonce: string;
@@ -42,7 +43,7 @@ export function initNonceStore(): void {
     CREATE INDEX IF NOT EXISTS idx_nonces_expires ON used_nonces(expires_at);
   `);
   
-  console.log('[NonceStore] Initialized');
+  logger.info('NonceStore initialized');
 }
 
 export async function hasNonce(nonce: string): Promise<boolean> {
@@ -92,7 +93,7 @@ export async function claimNonce(nonce: string, ttlMs: number = 600000): Promise
     return true;
     
   } catch (error) {
-    console.error('[NonceStore] Failed to claim nonce:', error);
+    logger.error({ err: error }, 'Failed to claim nonce');
     return false;
   }
 }
@@ -134,7 +135,7 @@ function cleanupExpiredNonces(): void {
   const result = db.prepare('DELETE FROM used_nonces WHERE expires_at <= ?').run(now);
   
   if (memoryCleanedCount > 0 || result.changes > 0) {
-    console.log(`[NonceStore] Cleaned ${memoryCleanedCount} memory, ${result.changes} database nonces`);
+    logger.debug({ memoryCleaned: memoryCleanedCount, dbCleaned: result.changes }, 'Nonce cleanup completed');
   }
 }
 

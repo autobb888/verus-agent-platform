@@ -7,6 +7,7 @@
  */
 import { config } from '../config/index.js';
 import { SafeChatHttpClient } from './client.js';
+import { logger } from '../utils/logger.js';
 
 export interface SafeChatProvider {
   scan(message: string): Promise<{ score: number; safe: boolean; classification: string; flags: string[] }>;
@@ -38,7 +39,7 @@ export async function createSafeChatProvider(): Promise<SafeChatProvider | null>
     const parts = ['http'];
     if (client.encrypted) parts.push('encrypted');
     parts.push('inbound + outbound');
-    console.log(`[Chat] SafeChat initialized (mode: ${parts.join(', ')})`);
+    logger.info({ mode: parts.join(', ') }, 'SafeChat initialized');
     return client;
   }
 
@@ -47,14 +48,14 @@ export async function createSafeChatProvider(): Promise<SafeChatProvider | null>
     try {
       const mod = await import(safechatPath) as any;
       const engine = new mod.SafeChatEngine();
-      console.log('[Chat] SafeChat initialized (mode: local, inbound + outbound)');
+      logger.info({ mode: 'local, inbound + outbound' }, 'SafeChat initialized');
       return engine;
     } catch (err) {
-      console.warn('[Chat] SafeChat local module failed to load:', (err as Error).message);
+      logger.warn({ err: (err as Error).message }, 'SafeChat local module failed to load');
     }
   }
 
   // Mode 3: Nothing configured
-  console.log('[Chat] SafeChat not configured');
+  logger.info('SafeChat not configured');
   return null;
 }

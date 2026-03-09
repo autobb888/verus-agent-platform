@@ -8,6 +8,7 @@
 
 import { getDatabase } from '../db/index.js';
 import { randomUUID } from 'crypto';
+import { logger } from '../utils/logger.js';
 
 export interface HeldMessage {
   id: string;
@@ -172,7 +173,7 @@ export function autoReleaseExpired(slaHours: number = 24): number {
     try {
       releaseAndDeliver(held, true);
     } catch (err) {
-      console.error(`[HoldQueue] Failed to deliver auto-released message ${held.id}:`, err);
+      logger.error({ err, holdId: held.id }, 'Failed to deliver auto-released message');
     }
   }
 

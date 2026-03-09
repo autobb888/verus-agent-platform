@@ -16,6 +16,7 @@ import { randomBytes } from 'crypto';
 import * as bitcoinMessage from 'bitcoinjs-message';
 import { getDatabase } from '../../db/index.js';
 import { getRpcClient } from '../../indexer/rpc-client.js';
+import { logger } from '../../utils/logger.js';
 
 // Session lifetime: 1 hour
 const SESSION_LIFETIME_MS = 60 * 60 * 1000;
@@ -71,12 +72,12 @@ sessionCleanupInterval = setInterval(() => {
     `).run(now);
 
     if ((sessionsDeleted.changes || 0) > 0 || (challengesDeleted.changes || 0) > 0 || (qrDeleted.changes || 0) > 0) {
-      console.log(`[Auth] Cleanup: ${sessionsDeleted.changes || 0} sessions, ${challengesDeleted.changes || 0} challenges, ${qrDeleted.changes || 0} qr_challenges`);
+      logger.debug({ sessions: sessionsDeleted.changes || 0, challenges: challengesDeleted.changes || 0, qrChallenges: qrDeleted.changes || 0 }, 'Auth cleanup completed');
     }
   } catch (err) {
     // Silently ignore if DB not yet initialized during early startup
     if (!(err instanceof Error && err.message.includes('not initialized'))) {
-      console.error('[Auth] Cleanup error:', err);
+      logger.error({ err }, 'Auth cleanup error');
     }
   }
 }, 10 * 60 * 1000);
@@ -89,7 +90,7 @@ export function stopAuthCleanup(): void {
     clearInterval(sessionCleanupInterval);
     sessionCleanupInterval = null;
   }
-  console.log('[Auth] Cleanup intervals stopped');
+  logger.info('Auth cleanup intervals stopped');
 }
 
 function checkRateLimit(ip: string): boolean {

@@ -1,4 +1,5 @@
 import { config } from '../config/index.js';
+import { logger } from '../utils/logger.js';
 
 interface RpcResponse<T> {
   result: T | null;
@@ -158,7 +159,7 @@ export class VerusRpcClient {
       return result === true;
     } catch (error) {
       // Log but don't throw - invalid signatures return false
-      console.error('[RPC] verifyMessage error:', error);
+      logger.error({ err: error }, 'RPC verifyMessage error');
       return false;
     }
   }

@@ -20,6 +20,7 @@ import { createNotification } from './notifications.js';
 import { emitWebhookEvent } from '../../notifications/webhook-engine.js';
 import { z } from 'zod';
 import { randomUUID } from 'crypto';
+import { logger } from '../../utils/logger.js';
 
 // --- Schemas ---
 
@@ -232,7 +233,7 @@ export async function dataPolicyRoutes(fastify: FastifyInstance): Promise<void> 
       const result = await rpc.verifyMessage(session.verusId, attestationMessage, parsed.data.signature);
       signatureVerified = result ? 1 : 0;
     } catch (err) {
-      console.error('[DataPolicy] Signature verification failed:', err);
+      logger.error({ err }, 'Data policy signature verification failed');
     }
 
     // Check for existing attestation

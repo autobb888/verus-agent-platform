@@ -1,6 +1,7 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { getRpcClient } from '../../indexer/rpc-client.js';
 import { getSessionFromRequest } from './auth.js';
+import { logger } from '../../utils/logger.js';
 
 // ==========================================
 // Auth middleware
@@ -90,7 +91,7 @@ export async function transactionRoutes(fastify: FastifyInstance): Promise<void>
         },
       });
     } catch (error: any) {
-      console.error('[TX] getaddressutxos error:', error.message);
+      logger.error({ err: error }, 'getaddressutxos error');
       return reply.code(502).send({
         error: { code: 'RPC_ERROR', message: 'Failed to fetch UTXOs from chain' },
       });
@@ -136,7 +137,7 @@ export async function transactionRoutes(fastify: FastifyInstance): Promise<void>
         },
       });
     } catch (error: any) {
-      console.error('[TX] getinfo error:', error.message);
+      logger.error({ err: error }, 'getinfo error');
       return reply.code(502).send({
         error: { code: 'RPC_ERROR', message: 'Failed to fetch chain info' },
       });
@@ -226,7 +227,7 @@ export async function transactionRoutes(fastify: FastifyInstance): Promise<void>
     }
 
     if (!sessionOwnsInput) {
-      console.warn(`[TX] Broadcast REJECTED — no input matches session address ${sessionAddress}. Input addrs: [${inputAddresses.join(', ')}]`);
+      logger.warn({ sessionAddress, inputAddresses }, 'Broadcast rejected — no input matches session address');
       return reply.code(403).send({
         error: { code: 'NOT_YOUR_TX', message: 'Transaction must spend from your registered address' },
       });
@@ -246,17 +247,17 @@ export async function transactionRoutes(fastify: FastifyInstance): Promise<void>
 
     // Fee guard: warn if outputs seem unreasonably large (> 1000 VRSC)
     if (totalOutput > 1000) {
-      console.warn(`[TX] Large transaction from ${session.verusId}: ${totalOutput} VRSC total output`);
+      logger.warn({ verusId: session.verusId, totalOutput }, 'Large transaction detected');
     }
 
     // Audit log
-    console.log(`[TX] Broadcast from ${session.verusId} (${sessionAddress}): inputs from [${inputAddresses.join(', ')}], outputs to [${outputAddresses.join(', ')}], total: ${totalOutput} VRSC`);
+    logger.info({ verusId: session.verusId, sessionAddress, inputAddresses, outputAddresses, totalOutput }, 'Broadcasting transaction');
 
     // Broadcast
     try {
       const txid = await rpc.rpcCall<string>('sendrawtransaction', [rawhex]);
       
-      console.log(`[TX] Broadcast success: ${txid} from ${session.verusId}`);
+      logger.info({ txid, verusId: session.verusId }, 'Broadcast success');
       
       return reply.send({
         data: {
@@ -266,7 +267,7 @@ export async function transactionRoutes(fastify: FastifyInstance): Promise<void>
       });
     } catch (error: any) {
       const errMsg = error.message || String(error);
-      console.error(`[TX] Broadcast failed for ${session.verusId}:`, errMsg);
+      logger.error({ err: error, verusId: session.verusId }, 'Broadcast failed');
 
       // RPC errors (daemon received request but rejected the TX) → 400
       if (errMsg.includes('RPC error:')) {
@@ -330,7 +331,7 @@ export async function transactionRoutes(fastify: FastifyInstance): Promise<void>
         });
       }
 
-      console.error('[TX] getrawtransaction error:', error.message);
+      logger.error({ err: error, txid }, 'getrawtransaction error');
       return reply.code(502).send({
         error: { code: 'RPC_ERROR', message: 'Failed to fetch transaction status' },
       });

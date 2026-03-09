@@ -39,6 +39,7 @@ import helmet from '@fastify/helmet';
 import compress from '@fastify/compress';
 import { initNonceStore } from '../auth/nonce-store.js';
 import { initSocketServer, setSafeChatEngine, setOutputScanEngine } from '../chat/ws-server.js';
+import { logger } from '../utils/logger.js';
 
 export async function createServer() {
   const isProduction = process.env.NODE_ENV === 'production';
@@ -255,12 +256,12 @@ export async function startServer() {
       port: config.api.port,
       host: config.api.host,
     });
-    console.log(`[API] Server listening on http://${config.api.host}:${config.api.port}`);
+    logger.info({ host: config.api.host, port: config.api.port }, 'API server listening');
 
     // Initialize Socket.IO on the underlying HTTP server
     const httpServer = server.server;
     const io = initSocketServer(httpServer);
-    console.log('[Chat] Socket.IO server initialized on /ws');
+    logger.info('Socket.IO server initialized on /ws');
 
     // Initialize SafeChat engine (HTTP API → local module → none)
     try {
@@ -271,7 +272,7 @@ export async function startServer() {
         setOutputScanEngine(provider);
       }
     } catch (err) {
-      console.warn('[Chat] SafeChat initialization failed:', (err as Error).message);
+      logger.warn({ err: (err as Error).message }, 'SafeChat initialization failed');
     }
 
     return server;

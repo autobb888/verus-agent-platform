@@ -1,4 +1,5 @@
 import Database from 'better-sqlite3';
+import { logger } from '../utils/logger.js';
 
 export function runMigrations(db: Database.Database): void {
   // Create agents table
@@ -474,10 +475,10 @@ export function runMigrations(db: Database.Database): void {
         CREATE INDEX IF NOT EXISTS idx_inbox_type ON inbox(type);
         CREATE INDEX IF NOT EXISTS idx_inbox_expires ON inbox(expires_at);
       `);
-      console.log('[Migrations] Inbox table recreated with updated type CHECK constraint');
+      logger.info('Inbox table recreated with updated type CHECK constraint');
     }
   } catch (err) {
-    console.error('[Migrations] Inbox migration error:', err);
+    logger.error({ err }, 'Inbox migration error');
   }
 
   // Phase 6d: Webhooks for agent notifications
@@ -723,4 +724,5 @@ export function runMigrations(db: Database.Database): void {
   // Missing cleanup indexes (T3-9)
   db.exec(`CREATE INDEX IF NOT EXISTS idx_chat_tokens_expires ON chat_tokens(expires_at)`);
   db.exec(`CREATE INDEX IF NOT EXISTS idx_qr_challenges_expires ON qr_challenges(expires_at)`);
+  db.exec(`CREATE INDEX IF NOT EXISTS idx_auth_challenges_expires ON auth_challenges(expires_at)`);
 }

@@ -15,6 +15,7 @@ import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { v4 as uuidv4 } from 'uuid';
 import { getDatabase } from '../../db/index.js';
 import { getSessionFromRequest } from './auth.js';
+import { logger } from '../../utils/logger.js';
 
 async function requireAuth(request: FastifyRequest, reply: FastifyReply) {
   const session = getSessionFromRequest(request);
@@ -74,7 +75,7 @@ export async function canaryRoutes(fastify: FastifyInstance): Promise<void> {
     const id = uuidv4();
     insertCanary.run(id, session.verusId, token, format || 'safechat-canary-v1');
 
-    console.log(`[Canary] Registered for ${session.verusId}: ${token.substring(0, 10)}...`);
+    logger.info({ verusId: session.verusId, tokenPreview: token.substring(0, 10) }, 'Canary token registered');
 
     return reply.code(201).send({ id, status: 'registered' });
   });
@@ -157,7 +158,7 @@ export async function canaryRoutes(fastify: FastifyInstance): Promise<void> {
       });
     }
 
-    console.log(`[Policy] ${session.verusId} set communication policy to: ${policy}`);
+    logger.info({ verusId: session.verusId, policy }, 'Communication policy updated');
 
     return reply.send({
       status: 'updated',

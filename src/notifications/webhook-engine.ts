@@ -12,6 +12,7 @@ import { createHmac } from 'crypto';
 import { webhookQueries, webhookDeliveryQueries } from '../db/index.js';
 import { ssrfSafeFetch } from '../utils/ssrf-fetch.js';
 import { decryptSecret } from '../utils/crypto.js';
+import { logger } from '../utils/logger.js';
 
 export type WebhookEventType = 
   | 'job.requested'
@@ -57,7 +58,7 @@ export function emitWebhookEvent(event: WebhookEvent): void {
       });
     }
   } catch (err) {
-    console.error('[Webhooks] Failed to queue event:', err);
+    logger.error({ err }, 'Failed to queue webhook event');
   }
 }
 
@@ -119,7 +120,7 @@ export function startWebhookEngine(): void {
     try {
       await processWebhookQueue();
     } catch (err) {
-      console.error('[Webhooks] Queue processing error:', err);
+      logger.error({ err }, 'Webhook queue processing error');
     }
   }, 5000);
   deliveryInterval.unref();
@@ -132,7 +133,7 @@ export function startWebhookEngine(): void {
   }, 24 * 60 * 60 * 1000);
   cleanupInterval.unref();
 
-  console.log('[Webhooks] Delivery engine started');
+  logger.info('Webhook delivery engine started');
 }
 
 export function stopWebhookEngine(): void {

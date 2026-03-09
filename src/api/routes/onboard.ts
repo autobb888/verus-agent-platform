@@ -42,6 +42,7 @@ import { getRpcClient } from '../../indexer/rpc-client.js';
 import { isReservedName } from '../../utils/reserved-names.js';
 import { hasHomoglyphAttack } from '../../utils/homoglyph.js';
 import { config } from '../../config/index.js';
+import { logger } from '../../utils/logger.js';
 
 // HMAC secret for challenge tokens (P2-SDK-12)
 const CHALLENGE_SECRET = process.env.ONBOARD_CHALLENGE_SECRET || (process.env.COOKIE_SECRET ? createHash('sha256').update(process.env.COOKIE_SECRET).digest('hex') : '');
@@ -104,7 +105,7 @@ async function verifyOnboardSignatureViaRPC(address: string, challenge: string, 
   // Fall back to bitcoinjs-message verification (same as auth.ts login fallback)
   try {
     if (bitcoinMessage.verify(challenge, address, signature, '\x15Verus signed data:\n')) {
-      console.log('[Onboard] bitcoinjs-message verification matched for', address);
+      logger.info({ address }, 'bitcoinjs-message verification matched');
       return true;
     }
   } catch {
@@ -116,7 +117,7 @@ async function verifyOnboardSignatureViaRPC(address: string, challenge: string, 
     try {
       return verifySignatureLocally(address, challenge, signature, pubkey);
     } catch (e) {
-      console.error('[Onboard] Local verify threw:', e);
+      logger.error({ err: e }, 'Local verify threw');
       return false;
     }
   }
@@ -154,7 +155,7 @@ export function verifySignatureLocally(_address: string, message: string, signat
     // compact sig format: [header, r(32), s(32)]
     return secp256k1.verify(sigBuf.slice(1), messageHash, expectedPubkey, { prehash: false });
   } catch (e) {
-    console.error('[Onboard] Local signature verification error:', e);
+    logger.error({ err: e }, 'Local signature verification error');
     return false;
   }
 }
@@ -377,7 +378,7 @@ export async function onboardRoutes(fastify: FastifyInstance): Promise<void> {
     } catch (error: any) {
       // "Identity not found" is expected — means the name is available
       if (!error.message.includes('Identity not found') && !error.message.includes('identity not found')) {
-        console.error('[Onboard] RPC error checking identity:', error.message);
+        logger.error({ err: error }, 'RPC error checking identity');
         return reply.code(502).send({
           error: { code: 'RPC_ERROR', message: 'Failed to check name availability' },
         });
@@ -405,11 +406,11 @@ export async function onboardRoutes(fastify: FastifyInstance): Promise<void> {
     }
     dailyCount++;
 
-    console.log(`[Onboard] New request: ${lowerName}.${PARENT_IDENTITY} → ${address} (${onboardId})`);
+    logger.info({ name: lowerName, address, onboardId }, 'New onboard request');
 
     // --- Start async registration process ---
     processRegistration(onboardId, lowerName, address, pubkey || '').catch(err => {
-      console.error(`[Onboard] Registration failed for ${onboardId}:`, err.message);
+      logger.error({ err, onboardId }, 'Registration failed');
       updateOnboardFailed.run(err.message, onboardId);
     });
 
@@ -531,7 +532,7 @@ export async function onboardRoutes(fastify: FastifyInstance): Promise<void> {
 
     // Resume: call registeridentity directly
     const doRegister = async () => {
-      console.log(`[Onboard] ${id}: Retrying registeridentity for "${row.name}"...`);
+      logger.info({ onboardId: id, name: row.name }, 'Retrying registeridentity');
       const registerResult = await rpc.rpcCall('registeridentity', [{
         txid: row.commitment_txid,
         namereservation,
@@ -552,7 +553,7 @@ export async function onboardRoutes(fastify: FastifyInstance): Promise<void> {
 
       const regTxid = typeof registerResult === 'string' ? registerResult : (registerResult as any)?.txid || '';
       updateOnboardRegistered.run(regTxid, `${row.name}.${PARENT_IDENTITY}`, iAddress, id);
-      console.log(`[Onboard] ${id}: ✅ Retry registered ${row.name}.${PARENT_IDENTITY} (${iAddress})`);
+      logger.info({ onboardId: id, identity: `${row.name}.${PARENT_IDENTITY}`, iAddress }, 'Retry registered successfully');
 
       // Auto-fund (only if not already funded)
       const alreadyFunded = db.prepare('SELECT fund_txid FROM onboard_requests WHERE id = ? AND fund_txid IS NOT NULL').get(id) as any;
@@ -566,7 +567,7 @@ export async function onboardRoutes(fastify: FastifyInstance): Promise<void> {
     };
 
     doRegister().catch(err => {
-      console.error(`[Onboard] Retry failed for ${id}:`, err.message);
+      logger.error({ err, onboardId: id }, 'Retry failed');
       updateOnboardFailed.run(err.message, id);
     });
 
@@ -590,7 +591,7 @@ export async function onboardRoutes(fastify: FastifyInstance): Promise<void> {
   ): Promise<void> {
     // Step 1: Register name commitment
     updateOnboardStatus.run('committing', onboardId);
-    console.log(`[Onboard] ${onboardId}: Calling registernamecommitment for "${name}"...`);
+    logger.info({ onboardId, name }, 'Calling registernamecommitment');
 
     let commitResult: any;
     try {
@@ -614,16 +615,16 @@ export async function onboardRoutes(fastify: FastifyInstance): Promise<void> {
     updateOnboardCommit.run(commitResult.txid, onboardId);
     // Store full commitment data for retry capability
     db.prepare(`UPDATE onboard_requests SET commitment_data = ? WHERE id = ?`).run(JSON.stringify(commitResult), onboardId);
-    console.log(`[Onboard] ${onboardId}: Commitment txid: ${commitResult.txid}`);
+    logger.info({ onboardId, txid: commitResult.txid }, 'Commitment submitted');
 
     // Step 2: Wait for 1 block confirmation
     updateOnboardStatus.run('confirming', onboardId);
-    console.log(`[Onboard] ${onboardId}: Waiting for block confirmation...`);
+    logger.info({ onboardId }, 'Waiting for block confirmation');
 
     await waitForConfirmation(commitResult.txid, 300_000); // 5 min timeout (testnet blocks can be slow)
 
     // Step 3: Register identity
-    console.log(`[Onboard] ${onboardId}: Calling registeridentity...`);
+    logger.info({ onboardId }, 'Calling registeridentity');
 
     let registerResult: any;
     try {
@@ -645,7 +646,7 @@ export async function onboardRoutes(fastify: FastifyInstance): Promise<void> {
     }
 
     // Step 4: Get the new identity's i-address with retry
-    console.log(`[Onboard] ${onboardId}: Looking up i-address for ${name}.${PARENT_IDENTITY}...`);
+    logger.info({ onboardId, identity: `${name}.${PARENT_IDENTITY}` }, 'Looking up i-address');
 
     let iAddress = '';
     let iAddressAttempts = 0;
@@ -656,44 +657,44 @@ export async function onboardRoutes(fastify: FastifyInstance): Promise<void> {
         const identity = await rpc.getIdentity(`${name}.${PARENT_IDENTITY}`);
         iAddress = identity?.identity?.identityaddress || '';
         if (iAddress) {
-          console.log(`[Onboard] ${onboardId}: Got i-address: ${iAddress}`);
+          logger.info({ onboardId, iAddress }, 'Got i-address');
           break;
         }
       } catch (err: any) {
         // Identity not found yet - keep retrying
         if (!err.message?.includes('not found') && !err.message?.includes('Identity not found')) {
-          console.warn(`[Onboard] ${onboardId}: RPC error getting identity: ${err.message}`);
+          logger.warn({ onboardId, err }, 'RPC error getting identity');
         }
       }
 
       iAddressAttempts++;
       if (iAddressAttempts % 6 === 0) { // Log every minute
-        console.log(`[Onboard] ${onboardId}: Still waiting for i-address... (${Math.round(iAddressAttempts * 10 / 60)}min elapsed)`);
+        logger.info({ onboardId, elapsedMin: Math.round(iAddressAttempts * 10 / 60) }, 'Still waiting for i-address');
       }
       await sleep(10_000);
     }
 
     if (!iAddress) {
-      console.error(`[Onboard] ${onboardId}: Could not get i-address after ${maxIAddressAttempts} attempts (~15 min)`);
+      logger.error({ onboardId, attempts: maxIAddressAttempts }, 'Could not get i-address after max attempts');
       iAddress = 'pending-lookup';
     }
 
     const registerTxid = typeof registerResult === 'string' ? registerResult : registerResult?.txid || '';
     updateOnboardRegistered.run(registerTxid, `${name}.${PARENT_IDENTITY}`, iAddress, onboardId);
-    console.log(`[Onboard] ${onboardId}: ✅ Registered ${name}.${PARENT_IDENTITY} (${iAddress})`);
+    logger.info({ onboardId, identity: `${name}.${PARENT_IDENTITY}`, iAddress }, 'Registered successfully');
 
     // Step 5: Auto-fund the new agent with startup VRSCTEST
     // Enough for ~30+ contentmultimap updates
     const STARTUP_FUND = 0.0033;
     try {
       const fundTxid = await rpc.rpcCall<string>('sendtoaddress', [address, STARTUP_FUND]);
-      console.log(`[Onboard] ${onboardId}: Funded ${address} with ${STARTUP_FUND} VRSCTEST (txid: ${fundTxid})`);
+      logger.info({ onboardId, address, amount: STARTUP_FUND, txid: fundTxid }, 'Funded agent');
       // Track the funded amount for first-job recoup
       db.prepare(`UPDATE onboard_requests SET funded_amount = ?, fund_txid = ? WHERE id = ?`)
         .run(STARTUP_FUND, fundTxid, onboardId);
     } catch (fundError: any) {
       // Non-fatal — agent just won't have gas yet
-      console.error(`[Onboard] ${onboardId}: Failed to fund: ${fundError.message}`);
+      logger.error({ err: fundError, onboardId }, 'Failed to fund agent');
     }
   }
 
