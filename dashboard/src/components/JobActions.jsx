@@ -96,6 +96,39 @@ function PaymentQR({ jobId, type, amount, currency, onTxDetected }) {
     );
   }
 
+  // Combined type: no QR (multi-output TX), show CLI command and addresses
+  if (type === 'combined' && qrData.sendcurrencyParams) {
+    return (
+      <div className="flex flex-col items-center gap-3">
+        <p className="text-xs text-center" style={{ color: 'var(--text-tertiary)' }}>
+          Send a single transaction paying both agent and platform fee ({qrData.totalAmount?.toFixed?.(4)} {currency} total)
+        </p>
+        <div className="w-full space-y-2">
+          <div className="bg-gray-950 rounded p-2">
+            <p className="text-xs text-gray-400 mb-1">Agent: {qrData.agentPayment?.amount?.toFixed?.(4)} {currency}</p>
+            <p className="text-xs font-mono break-all" style={{ color: 'var(--text-secondary)' }}>{qrData.agentPayment?.address}</p>
+          </div>
+          <div className="bg-gray-950 rounded p-2">
+            <p className="text-xs text-gray-400 mb-1">Platform fee: {qrData.feePayment?.amount?.toFixed?.(4)} {currency}</p>
+            <p className="text-xs font-mono break-all" style={{ color: 'var(--text-secondary)' }}>{qrData.feePayment?.address}</p>
+          </div>
+        </div>
+        <div className="w-full">
+          <p className="text-xs text-gray-400 mb-1">Verus CLI command:</p>
+          <div className="bg-gray-950 rounded p-3 font-mono text-xs text-verus-blue break-all whitespace-pre-wrap select-all">
+            {qrData.cliCommand}
+          </div>
+        </div>
+        {polling && (
+          <div className="flex items-center gap-2 text-xs" style={{ color: 'var(--text-tertiary)' }}>
+            <div className="animate-spin rounded-full h-3 w-3 border-b border-verus-blue"></div>
+            Waiting for payment...
+          </div>
+        )}
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-col items-center gap-3">
       <div className="bg-white p-3 rounded-lg">
@@ -277,8 +310,8 @@ export default function JobActions({ job, onUpdate, autoOpenPayment, onAutoOpenC
         return; // Don't close panel
       }
 
-      // After platform-fee succeeds and job is in_progress, notify parent
-      if (action === 'platform-fee' && data.data?.status === 'in_progress') {
+      // After platform-fee or payment-combined succeeds and job is in_progress, notify parent
+      if ((action === 'platform-fee' || action === 'payment-combined') && data.data?.status === 'in_progress') {
         setSignPanel(null);
         setSignatureInput('');
         if (onUpdate) onUpdate();
@@ -322,18 +355,27 @@ export default function JobActions({ job, onUpdate, autoOpenPayment, onAutoOpenC
           </button>
         )}
 
-        {/* Buyer: Submit agent payment */}
+        {/* Buyer: Payment options (two-step or combined) */}
         {isBuyer && job.status === 'accepted' && !job.payment?.txid && !signPanel && (
-          <button
-            onClick={() => { setSignPanel({ action: 'payment', type: 'txid' }); setSignatureInput(''); }}
-            disabled={loading}
-            className="btn-primary text-sm"
-          >
-            Pay Agent ({job.amount} {job.currency})
-          </button>
+          <>
+            <button
+              onClick={() => { setSignPanel({ action: 'payment-combined', type: 'combined-txid' }); setSignatureInput(''); }}
+              disabled={loading}
+              className="btn-primary text-sm"
+            >
+              Pay All in One TX
+            </button>
+            <button
+              onClick={() => { setSignPanel({ action: 'payment', type: 'txid' }); setSignatureInput(''); }}
+              disabled={loading}
+              className="btn-secondary text-sm"
+            >
+              Pay in 2 Steps
+            </button>
+          </>
         )}
 
-        {/* Buyer: Submit platform fee */}
+        {/* Buyer: Submit platform fee (step 2 of 2-step flow) */}
         {isBuyer && job.status === 'accepted' && job.payment?.txid && !job.payment?.platformFeeTxid && !signPanel && (
           <button
             onClick={() => { setSignPanel({ action: 'platform-fee', type: 'fee-txid' }); setSignatureInput(''); }}
@@ -377,22 +419,31 @@ export default function JobActions({ job, onUpdate, autoOpenPayment, onAutoOpenC
           </button>
         )}
 
-        {/* Buyer: Complete */}
+        {/* Buyer: Complete or Reject Delivery */}
         {isBuyer && job.status === 'delivered' && !signPanel && (
-          <button
-            onClick={() => {
-              const ts = Math.floor(Date.now() / 1000);
-              const msg = `VAP-COMPLETE|Job:${job.jobHash}|Ts:${ts}|I confirm the work has been delivered satisfactorily.`;
-              const idName = user?.identityName ? `${user.identityName}@` : 'yourID@';
-              const cmd = buildSignCmd(idName, msg);
-              setSignPanel({ action: 'complete', message: msg, command: cmd, timestamp: ts });
-              setSignatureInput('');
-            }}
-            disabled={loading}
-            className="btn-primary text-sm"
-          >
-            Confirm Complete
-          </button>
+          <>
+            <button
+              onClick={() => {
+                const ts = Math.floor(Date.now() / 1000);
+                const msg = `VAP-COMPLETE|Job:${job.jobHash}|Ts:${ts}|I confirm the work has been delivered satisfactorily.`;
+                const idName = user?.identityName ? `${user.identityName}@` : 'yourID@';
+                const cmd = buildSignCmd(idName, msg);
+                setSignPanel({ action: 'complete', message: msg, command: cmd, timestamp: ts });
+                setSignatureInput('');
+              }}
+              disabled={loading}
+              className="btn-primary text-sm"
+            >
+              Confirm Complete
+            </button>
+            <button
+              onClick={() => { setSignPanel({ action: 'reject-delivery', type: 'reject-delivery' }); setSignatureInput(''); }}
+              disabled={loading}
+              className="btn-danger text-sm"
+            >
+              Reject Delivery
+            </button>
+          </>
         )}
 
         {/* Cancel (buyer, requested only) */}
@@ -411,7 +462,7 @@ export default function JobActions({ job, onUpdate, autoOpenPayment, onAutoOpenC
       </div>
 
       {/* Sign Panel (accept/complete) */}
-      {signPanel && signPanel.type !== 'txid' && signPanel.type !== 'delivery' && (
+      {signPanel && !['txid', 'delivery', 'fee-txid', 'extension', 'combined-txid', 'reject-delivery'].includes(signPanel.type) && (
         <div className="bg-gray-900 rounded-lg p-4 space-y-3 border border-gray-700">
           <h4 className="text-white font-medium text-sm">Sign to {signPanel.action}</h4>
           <p className="text-gray-400 text-xs">Run this command in Verus CLI or Desktop console, then paste the <strong>signature</strong> value below.</p>
@@ -577,6 +628,75 @@ export default function JobActions({ job, onUpdate, autoOpenPayment, onAutoOpenC
           onSubmit={(body) => handleAction('deliver', body)}
           onCancel={() => { setSignPanel(null); setSignatureInput(''); }}
         />
+      )}
+
+      {/* Combined Payment Panel (single TX for both agent + fee) */}
+      {signPanel && signPanel.type === 'combined-txid' && (
+        <div className="bg-gray-900 rounded-lg p-4 space-y-3 border border-gray-700">
+          <h4 className="text-white font-medium text-sm">Combined Payment (Agent + Platform Fee)</h4>
+          <p className="text-gray-400 text-xs">
+            Send a single transaction that pays both the agent and the platform fee.
+            Use the <code>sendcurrency</code> command below to create a multi-output transaction.
+          </p>
+
+          <PaymentQR
+            jobId={job.id}
+            type="combined"
+            amount={job.amount}
+            currency={job.currency}
+            onTxDetected={(txid) => setSignatureInput(txid)}
+          />
+
+          <div>
+            <label className="block text-xs text-gray-400 mb-1">Transaction ID (64-char hex) — paste after sending</label>
+            <input
+              type="text" value={signatureInput} onChange={(e) => setSignatureInput(e.target.value)}
+              className="w-full bg-gray-950 border border-gray-700 rounded-lg px-3 py-2 text-white font-mono text-sm focus:border-verus-blue focus:outline-none"
+              placeholder="abc123def456..."
+            />
+          </div>
+          <div className="flex gap-2">
+            <button
+              onClick={() => { handleAction('payment-combined', { txid: signatureInput.trim() }); }}
+              disabled={!signatureInput.trim() || loading}
+              className="btn-primary text-sm"
+            >
+              {loading ? 'Verifying...' : 'Submit Combined Payment'}
+            </button>
+            <button onClick={() => { setSignPanel(null); setSignatureInput(''); }} className="btn-secondary text-sm">Cancel</button>
+          </div>
+        </div>
+      )}
+
+      {/* Reject Delivery Panel */}
+      {signPanel && signPanel.type === 'reject-delivery' && (
+        <div className="bg-gray-900 rounded-lg p-4 space-y-3 border border-gray-700">
+          <h4 className="text-white font-medium text-sm">Reject Delivery</h4>
+          <p className="text-gray-400 text-xs">
+            Send the work back to the agent. Provide a reason so they know what needs to be fixed.
+          </p>
+          <div>
+            <label className="block text-xs text-gray-400 mb-1">Reason</label>
+            <textarea
+              value={signatureInput}
+              onChange={(e) => setSignatureInput(e.target.value)}
+              rows={3}
+              maxLength={1000}
+              className="w-full bg-gray-950 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm focus:border-verus-blue focus:outline-none"
+              placeholder="Describe what needs to be fixed..."
+            />
+          </div>
+          <div className="flex gap-2">
+            <button
+              onClick={() => { handleAction('reject-delivery', { reason: signatureInput.trim() }); }}
+              disabled={!signatureInput.trim() || loading}
+              className="btn-danger text-sm"
+            >
+              {loading ? 'Submitting...' : 'Reject Delivery'}
+            </button>
+            <button onClick={() => { setSignPanel(null); setSignatureInput(''); }} className="btn-secondary text-sm">Cancel</button>
+          </div>
+        </div>
       )}
     </div>
   );

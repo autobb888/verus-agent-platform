@@ -24,6 +24,7 @@ export type WebhookEventType =
   | 'job.disputed'
   | 'job.cancelled'
   | 'job.started'
+  | 'job.delivery_rejected'
   | 'job.extension_request'
   | 'job.end_session_request'
   | 'message.new'

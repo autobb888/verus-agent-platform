@@ -17,6 +17,7 @@ import * as bitcoinMessage from 'bitcoinjs-message';
 import { getDatabase } from '../../db/index.js';
 import { getRpcClient } from '../../indexer/rpc-client.js';
 import { logger } from '../../utils/logger.js';
+import { authAttempts } from '../../utils/metrics.js';
 
 // Session lifetime: 1 hour
 const SESSION_LIFETIME_MS = 60 * 60 * 1000;
@@ -178,15 +179,17 @@ export async function authRoutes(fastify: FastifyInstance): Promise<void> {
     const ip = request.ip;
     
     if (!checkRateLimit(ip)) {
-      return reply.code(429).send({ 
+      authAttempts.inc({ result: 'failure' });
+      return reply.code(429).send({
         error: { code: 'RATE_LIMITED', message: 'Too many requests, try again later' }
       });
     }
-    
+
     // Validate request
     const parsed = loginSchema.safeParse(request.body);
     if (!parsed.success) {
-      return reply.code(400).send({ 
+      authAttempts.inc({ result: 'failure' });
+      return reply.code(400).send({
         error: {
           code: 'VALIDATION_ERROR',
           message: 'Invalid request',
@@ -215,6 +218,7 @@ export async function authRoutes(fastify: FastifyInstance): Promise<void> {
       })();
 
       if (!challengeRow) {
+        authAttempts.inc({ result: 'failure' });
         return reply.code(400).send({
           error: { code: 'INVALID_CHALLENGE', message: 'Invalid or expired challenge' }
         });
@@ -269,6 +273,7 @@ export async function authRoutes(fastify: FastifyInstance): Promise<void> {
       
       if (!isValid) {
         fastify.log.warn({ verusId }, 'Invalid signature (both RPC and local)');
+        authAttempts.inc({ result: 'failure' });
         return reply.code(401).send({
           error: { code: 'INVALID_SIGNATURE', message: 'Signature verification failed' }
         });
@@ -313,7 +318,8 @@ export async function authRoutes(fastify: FastifyInstance): Promise<void> {
       reply.setCookie(SESSION_COOKIE, sessionId, cookieOpts());
       
       fastify.log.info({ verusId, identityAddress, identityName }, 'User logged in');
-      
+      authAttempts.inc({ result: 'success' });
+
       return {
         data: {
           success: true,

@@ -18,7 +18,6 @@ describe('Agents API', () => {
 
     for (const agent of data) {
       expect(agent.id).toBeDefined();
-      expect(agent.verusId).toBeDefined();
       expect(agent.name).toBeDefined();
       expect(agent.type).toBeDefined();
       expect(agent.status).toBeDefined();

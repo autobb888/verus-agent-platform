@@ -21,6 +21,7 @@ import { getRpcClient } from '../../indexer/rpc-client.js';
 import { getSessionFromRequest } from './auth.js';
 import { getIO } from '../../chat/ws-server.js';
 import { logger } from '../../utils/logger.js';
+import { jobsCreated, jobsCompleted, paymentsVerified } from '../../utils/metrics.js';
 
 import { RateLimiter } from '../../utils/rate-limiter.js';
 
@@ -558,6 +559,7 @@ export async function jobRoutes(fastify: FastifyInstance): Promise<void> {
       delivered_at: null,
       completed_at: null,
     });
+    jobsCreated.inc();
 
     // Notify seller via inbox
     const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
@@ -938,6 +940,13 @@ export async function jobRoutes(fastify: FastifyInstance): Promise<void> {
       });
     }
 
+    // Enforce platform fee was paid before allowing completion
+    if (!job.platform_fee_txid) {
+      return reply.code(400).send({
+        error: { code: 'FEE_REQUIRED', message: 'Platform fee must be paid before completing the job' },
+      });
+    }
+
     // Verify signature
     const expectedMessage = generateCompletionMessage(job.job_hash, timestamp);
     const rpc = getRpcClient();
@@ -996,6 +1005,7 @@ export async function jobRoutes(fastify: FastifyInstance): Promise<void> {
     });
 
     fastify.log.info({ jobId: id, buyer: session.verusId }, 'Job completed');
+    jobsCompleted.inc();
     emitWebhookEvent({ type: 'job.completed', agentVerusId: job.seller_verus_id, jobId: id, data: { buyerVerusId: session.verusId } });
     createNotification({ recipientVerusId: job.seller_verus_id, type: 'job.completed', title: 'Job Completed', body: 'The buyer has confirmed job completion', jobId: id });
 
@@ -1036,6 +1046,78 @@ export async function jobRoutes(fastify: FastifyInstance): Promise<void> {
       // Non-critical — log and continue
       fastify.log.warn({ error: err.message }, 'Startup recoup check failed');
     }
+
+    const updated = jobQueries.getById(id);
+    return { data: formatJob(updated!) };
+  });
+
+  /**
+   * POST /v1/jobs/:id/reject-delivery
+   * Buyer rejects delivery, returning job to in_progress so seller can rework
+   */
+  const rejectDeliveryLimiter = new RateLimiter(60 * 60 * 1000, 5); // 5 per hour per buyer
+  fastify.post('/v1/jobs/:id/reject-delivery', { preHandler: requireAuth }, async (request, reply) => {
+    const session = (request as any).session as { verusId: string; identityName: string | null };
+    const { id } = request.params as { id: string };
+
+    const rejectSchema = z.object({
+      reason: z.string().min(1).max(2000),
+    });
+
+    const parsed = rejectSchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.code(400).send({
+        error: { code: 'VALIDATION_ERROR', message: 'Reason is required', details: parsed.error.errors },
+      });
+    }
+
+    if (!rejectDeliveryLimiter.check(session.verusId)) {
+      return reply.code(429).send({ error: { code: 'RATE_LIMITED', message: 'Too many rejection attempts' } });
+    }
+
+    const job = jobQueries.getById(id);
+    if (!job) {
+      return reply.code(404).send({ error: { code: 'NOT_FOUND', message: 'Job not found' } });
+    }
+    if (job.buyer_verus_id !== session.verusId) {
+      return reply.code(403).send({ error: { code: 'FORBIDDEN', message: 'Only the buyer can reject delivery' } });
+    }
+    if (job.status !== 'delivered') {
+      return reply.code(400).send({ error: { code: 'INVALID_STATUS', message: `Cannot reject delivery in status: ${job.status}` } });
+    }
+
+    // Move back to in_progress
+    const db = getDatabase();
+    const result = db.prepare(`
+      UPDATE jobs SET status = 'in_progress', updated_at = datetime('now')
+      WHERE id = ? AND status = 'delivered' AND buyer_verus_id = ?
+    `).run(id, session.verusId);
+
+    if (result.changes === 0) {
+      return reply.code(409).send({ error: { code: 'STATE_CONFLICT', message: 'Job was modified by another request' } });
+    }
+
+    const { reason } = parsed.data;
+    fastify.log.info({ jobId: id, buyer: session.verusId, reason }, 'Delivery rejected');
+
+    // Send chat message about rejection
+    db.prepare(`
+      INSERT INTO job_messages (id, job_id, sender_verus_id, content, type, created_at)
+      VALUES (?, ?, ?, ?, 'system', datetime('now'))
+    `).run(randomUUID(), id, session.verusId, `Delivery rejected: ${reason}`);
+
+    // Notify seller
+    createNotification({
+      recipientVerusId: job.seller_verus_id,
+      type: 'job.delivery_rejected',
+      title: 'Delivery Rejected',
+      body: reason,
+      jobId: id,
+    });
+    emitWebhookEvent({ type: 'job.delivery_rejected', agentVerusId: job.seller_verus_id, jobId: id, data: { reason } });
+
+    const io = getIO();
+    if (io) io.to(`job:${id}`).emit('job_status_changed', { jobId: id, status: 'in_progress' });
 
     const updated = jobQueries.getById(id);
     return { data: formatJob(updated!) };
@@ -1389,6 +1471,7 @@ export async function jobRoutes(fastify: FastifyInstance): Promise<void> {
       const confirmations = rawTx.confirmations || 0;
       if (confirmations >= 6) {
         paymentVerified = 1;
+        paymentsVerified.inc({ type: 'agent' });
         verificationNote = `Verified on-chain with ${confirmations} confirmations`;
       } else if (confirmations >= 1) {
         paymentVerified = 0; // Not fully verified yet
@@ -1532,6 +1615,7 @@ export async function jobRoutes(fastify: FastifyInstance): Promise<void> {
         verificationNote = `Fee amount ${feeAmount} is less than expected ${expectedFee}`;
       } else if (confirmations >= 6) {
         feeVerified = 1;
+        paymentsVerified.inc({ type: 'fee' });
         verificationNote = `Verified with ${confirmations} confirmations`;
       } else {
         verificationNote = `Found with ${confirmations} confirmations (needs 6+)`;
@@ -1569,6 +1653,140 @@ export async function jobRoutes(fastify: FastifyInstance): Promise<void> {
       const ioFee = getIO();
       if (ioFee) ioFee.to(`job:${id}`).emit('job_status_changed', { jobId: id, status: 'in_progress' });
     }
+
+    return { data: formatJob(updatedJob), meta: { verificationNote } };
+  });
+
+  /**
+   * POST /v1/jobs/:id/payment-combined
+   * Record a single TX that pays BOTH agent and platform fee
+   * (e.g., sendcurrency with array of outputs)
+   */
+  fastify.post('/v1/jobs/:id/payment-combined', { preHandler: requireAuth }, async (request, reply) => {
+    const session = (request as any).session as { verusId: string; identityName: string | null };
+    const { id } = request.params as { id: string };
+
+    const job = jobQueries.getById(id);
+    if (!job) {
+      return reply.code(404).send({ error: { code: 'NOT_FOUND', message: 'Job not found' } });
+    }
+    if (job.buyer_verus_id !== session.verusId) {
+      return reply.code(403).send({ error: { code: 'FORBIDDEN', message: 'Only the buyer can record payment' } });
+    }
+
+    const schema = z.object({
+      txid: z.string().min(1).max(100).regex(/^[a-fA-F0-9]{64}$/, 'Invalid transaction hash format'),
+    });
+    const parsed = schema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.code(400).send({ error: { code: 'VALIDATION_ERROR', message: 'Invalid txid format' } });
+    }
+
+    const { txid } = parsed.data;
+    const rpc = getRpcClient();
+    const db = getDatabase();
+    let paymentVerified = 0;
+    let feeVerified = 0;
+    let verificationNote = '';
+
+    // Check txid reuse
+    const existingPayment = db.prepare('SELECT id FROM jobs WHERE (payment_txid = ? OR platform_fee_txid = ?) AND id != ?').get(txid, txid, id) as any;
+    if (existingPayment) {
+      return reply.code(409).send({ error: { code: 'TXID_ALREADY_USED', message: 'This transaction ID is already used by another job' } });
+    }
+
+    try {
+      const rawTx = await rpc.getTransaction(txid);
+      if (!rawTx) {
+        return reply.code(400).send({ error: { code: 'TX_NOT_FOUND', message: 'Transaction not found on chain' } });
+      }
+
+      const confirmations = rawTx.confirmations || 0;
+      const sellerAddress = job.payment_address || job.seller_verus_id;
+
+      // Calculate expected fee
+      const dt = db.prepare('SELECT * FROM job_data_terms WHERE job_id = ?').get(id) as any;
+      const feeRate = calculateFeeRate(dt ? {
+        allowTraining: dt?.allow_training === 1,
+        allowThirdParty: dt?.allow_third_party === 1,
+        requireDeletionAttestation: dt?.require_deletion_attestation === 1,
+      } : undefined);
+      const expectedFee = job.amount * feeRate;
+
+      // Check both outputs in same TX
+      let agentAmount = 0;
+      let feeAmount = 0;
+      let foundAgent = false;
+      let foundFee = false;
+
+      if (rawTx.vout) {
+        for (const vout of rawTx.vout) {
+          const addresses = vout.scriptPubKey?.addresses || [];
+          if (addresses.includes(sellerAddress)) {
+            agentAmount += vout.value || 0;
+            foundAgent = true;
+          }
+          if (addresses.includes(PLATFORM_FEE_ADDRESS)) {
+            feeAmount += vout.value || 0;
+            foundFee = true;
+          }
+        }
+      }
+
+      const notes: string[] = [];
+
+      if (!foundAgent) {
+        notes.push('No output to seller address');
+      } else if (agentAmount < job.amount) {
+        notes.push(`Agent payment ${agentAmount} < required ${job.amount}`);
+      } else if (confirmations >= 6) {
+        paymentVerified = 1;
+        paymentsVerified.inc({ type: 'combined' });
+        notes.push(`Agent payment verified (${confirmations} confirmations)`);
+      } else {
+        notes.push(`Agent payment found (${confirmations} confirmations, needs 6+)`);
+      }
+
+      if (!foundFee) {
+        notes.push('No output to platform fee address');
+      } else if (feeAmount < expectedFee * 0.99) {
+        notes.push(`Fee ${feeAmount} < expected ${expectedFee.toFixed(4)}`);
+      } else if (confirmations >= 6) {
+        feeVerified = 1;
+        notes.push(`Platform fee verified (${confirmations} confirmations)`);
+      } else {
+        notes.push(`Platform fee found (${confirmations} confirmations, needs 6+)`);
+      }
+
+      verificationNote = notes.join('; ');
+      fastify.log.info({ jobId: id, txid, agentAmount, feeAmount, expectedFee, confirmations, paymentVerified, feeVerified }, 'Combined payment verification');
+    } catch (err: any) {
+      fastify.log.warn({ jobId: id, txid, error: err?.message }, 'Combined payment verification failed');
+      verificationNote = 'Could not verify transaction on-chain';
+    }
+
+    // Record both payments atomically
+    db.transaction(() => {
+      jobQueries.setPayment(id, txid, paymentVerified);
+      jobQueries.setPlatformFee(id, txid, feeVerified);
+      const freshJob = jobQueries.getById(id)!;
+      if (freshJob.status === 'accepted') {
+        db.prepare(`
+          UPDATE jobs SET status = 'in_progress', updated_at = datetime('now') WHERE id = ? AND status = 'accepted'
+        `).run(id);
+      }
+    })();
+
+    const updatedJob = jobQueries.getById(id)!;
+    if (updatedJob.status === 'in_progress') {
+      fastify.log.info({ jobId: id }, 'Job moved to in_progress after combined payment');
+      emitWebhookEvent({ type: 'job.started', agentVerusId: job.seller_verus_id, jobId: id, data: {} });
+      createNotification({ recipientVerusId: job.seller_verus_id, type: 'job.started', title: 'Job Started', body: 'Payment received — job is now in progress', jobId: id });
+      const io = getIO();
+      if (io) io.to(`job:${id}`).emit('job_status_changed', { jobId: id, status: 'in_progress' });
+    }
+
+    emitWebhookEvent({ type: 'job.payment', agentVerusId: job.seller_verus_id, jobId: id, data: { txid, combined: true } });
 
     return { data: formatJob(updatedJob), meta: { verificationNote } };
   });

@@ -4,6 +4,7 @@ import { agentQueries, capabilityQueries, endpointQueries, syncQueries, serviceQ
 import { parseAgentData } from '../validation/vdxf-schema.js';
 import { hasAgentData, hasServiceData, hasReviewData, extractAgentData, extractServiceData, extractServicesArray, extractReviews, extractSessionData } from '../validation/vdxf-keys.js';
 import { logger } from '../utils/logger.js';
+import { indexerBlocksProcessed, indexerLag } from '../utils/metrics.js';
 
 interface IndexerState {
   running: boolean;
@@ -95,6 +96,8 @@ async function processNewBlocks(): Promise<void> {
     syncState = syncQueries.get();
   }
 
+  indexerLag.set(currentHeight - syncState.last_block_height);
+
   if (targetHeight <= syncState.last_block_height) {
     // Nothing new to process
     return;
@@ -123,6 +126,7 @@ async function processNewBlocks(): Promise<void> {
     syncQueries.update(height, block.hash);
     lastHash = block.hash;
     state.lastProcessedBlock = height;
+    indexerBlocksProcessed.inc();
 
     // Log progress every 1000 blocks
     if (height % 1000 === 0) {

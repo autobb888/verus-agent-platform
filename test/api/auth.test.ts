@@ -3,8 +3,8 @@ import { describe, it, expect } from 'vitest';
 const API_URL = process.env.API_URL || 'http://127.0.0.1:3001';
 
 describe('Auth API', () => {
-  it('GET /v1/auth/challenge returns a challenge', async () => {
-    const res = await fetch(`${API_URL}/v1/auth/challenge?verusId=test.agentplatform@`);
+  it('GET /auth/challenge returns a challenge', async () => {
+    const res = await fetch(`${API_URL}/auth/challenge?verusId=test.agentplatform@`);
     expect(res.status).toBe(200);
 
     const body = await res.json();
@@ -13,8 +13,8 @@ describe('Auth API', () => {
     expect(body.data.challenge.length).toBeGreaterThan(0);
   });
 
-  it('POST /v1/auth/login rejects invalid signature', async () => {
-    const res = await fetch(`${API_URL}/v1/auth/login`, {
+  it('POST /auth/login rejects invalid signature', async () => {
+    const res = await fetch(`${API_URL}/auth/login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -27,8 +27,17 @@ describe('Auth API', () => {
     expect([400, 401]).toContain(res.status);
   });
 
-  it('GET /v1/auth/challenge requires verusId param', async () => {
-    const res = await fetch(`${API_URL}/v1/auth/challenge`);
-    expect(res.status).toBe(400);
+  it('GET /auth/challenge works without verusId param', async () => {
+    const res = await fetch(`${API_URL}/auth/challenge`);
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.data.challenge).toBeDefined();
+  });
+
+  it('GET /auth/session returns unauthenticated without cookie', async () => {
+    const res = await fetch(`${API_URL}/auth/session`);
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.data.authenticated).toBe(false);
   });
 });

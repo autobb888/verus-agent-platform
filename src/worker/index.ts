@@ -16,6 +16,7 @@ import {
 import { jobFileQueries } from '../db/index.js';
 import { deleteFile as deleteStoredFile } from '../files/storage.js';
 import { logger } from '../utils/logger.js';
+import { activeJobs } from '../utils/metrics.js';
 
 const POLL_INTERVAL = 30 * 1000; // 30 seconds
 const CHALLENGE_VERIFY_DELAY = 5 * 60 * 1000; // 5 minutes
@@ -129,7 +130,17 @@ async function workerLoop(): Promise<void> {
     } catch (err) {
       logger.error({ err }, 'Challenge cleanup error');
     }
-    
+
+    // 8. Update active jobs gauge
+    try {
+      const { getDatabase } = await import('../db/index.js');
+      const db = getDatabase();
+      const row = db.prepare(`SELECT COUNT(*) as count FROM jobs WHERE status IN ('in_progress', 'delivered')`).get() as any;
+      activeJobs.set(row?.count || 0);
+    } catch (err) {
+      // non-critical
+    }
+
   } catch (error) {
     logger.error({ err: error }, 'Error in worker loop');
   }

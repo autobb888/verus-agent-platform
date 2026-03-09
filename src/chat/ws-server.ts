@@ -14,6 +14,7 @@ import { parse as parseCookie } from 'cookie';
 import { unsign } from 'cookie-signature';
 import { safeJsonParse } from '../utils/safe-json.js';
 import { logger } from '../utils/logger.js';
+import { wsConnections } from '../utils/metrics.js';
 
 // Types
 interface AuthenticatedSocket extends Socket {
@@ -253,6 +254,7 @@ export function initSocketServer(httpServer: HttpServer): SocketIOServer {
     // Track connections
     ipConnections.set(ip, (ipConnections.get(ip) || 0) + 1);
     userConnections.set(socket.verusId, (userConnections.get(socket.verusId) || 0) + 1);
+    wsConnections.inc();
 
     // Auto-join user-level room for per-user events (review notifications, etc.)
     socket.join(`user:${socket.verusId}`);
@@ -661,6 +663,7 @@ export function initSocketServer(httpServer: HttpServer): SocketIOServer {
 
     // Disconnect
     socket.on('disconnect', () => {
+      try { wsConnections.dec(); } catch { /* gauge already at 0 */ }
       clearInterval(revalidateInterval);
       if (socket.sessionTimeout) clearTimeout(socket.sessionTimeout);
       if (socket.sessionWarningTimeout) clearTimeout(socket.sessionWarningTimeout);

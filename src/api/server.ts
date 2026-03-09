@@ -33,6 +33,7 @@ import { canaryRoutes } from './routes/canary.js';
 import { pricingRoutes } from './routes/pricing.js';
 import { attestationRoutes } from './routes/attestations.js';
 import { holdQueueRoutes } from './routes/hold-queue.js';
+import { metricsRoutes } from '../utils/metrics.js';
 import multipart from '@fastify/multipart';
 import fastifyStatic from '@fastify/static';
 import helmet from '@fastify/helmet';
@@ -201,6 +202,7 @@ export async function createServer() {
   await fastify.register(attestationRoutes);
   await fastify.register(profileRoutes);
   await fastify.register(holdQueueRoutes);
+  await fastify.register(metricsRoutes);
 
   // SPA catch-all: serve dashboard/dist in production
   if (isProduction) {

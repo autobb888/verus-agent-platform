@@ -104,8 +104,8 @@ export async function paymentQrRoutes(fastify: FastifyInstance): Promise<void> {
     const { id } = request.params as { id: string };
     const { type = 'agent' } = request.query as { type?: string };
 
-    if (!['agent', 'fee'].includes(type)) {
-      return reply.code(400).send({ error: { code: 'INVALID_TYPE', message: 'type must be "agent" or "fee"' } });
+    if (!['agent', 'fee', 'combined'].includes(type)) {
+      return reply.code(400).send({ error: { code: 'INVALID_TYPE', message: 'type must be "agent", "fee", or "combined"' } });
     }
 
     const job = jobQueries.getById(id);
@@ -120,43 +120,75 @@ export async function paymentQrRoutes(fastify: FastifyInstance): Promise<void> {
 
     const systemId = IS_TESTNET ? VRSCTEST_SYSTEM : VRSC_SYSTEM;
 
-    if (type === 'agent') {
-      const address = job.payment_address || job.seller_verus_id;
-      const invoice = generateInvoice(address, job.amount, systemId, IS_TESTNET);
-      return {
-        data: {
-          type: 'agent',
-          address,
-          amount: job.amount,
-          currency: job.currency,
-          qrString: invoice.qrString,
-          deeplink: invoice.deeplink,
-        },
-      };
-    } else {
-      // Calculate discounted fee based on data terms
-      const db = getDatabase();
-      const dt = db.prepare('SELECT * FROM job_data_terms WHERE job_id = ?').get(id) as any;
-      let feeRate = 0.05;
-      if (dt) {
-        let discount = 0;
-        if (dt.allow_training === 1) discount += 0.10;
-        if (dt.allow_third_party === 1) discount += 0.10;
-        if (dt.require_deletion_attestation === 0) discount += 0.05;
-        feeRate = 0.05 * (1 - discount);
+    // Calculate discounted fee for fee and combined types
+    const db = getDatabase();
+    const dt = db.prepare('SELECT * FROM job_data_terms WHERE job_id = ?').get(id) as any;
+    let feeRate = 0.05;
+    if (dt) {
+      let discount = 0;
+      if (dt.allow_training === 1) discount += 0.10;
+      if (dt.allow_third_party === 1) discount += 0.10;
+      if (dt.require_deletion_attestation === 0) discount += 0.05;
+      feeRate = 0.05 * (1 - discount);
+    }
+    const feeAmount = job.amount * feeRate;
+
+    try {
+      if (type === 'agent') {
+        const address = job.payment_address || job.seller_verus_id;
+        const invoice = generateInvoice(address, job.amount, systemId, IS_TESTNET);
+        return {
+          data: {
+            type: 'agent',
+            address,
+            amount: job.amount,
+            currency: job.currency,
+            qrString: invoice.qrString,
+            deeplink: invoice.deeplink,
+          },
+        };
+      } else if (type === 'fee') {
+        const invoice = generateInvoice(PLATFORM_FEE_ADDRESS, feeAmount, systemId, IS_TESTNET);
+        return {
+          data: {
+            type: 'fee',
+            address: PLATFORM_FEE_ADDRESS,
+            amount: feeAmount,
+            currency: job.currency,
+            qrString: invoice.qrString,
+            deeplink: invoice.deeplink,
+          },
+        };
+      } else {
+        // type === 'combined': return sendcurrency params for both outputs in one TX
+        const agentAddress = job.payment_address || job.seller_verus_id;
+        const currencyName = IS_TESTNET ? 'VRSCTEST' : 'VRSC';
+        // Build sendcurrency params as structured data (use this, not cliCommand)
+        const params = [
+          { address: agentAddress, amount: job.amount, currency: currencyName },
+          { address: PLATFORM_FEE_ADDRESS, amount: feeAmount, currency: currencyName },
+        ];
+        return {
+          data: {
+            type: 'combined',
+            agentPayment: {
+              address: agentAddress,
+              amount: job.amount,
+            },
+            feePayment: {
+              address: PLATFORM_FEE_ADDRESS,
+              amount: feeAmount,
+            },
+            totalAmount: job.amount + feeAmount,
+            currency: job.currency,
+            sendcurrencyParams: params,
+            // Pre-formatted CLI command — uses JSON.stringify to prevent injection
+            cliCommand: `sendcurrency "*" '${JSON.stringify(params)}'`,
+          },
+        };
       }
-      const feeAmount = job.amount * feeRate;
-      const invoice = generateInvoice(PLATFORM_FEE_ADDRESS, feeAmount, systemId, IS_TESTNET);
-      return {
-        data: {
-          type: 'fee',
-          address: PLATFORM_FEE_ADDRESS,
-          amount: feeAmount,
-          currency: job.currency,
-          qrString: invoice.qrString,
-          deeplink: invoice.deeplink,
-        },
-      };
+    } catch (err: any) {
+      return reply.code(400).send({ error: { code: 'INVALID_ADDRESS', message: 'Could not generate invoice — invalid payment address' } });
     }
   });
 }
